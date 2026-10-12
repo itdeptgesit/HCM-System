@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.gemini/
+.gemini_temp_repo/
+.vscode/
+
+# Environment files
+.env
+.env.*
+!.env.example
+*.local
+
+# Logs & temp
+*.log
