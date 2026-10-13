@@ -1,0 +1,152 @@
+================================================================================
+PANDUAN LENGKAP STEP-BY-STEP INTEGRASI GOOGLE DRIVE (SERVICE ACCOUNT)
+UNTUK GESIT HR (APP-HR) MENGGUNAKAN SUPABASE EDGE FUNCTION
+================================================================================
+
+Arsitektur ini mengadopsi sistem dari CSL-system:
+Browser -> Supabase Edge Function (upload-to-gdrive) -> Google Drive REST API v3
+Menggunakan Google Cloud Service Account (Server-to-Server) yang jauh lebih aman,
+cepat, dan stabil dibandingkan Google Apps Script Webhook.
+
+File Edge Function yang dibuat:
+supabase/functions/upload-to-gdrive/index.ts
+
+File Frontend yang diperbarui:
+lib/googleDriveUpload.ts
+
+--------------------------------------------------------------------------------
+LANGKAH 1: MENYIAPKAN GOOGLE SERVICE ACCOUNT
+--------------------------------------------------------------------------------
+Catatan: Anda dapat menggunakan Service Account yang sama dengan CSL-system
+(file: D:\web\CSL-system\supabase\gdrive-service-account.json) ATAU membuat baru.
+
+Jika ingin membuat baru di Google Cloud Console:
+1. Buka https://console.cloud.google.com/
+2. Buat project baru atau pilih project yang sudah ada.
+3. Buka menu "APIs & Services" > "Library".
+4. Cari "Google Drive API", lalu klik "ENABLE".
+5. Buka menu "APIs & Services" > "Credentials".
+6. Klik "Create Credentials" > pilih "Service Account".
+7. Beri nama service account (misal: "gesit-hr-storage"), klik "Create and Continue".
+8. Pada bagian Role, lewati atau beri "Basic" > "Editor", lalu klik "Done".
+9. Klik pada Service Account yang baru dibuat, masuk ke tab "KEYS".
+10. Klik "Add Key" > "Create new key" > pilih format "JSON" > klik "Create".
+11. File JSON kredensial akan terdownload ke komputer Anda.
+12. Catat "client_email" yang ada di dalam file JSON tersebut
+    (Contoh: csl-system@csl-system.iam.gserviceaccount.com).
+
+
+--------------------------------------------------------------------------------
+LANGKAH 2: MENYIAPKAN FOLDER DI GOOGLE DRIVE (WAJIB: DRIVE BERSAMA / SHARED DRIVE)
+--------------------------------------------------------------------------------
+PENTING:
+Akun Google Service Account memiliki kuota penyimpanan pribadi 0 MB.
+Google Drive secara resmi MENOLAK upload Service Account ke "Drive Saya" (My Drive)
+dengan error "storageQuotaExceeded".
+
+Oleh karena itu, folder induk WAJIB dibuat di:
+>> "Drive Bersama" (Shared Drives / Team Drive) di Google Workspace <<
+(Persis seperti yang digunakan di CSL-system: 0AAPXH8eLte2GUk9PVA)
+
+Langkah-langkah:
+1. Buka Google Drive (https://drive.google.com) menggunakan akun Google Workspace kantor.
+2. Di menu sidebar kiri, klik "Drive Bersama" (Shared Drives).
+3. Buat Drive Bersama baru, misalnya: "GESIT HR Drive" 
+   (atau Anda bisa menggunakan Drive Bersama yang sama dengan CSL-system).
+4. Klik tombol "Kelola Anggota" (Manage Members) di Drive Bersama tersebut.
+5. Masukkan email Service Account:
+   (Contoh: csl-system@csl-system.iam.gserviceaccount.com)
+6. Berikan hak akses: "Pengelola Konten" (Content Manager) atau "Pengelola" (Manager).
+7. Klik "Kirim" / "Selesai".
+8. Ambil ID dari URL browser saat membuka Drive Bersama tersebut:
+   Contoh URL:
+   https://drive.google.com/drive/folders/0AAPXH8eLte2GUk9PVA
+   
+   Maka GDRIVE_FOLDER_ID adalah:
+   0AAPXH8eLte2GUk9PVA  (Biasanya diawali karakter "0A...")
+
+
+--------------------------------------------------------------------------------
+LANGKAH 3: SETTING SECRETS DI SUPABASE DASHBOARD
+--------------------------------------------------------------------------------
+Edge Function membutuhkan 2 secret variable agar dapat berjalan.
+
+CARA A: Lewat Supabase Dashboard Web (Paling Mudah)
+1. Buka dashboard Supabase project Anda:
+   https://supabase.com/dashboard/project/oyhwtleoftbiyabsgjsu
+2. Di menu sidebar kiri, klik icon gerigi "Project Settings".
+3. Pilih menu "Edge Functions" (atau masuk ke menu "Edge Functions" di sidebar).
+4. Klik tombol "Add Secret" / "Manage Secrets":
+   
+   Secret 1:
+   - Name : GDRIVE_FOLDER_ID
+   - Value: [Masukkan ID Folder dari Langkah 2]
+
+   Secret 2:
+   - Name : GDRIVE_SERVICE_ACCOUNT_JSON
+   - Value: [Paste seluruh isi file JSON Service Account dari Langkah 1 dalam 1 baris/lengkap]
+            Pastikan tanda petik dan format JSON tidak terpotong.
+
+5. Klik "Save" / "Apply".
+
+CARA B: Lewat Terminal Supabase CLI
+Jalankan perintah ini di terminal (ganti value sesuai data Anda):
+
+npx supabase secrets set GDRIVE_FOLDER_ID="1ABCxyz987654321_ContohFolderID"
+npx supabase secrets set GDRIVE_SERVICE_ACCOUNT_JSON='{"type":"service_account",...isi json...}'
+
+
+--------------------------------------------------------------------------------
+LANGKAH 4: DEPLOY EDGE FUNCTION KE SUPABASE
+--------------------------------------------------------------------------------
+1. Buka terminal di folder project d:\web\app-hr
+2. Jika belum login Supabase CLI, jalankan:
+   npx supabase login
+   (Ikuti instruksi login via browser dan masukkan access token Anda)
+
+3. Hubungkan ke project Supabase Anda (Project Ref: oyhwtleoftbiyabsgjsu):
+   npx supabase link --project-ref oyhwtleoftbiyabsgjsu
+
+4. Deploy function "upload-to-gdrive":
+   npx supabase functions deploy upload-to-gdrive --no-verify-jwt
+
+   Catatan: Parameter `--no-verify-jwt` membolehkan upload fleksibel
+   (validasi tetap aman dilakukan di sisi backend).
+
+
+--------------------------------------------------------------------------------
+LANGKAH 5: PENGUJIAN & VERIFIKASI
+--------------------------------------------------------------------------------
+1. Jalankan aplikasi frontend:
+   npm run dev
+2. Buka aplikasi web GESIT HR di browser.
+3. Coba upload dokumen pada modul mana saja:
+   - Menu "Karyawan" / "Data Karyawan": Upload dokumen pribadi (KTP, Ijazah, SK).
+   - Menu "Pengumuman / News": Upload file lampiran atau cover berita.
+4. Periksa folder Google Drive Anda ("GESIT HR Documents"):
+   - Subfolder otomatis akan terbentuk:
+     * "Dokumen Karyawan" -> "[NIK] Nama Karyawan"
+     * "Berita & Pengumuman"
+     * "SK & Kebijakan"
+     * "Internal HR"
+   - File tersimpan rapi dan link Google Drive langsung tersimpan di database.
+
+
+--------------------------------------------------------------------------------
+PEMECAHAN MASALAH (TROUBLESHOOTING)
+--------------------------------------------------------------------------------
+1. Error "Konfigurasi Google Drive belum diatur di Supabase Secrets":
+   -> Pastikan secret GDRIVE_SERVICE_ACCOUNT_JSON dan GDRIVE_FOLDER_ID sudah
+      disimpan di Supabase Dashboard.
+
+2. Error "Google Drive upload failed: File not found":
+   -> Pastikan Folder ID benar dan Anda SUDAH membagikan (Share) folder Drive
+      tersebut ke email Service Account dengan akses EDITOR.
+
+3. Melihat Log Error:
+   -> Masuk ke Supabase Dashboard > Edge Functions > upload-to-gdrive > Logs.
+      Semua aktivitas upload dan error akan tercatat di sana secara real-time.
+
+================================================================================
+SELESAI. Sistem kini berjalan otomatis dengan keamanan level Enterprise.
+================================================================================

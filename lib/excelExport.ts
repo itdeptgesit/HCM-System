@@ -1,5 +1,50 @@
 import * as XLSX from 'xlsx';
 
+export interface ExcelSheetData {
+  sheetName: string;
+  data: any[];
+}
+
+/**
+ * Calculates responsive column widths for worksheet based on content and headers
+ */
+const calculateColWidths = (data: any[]): { wch: number }[] => {
+  if (!data || data.length === 0) return [];
+  const maxWidths: number[] = [];
+  data.forEach((row) => {
+    Object.keys(row).forEach((key, i) => {
+      const val = row[key] !== null && row[key] !== undefined ? String(row[key]) : '';
+      const len = Math.max(val.length, key.length) + 3;
+      maxWidths[i] = Math.max(maxWidths[i] || 0, Math.min(len, 60));
+    });
+  });
+  return maxWidths.map(wch => ({ wch: Math.max(wch, 12) }));
+};
+
+/**
+ * Exports multiple sheets in a single Excel workbook (.xlsx)
+ * @param sheets Array of sheet configurations with name and data
+ * @param fileName Name of the file (without extension)
+ */
+export const exportMultiSheetToExcel = (sheets: ExcelSheetData[], fileName: string) => {
+  if (!sheets || sheets.length === 0) {
+    console.warn('No sheets to export');
+    return;
+  }
+
+  const workbook = XLSX.utils.book_new();
+
+  sheets.forEach(({ sheetName, data }) => {
+    if (!data || data.length === 0) return;
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    worksheet['!cols'] = calculateColWidths(data);
+    // Excel worksheet names have a max length of 31 characters
+    XLSX.utils.book_append_sheet(workbook, worksheet, sheetName.slice(0, 31));
+  });
+
+  XLSX.writeFile(workbook, `${fileName}.xlsx`);
+};
+
 /**
  * Exports JSON data to an Excel file (.xlsx)
  * @param data Array of objects to export
@@ -7,30 +52,16 @@ import * as XLSX from 'xlsx';
  * @param sheetName Name of the worksheet
  */
 export const exportToExcel = (data: any[], fileName: string, sheetName: string = 'Sheet1') => {
-    if (!data || data.length === 0) {
-        console.warn('No data to export');
-        return;
-    }
+  if (!data || data.length === 0) {
+    console.warn('No data to export');
+    return;
+  }
 
-    // Convert JSON to Worksheet
-    const worksheet = XLSX.utils.json_to_sheet(data);
+  const worksheet = XLSX.utils.json_to_sheet(data);
+  const workbook = XLSX.utils.book_new();
+  worksheet['!cols'] = calculateColWidths(data);
 
-    // Create a new Workbook
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
-
-    // Set Auto-width for columns
-    const maxWidths = data.reduce((acc: any, row: any) => {
-        Object.keys(row).forEach((key, i) => {
-            const value = row[key] ? row[key].toString() : '';
-            const length = value.length + 2;
-            if (!acc[i] || length > acc[i]) acc[i] = length;
-        });
-        return acc;
-    }, []);
-
-    worksheet['!cols'] = Object.keys(maxWidths).map(i => ({ wch: maxWidths[i] }));
-
-    // Export the file
-    XLSX.writeFile(workbook, `${fileName}.xlsx`);
+  XLSX.utils.book_append_sheet(workbook, worksheet, sheetName.slice(0, 31));
+  XLSX.writeFile(workbook, `${fileName}.xlsx`);
 };
+

@@ -6,6 +6,8 @@ import App from './App';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { ThemeProvider } from '@/components/theme-provider';
 
+import { ToastProvider } from './components/ToastProvider';
+
 console.log("Gesit ERP: index.tsx loaded. Attempting to mount...");
 
 const rootElement = document.getElementById('root');
@@ -20,9 +22,11 @@ const root = ReactDOM.createRoot(rootElement);
 root.render(
   <React.StrictMode>
     <BrowserRouter>
-      <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+      <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
         <TooltipProvider>
-          <App />
+          <ToastProvider>
+            <App />
+          </ToastProvider>
         </TooltipProvider>
       </ThemeProvider>
     </BrowserRouter>

@@ -9,6 +9,9 @@ export default defineConfig(({ mode }) => {
       port: 3000,
       strictPort: false,
       host: '0.0.0.0',
+      fs: {
+        allow: ['.', '..']
+      },
       watch: {
         ignored: ['**/dist/**', '**/.git/**', '**/node_modules/**'],
       },

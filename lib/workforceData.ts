@@ -1,0 +1,62 @@
+import { supabase } from './supabaseClient';
+import { isActiveEmployee, requestDisplayStatus } from './workforce-contract';
+
+export async function loadCurrentHRUser() {
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError) throw sessionError;
+  const authUser = sessionData.session?.user;
+  if (!authUser?.email) return null;
+  const { data: account, error } = await supabase.from('user_accounts').select('*').ilike('email', authUser.email).maybeSingle();
+  if (error) throw error;
+  if (!account) throw new Error('Profil karyawan belum terdaftar di user_accounts. Hubungi administrator.');
+  if (!isActiveEmployee(account) || ['inactive', 'suspended'].includes(String(account.status).toLowerCase())) throw new Error('Akun karyawan tidak aktif.');
+  return {
+    ...account, id: String(account.id), authId: authUser.id, fullName: account.full_name,
+    employeeId: account.employee_code || '', jobTitle: account.job_title || '', avatarUrl: account.avatar_url || '',
+    groups: account.groups || [],
+  };
+}
+
+export async function fetchAllRows(query: (from: number, to: number) => PromiseLike<{ data: any[] | null; error: any }>): Promise<any[]> {
+  const rows: any[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await query(from, from + 999);
+    if (error) throw error;
+    rows.push(...(data || []));
+    if (!data || data.length < 1000) return rows;
+  }
+}
+
+export function loadWorkforceAccounts() {
+  return fetchAllRows((from, to) => supabase.from('user_accounts').select('*').order('id').range(from, to))
+    .then(rows => rows.map(row => ({ ...row, id: String(row.id), status: row.employment_status || row.status })));
+}
+
+export function normalizeRequest<T extends { status?: string; approval_status?: string }>(row: T): T {
+  return { ...row, status: requestDisplayStatus(row) };
+}
+
+export function normalizeAttendance(row: any) {
+  const aliases: Record<string, string> = { 'on leave': 'leave', 'half day': 'half_day', sick: 'sick', permission: 'permission' };
+  const raw = String(row.status || 'present').toLowerCase();
+  return {
+    ...row, user_id: String(row.user_id), status: aliases[raw] || raw,
+    clock_in: row.clock_in || row.check_in_time || null,
+    clock_out: row.clock_out || row.check_out_time || null,
+    total_work_minutes: Number(row.total_work_minutes ?? row.work_duration_minutes ?? 0),
+    total_overtime_minutes: Number(row.total_overtime_minutes ?? 0),
+    clock_in_lat: row.clock_in_lat ?? row.check_in_lat ?? null,
+    clock_in_lng: row.clock_in_lng ?? row.check_in_lng ?? null,
+    clock_out_lat: row.clock_out_lat ?? row.check_out_lat ?? null,
+    clock_out_lng: row.clock_out_lng ?? row.check_out_lng ?? null,
+    photo_url: row.photo_url || row.check_in_photo_url || null,
+  };
+}
+
+export async function reviewWorkforceRequest(type: 'leave' | 'overtime' | 'reimbursement', id: string | number, decision: 'approved' | 'rejected' | 'paid', note?: string) {
+  const { data, error } = await supabase.rpc('review_workforce_request', {
+    p_request_type: type, p_request_id: id, p_decision: decision, p_notes: note || null,
+  });
+  if (error) throw error;
+  return data;
+}

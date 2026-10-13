@@ -48,26 +48,26 @@ export const DangerConfirmModal: React.FC<DangerConfirmModalProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()} disablePointerDismissal={true}>
-      <DialogContent showCloseButton={false} className="sm:max-w-[480px] p-6 bg-white dark:bg-zinc-950 rounded-lg border border-slate-200 dark:border-zinc-800 shadow-lg animate-in fade-in zoom-in-95 duration-200">
+      <DialogContent showCloseButton={false} className="sm:max-w-[480px] p-6 bg-card text-card-foreground rounded-2xl border border-border shadow-2xl animate-in fade-in zoom-in-95 duration-200">
         <div className="flex flex-col space-y-2 text-left">
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-zinc-50 leading-tight">
+          <h2 className="text-lg font-semibold text-foreground leading-tight">
             {title}
           </h2>
-          <p className="text-sm text-slate-500 dark:text-zinc-400 leading-normal font-normal">
+          <p className="text-sm text-muted-foreground leading-normal font-normal">
             {message}
           </p>
         </div>
 
         {entityName && (
           <div className="space-y-2 my-4">
-            <div className="text-xs font-medium text-slate-500 dark:text-zinc-400">
-              Please type <span className="font-bold text-slate-900 dark:text-zinc-50">{entityName}</span> to confirm.
+            <div className="text-xs font-medium text-muted-foreground">
+              Please type <span className="font-bold text-foreground">{entityName}</span> to confirm.
             </div>
             <Input
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               placeholder={entityName}
-              className="h-9 border-slate-200 dark:border-zinc-800 rounded-md bg-white dark:bg-zinc-900 text-sm focus-visible:ring-1 focus-visible:ring-zinc-400 focus-visible:border-zinc-400"
+              className="h-9 border-border rounded-lg bg-background text-foreground text-sm focus-visible:ring-1 focus-visible:ring-primary focus-visible:border-primary"
               autoFocus
             />
           </div>
@@ -82,7 +82,7 @@ export const DangerConfirmModal: React.FC<DangerConfirmModalProps> = ({
               onClose();
             }}
             disabled={isLoading}
-            className="text-xs font-semibold h-9 px-4 rounded-md text-slate-700 hover:bg-slate-100 dark:text-zinc-300 dark:hover:bg-zinc-900 dark:hover:text-zinc-50 transition-colors"
+            className="text-xs font-semibold h-9 px-4 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
           >
             Cancel
           </Button>
@@ -90,10 +90,10 @@ export const DangerConfirmModal: React.FC<DangerConfirmModalProps> = ({
             type="button"
             onClick={onConfirm}
             disabled={isConfirmDisabled}
-            className={`text-xs font-semibold h-9 px-4 rounded-md transition-colors flex items-center justify-center gap-2 ${
+            className={`text-xs font-semibold h-9 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 ${
               variant === 'logout'
-                ? 'bg-blue-600 hover:bg-blue-700 text-white dark:bg-blue-500 dark:hover:bg-blue-600 border border-blue-600 dark:border-blue-500'
-                : 'bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-200 border border-zinc-900 dark:border-zinc-50'
+                ? 'bg-destructive hover:bg-destructive/90 text-destructive-foreground shadow-sm'
+                : 'bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm'
             }`}
           >
             {isLoading && <Loader2 size={14} className="animate-spin" />}

@@ -6,10 +6,12 @@ import {
   FileSpreadsheet, Eye, Pencil, Trash2, KeyRound, AlertTriangle,
   Building2, Briefcase, Calendar, ShieldCheck, Mail, Phone, MapPin,
   Clock, ArrowUpRight, CheckCircle2, XCircle, ArrowRightLeft,
-  ChevronLeft, ChevronRight, Filter, ShieldAlert, Award
+  ChevronLeft, ChevronRight, Filter, ShieldAlert, Award, Upload, GraduationCap,
+  X, Loader2
 } from 'lucide-react';
 import { supabase, supabaseAdmin, ensureAuthUserWithPassword } from '../lib/supabaseClient';
-import { UserAccount, UserGroup } from '../types';
+import { UserAccount, UserGroup, EmployeeContractHistory } from '../types';
+import { uploadFileToGoogleDrive } from '../lib/googleDriveUpload';
 import { useToast } from './ToastProvider';
 import { exportToExcel } from '../lib/excelExport';
 import { trackActivity } from '../lib/auditLogger';
@@ -22,11 +24,15 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Separator } from '@/components/ui/separator';
 import { UserAvatar } from './UserAvatar';
 import { UserFormModal } from './UserFormModal';
 import { DangerConfirmModal } from './DangerConfirmModal';
 import { ResetPasswordModal } from './ResetPasswordModal';
 import { AccessDenied } from './AccessDenied';
+import { RestrictedDocViewer } from './ui/RestrictedDocViewer';
+import { EmployeeImportModal } from './EmployeeImportModal';
+import { EmployeeExportModal } from './EmployeeExportModal';
 
 interface EmployeeDataManagerProps {
   currentUser: UserAccount | null;
@@ -58,8 +64,11 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
 
   // Modals state
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<UserAccount | null>(null);
   const [viewingEmployee, setViewingEmployee] = useState<UserAccount | null>(null);
+  const [detailActiveTab, setDetailActiveTab] = useState<'profile' | 'contract' | 'education' | 'payroll' | 'documents'>('profile');
   const [transferEmployee, setTransferEmployee] = useState<UserAccount | null>(null);
   const [deleteEmployee, setDeleteEmployee] = useState<UserAccount | null>(null);
   const [resetPasswordEmployee, setResetPasswordEmployee] = useState<UserAccount | null>(null);
@@ -78,6 +87,20 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
 
   // Transfer history state
   const [transferLogs, setTransferLogs] = useState<any[]>([]);
+
+  // Contract transition & history state
+  const [transitionEmployee, setTransitionEmployee] = useState<UserAccount | null>(null);
+  const [contractHistories, setContractHistories] = useState<Record<string, EmployeeContractHistory[]>>({});
+  const [isTransitionProcessing, setIsTransitionProcessing] = useState(false);
+  const [transitionForm, setTransitionForm] = useState({
+    contractType: 'PKWT 1',
+    skNumber: '',
+    startDate: new Date().toISOString().slice(0, 10),
+    endDate: '',
+    skFileUrl: '',
+    notes: ''
+  });
+  const [uploadingTransitionSk, setUploadingTransitionSk] = useState(false);
 
   // Permissions
   const roleLower = (currentUser?.role || '').toLowerCase();
@@ -155,7 +178,20 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
           bpjsTkNumber: u.bpjs_tk_number,
           bpjsHealthNumber: u.bpjs_health_number,
           avatarUrl: u.avatar_url,
-          lastLogin: u.last_login || 'Never'
+          lastLogin: u.last_login || 'Never',
+          // Dokumen Google Drive
+          ktpFileUrl: u.ktp_file_url,
+          ijazahFileUrl: u.ijazah_file_url,
+          skFileUrl: u.sk_file_url,
+          bpjsFileUrl: u.bpjs_file_url,
+          // Pendidikan
+          lastEducation: u.last_education,
+          institutionName: u.institution_name,
+          major: u.major,
+          graduationYear: u.graduation_year,
+          educationStartYear: u.education_start_year,
+          gpa: u.gpa,
+          diplomaNumber: u.diploma_number
         }));
         setEmployees(mapped);
       }
@@ -168,6 +204,36 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
           .order('effective_date', { ascending: false })
           .limit(50);
         if (histData) setTransferLogs(histData);
+      } catch {
+        // Table may not exist yet, safely fallback
+      }
+
+      // Try fetching contract history timeline
+      try {
+        const { data: contractData } = await supabase
+          .from('employee_contract_history')
+          .select('*')
+          .order('contract_start_date', { ascending: false });
+        if (contractData) {
+          const map: Record<string, EmployeeContractHistory[]> = {};
+          contractData.forEach((row: any) => {
+            const key = String(row.employee_id);
+            if (!map[key]) map[key] = [];
+            map[key].push({
+              id: row.id,
+              employeeId: row.employee_id,
+              contractType: row.contract_type,
+              skNumber: row.sk_number,
+              contractStartDate: row.contract_start_date,
+              contractEndDate: row.contract_end_date,
+              skFileUrl: row.sk_file_url,
+              notes: row.notes,
+              createdBy: row.created_by,
+              createdAt: row.created_at
+            });
+          });
+          setContractHistories(map);
+        }
       } catch {
         // Table may not exist yet, safely fallback
       }
@@ -371,6 +437,152 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
     setContractAlertFilter('all');
   };
 
+  // Open contract transition modal
+  const openContractTransitionModal = (emp: UserAccount) => {
+    setTransitionEmployee(emp);
+    const currentType = (emp.contractType || emp.employmentType || '').toUpperCase();
+    let suggestedNext = 'PKWT 1';
+    if (currentType.includes('PROBATION') || currentType.includes('PERCOBAAN')) {
+      suggestedNext = 'PKWT 1';
+    } else if (currentType.includes('PKWT 1') || currentType === 'PKWT') {
+      suggestedNext = 'PKWT 2';
+    } else if (currentType.includes('PKWT 2') || currentType.includes('KONTRAK')) {
+      suggestedNext = 'PKWTT';
+    } else if (currentType.includes('PKWTT') || currentType.includes('TETAP')) {
+      suggestedNext = 'PKWTT';
+    }
+
+    let nextStart = new Date().toISOString().slice(0, 10);
+    if (emp.contractEndDate) {
+      try {
+        const d = new Date(emp.contractEndDate);
+        d.setDate(d.getDate() + 1);
+        nextStart = d.toISOString().slice(0, 10);
+      } catch (_) {}
+    }
+
+    setTransitionForm({
+      contractType: suggestedNext,
+      skNumber: '',
+      startDate: nextStart,
+      endDate: suggestedNext === 'PKWTT' ? '' : '',
+      skFileUrl: '',
+      notes: ''
+    });
+  };
+
+  // Upload transition SK file directly to Google Drive
+  const handleUploadTransitionSK = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingTransitionSk(true);
+    try {
+      const res = await uploadFileToGoogleDrive(file, {
+        category: 'sk_karyawan',
+        visibility: 'private',
+        targetEmail: transitionEmployee?.email,
+        employeeName: transitionEmployee?.fullName,
+        employeeCode: transitionEmployee?.employeeCode,
+        folderType: 'employee_docs'
+      });
+      if (res.success && res.fileUrl) {
+        setTransitionForm(f => ({ ...f, skFileUrl: res.fileUrl }));
+        showToast('✓ File SK berhasil diunggah ke Google Drive (Restricted)', 'success');
+      } else {
+        throw new Error(res.error || 'Gagal upload file');
+      }
+    } catch (err: any) {
+      showToast('Gagal mengunggah file SK: ' + err.message, 'error');
+    } finally {
+      setUploadingTransitionSk(false);
+    }
+  };
+
+  // Execute contract transition and save to timeline + user_accounts
+  const executeContractTransition = async () => {
+    if (!transitionEmployee) return;
+    if (!transitionForm.startDate) {
+      showToast('Tanggal mulai berlaku SK wajib diisi', 'error');
+      return;
+    }
+    const isTetap = transitionForm.contractType.toUpperCase().includes('PKWTT') || transitionForm.contractType.toUpperCase().includes('TETAP');
+    if (!isTetap && !transitionForm.endDate) {
+      showToast('Tanggal selesai kontrak wajib diisi untuk kontrak berjangka / PKWT / Probation', 'error');
+      return;
+    }
+
+    setIsTransitionProcessing(true);
+    try {
+      const historyPayload = {
+        employee_id: transitionEmployee.id,
+        contract_type: transitionForm.contractType,
+        sk_number: transitionForm.skNumber || null,
+        contract_start_date: transitionForm.startDate,
+        contract_end_date: isTetap ? null : transitionForm.endDate,
+        sk_file_url: transitionForm.skFileUrl || null,
+        notes: transitionForm.notes || null,
+        created_by: currentUser?.fullName || 'HR Admin'
+      };
+
+      // 1. Try insert into employee_contract_history in Supabase
+      try {
+        await supabase.from('employee_contract_history').insert([historyPayload]);
+      } catch (e) {
+        console.warn('Fallback saving contract history locally:', e);
+      }
+
+      // Also update local state map
+      const empIdStr = String(transitionEmployee.id);
+      const newHistoryItem: EmployeeContractHistory = {
+        id: Date.now(),
+        employeeId: transitionEmployee.id,
+        contractType: transitionForm.contractType,
+        skNumber: transitionForm.skNumber,
+        contractStartDate: transitionForm.startDate,
+        contractEndDate: isTetap ? undefined : transitionForm.endDate,
+        skFileUrl: transitionForm.skFileUrl,
+        notes: transitionForm.notes,
+        createdBy: currentUser?.fullName || 'HR Admin',
+        createdAt: new Date().toISOString()
+      };
+
+      setContractHistories(prev => ({
+        ...prev,
+        [empIdStr]: [newHistoryItem, ...(prev[empIdStr] || [])]
+      }));
+
+      // 2. Update user_accounts table
+      const updatePayload: any = {
+        contract_type: transitionForm.contractType,
+        employment_type: transitionForm.contractType,
+        contract_start_date: transitionForm.startDate,
+        contract_end_date: isTetap ? null : transitionForm.endDate,
+        pkwt_number: transitionForm.skNumber || transitionEmployee.pkwtNumber,
+        sk_file_url: transitionForm.skFileUrl || transitionEmployee.skFileUrl
+      };
+
+      const { error: updateError } = await supabase
+        .from('user_accounts')
+        .update(updatePayload)
+        .eq('id', transitionEmployee.id);
+
+      if (updateError) throw updateError;
+
+      // 3. Update local employee lists
+      setEmployees(prev => prev.map(e => e.id === transitionEmployee.id ? { ...e, ...updatePayload } : e));
+      if (viewingEmployee?.id === transitionEmployee.id) {
+        setViewingEmployee(prev => prev ? { ...prev, ...updatePayload } : null);
+      }
+
+      showToast(`Status kontrak ${transitionEmployee.fullName} berhasil diperbarui menjadi ${transitionForm.contractType}!`, 'success');
+      setTransitionEmployee(null);
+    } catch (err: any) {
+      showToast('Gagal memperbarui status kontrak: ' + (err.message || 'Error'), 'error');
+    } finally {
+      setIsTransitionProcessing(false);
+    }
+  };
+
   // Transfer actions
   const openTransferModal = (emp: UserAccount) => {
     setTransferEmployee(emp);
@@ -489,12 +701,13 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
       bank_account_name: userData.bankAccountName || null,
       bank_account_number: userData.bankAccountNumber || null,
       tax_status: userData.taxStatus || null,
-      dateOfBirth: userData.dateOfBirth || null,
+      date_of_birth: userData.dateOfBirth || null,
       birth_place: userData.birthPlace || null,
       gender: userData.gender || null,
       marital_status: userData.maritalStatus || null,
       religion: userData.religion || null,
       blood_type: userData.bloodType || null,
+      nik: userData.nik !== undefined ? (userData.nik ? String(userData.nik).trim() : null) : null,
       npwp: userData.npwp || null,
       passport_number: userData.passportNumber || null,
       residential_address: userData.residentialAddress || null,
@@ -509,7 +722,20 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
       attendance_manager_id: userData.attendanceManagerId || null,
       attendance_vp_id: userData.attendanceVpId || null,
       avatar_url: userData.avatarUrl || null,
-      e_sign_url: userData.eSignUrl || null
+      e_sign_url: userData.eSignUrl || null,
+      // Dokumen Google Drive
+      ktp_file_url: userData.ktpFileUrl || null,
+      ijazah_file_url: userData.ijazahFileUrl || null,
+      sk_file_url: userData.skFileUrl || null,
+      bpjs_file_url: userData.bpjsFileUrl || null,
+      // Data Pendidikan
+      last_education: userData.lastEducation || null,
+      institution_name: userData.institutionName || null,
+      major: userData.major || null,
+      graduation_year: userData.graduationYear || null,
+      education_start_year: userData.educationStartYear || null,
+      gpa: userData.gpa || null,
+      diploma_number: userData.diplomaNumber || null
     };
 
     try {
@@ -525,24 +751,29 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
         editingEmployee?.id
       );
 
-      if (editingEmployee) {
-        if (authUserId) payload.auth_id = authUserId;
-        const { error } = await supabase
-          .from('user_accounts')
-          .update(payload)
-          .eq('id', editingEmployee.id);
+      // Eksekusi penyimpanan dengan mekanisme self-healing (otomatis retry tanpa kolom yang belum ada di DB)
+      const executeSave = async (dataPayload: any, retries = 8): Promise<void> => {
+        if (authUserId) dataPayload.auth_id = authUserId;
+        const query = editingEmployee
+          ? supabase.from('user_accounts').update(dataPayload).eq('id', editingEmployee.id)
+          : supabase.from('user_accounts').insert([dataPayload]);
 
-        if (error) throw error;
-        showToast(`Data ${userData.fullName} berhasil diperbarui`, 'success');
-      } else {
-        if (authUserId) payload.auth_id = authUserId;
-        const { error } = await supabase
-          .from('user_accounts')
-          .insert([payload]);
+        const { error } = await query;
+        if (error) {
+          const match = error.message?.match(/Could not find the '([^']+)' column of 'user_accounts'/i);
+          if (match && match[1] && retries > 0) {
+            const missingCol = match[1];
+            console.warn(`Kolom '${missingCol}' belum ada di tabel user_accounts. Menyimpan kembali tanpa kolom tersebut...`);
+            const cleaned = { ...dataPayload };
+            delete cleaned[missingCol];
+            return executeSave(cleaned, retries - 1);
+          }
+          throw error;
+        }
+      };
 
-        if (error) throw error;
-        showToast(`Employee ${userData.fullName} berhasil didaftarkan`, 'success');
-      }
+      await executeSave(payload);
+      showToast(editingEmployee ? `Data ${userData.fullName} berhasil diperbarui` : `Employee ${userData.fullName} berhasil didaftarkan`, 'success');
 
       setIsFormModalOpen(false);
       setEditingEmployee(null);
@@ -627,11 +858,20 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
-            onClick={handleExportExcel}
+            onClick={() => setIsExportModalOpen(true)}
             className="text-xs font-semibold"
           >
             <FileSpreadsheet className="mr-2 h-3.5 w-3.5 text-emerald-600" /> Export Excel
           </Button>
+          {canManage && (
+            <Button
+              variant="outline"
+              onClick={() => setIsImportModalOpen(true)}
+              className="text-xs font-semibold border-emerald-500/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+            >
+              <Upload className="mr-2 h-3.5 w-3.5 text-emerald-600" /> Import Excel
+            </Button>
+          )}
           <Button
             variant="outline"
             size="icon-sm"
@@ -1131,7 +1371,10 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
                           <Button
                             variant="ghost"
                             size="icon-sm"
-                            onClick={() => setViewingEmployee(emp)}
+                            onClick={() => {
+                              setViewingEmployee(emp);
+                              setDetailActiveTab('profile');
+                            }}
                             title="Lihat Detail Profil"
                             className="text-muted-foreground hover:text-foreground hover:bg-muted"
                           >
@@ -1151,6 +1394,19 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
                               className="text-muted-foreground hover:text-foreground hover:bg-muted"
                             >
                               <Pencil size={15} />
+                            </Button>
+                          )}
+
+                          {/* Contract Transition Button */}
+                          {canManage && (
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              onClick={() => openContractTransitionModal(emp)}
+                              title="Perbarui Status Kontrak / SK (Probation ➔ PKWT ➔ Tetap)"
+                              className="text-muted-foreground hover:text-emerald-600 hover:bg-emerald-500/10"
+                            >
+                              <FileText size={15} />
                             </Button>
                           )}
 
@@ -1228,195 +1484,542 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
         </div>
       </Card>
 
-      {/* QUICK VIEW EMPLOYEE DETAIL MODAL */}
+      {/* QUICK VIEW EMPLOYEE DETAIL MODAL (AUTHENTIC SHADCN UI SYSTEM - LARGE & SPACIOUS) */}
       <Dialog open={!!viewingEmployee} onOpenChange={(open) => !open && setViewingEmployee(null)}>
-        <DialogContent className="max-w-3xl p-0 overflow-hidden rounded-2xl border-border bg-card">
+        <DialogContent className="sm:max-w-5xl lg:max-w-6xl w-[94vw] max-w-[94vw] max-h-[92vh] flex flex-col p-0 overflow-hidden border border-border bg-background shadow-2xl rounded-xl">
           {viewingEmployee && (
             <>
-              {/* Header profile banner */}
-              <div className="bg-muted/40 p-6 border-b border-border/60">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-4">
-                    <UserAvatar name={viewingEmployee.fullName} url={viewingEmployee.avatarUrl} size="lg" />
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h2 className="text-xl font-bold text-foreground">{viewingEmployee.fullName}</h2>
+              {/* Header Profile ala Shadcn UI */}
+              <div className="p-6 pb-4 border-b border-border bg-card shrink-0">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-center gap-5 min-w-0">
+                    <div className="relative shrink-0">
+                      <UserAvatar name={viewingEmployee.fullName} url={viewingEmployee.avatarUrl} size="lg" className="h-16 w-16 text-lg border-2 border-border shadow-xs" />
+                      <span className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-emerald-500 ring-2 ring-background" title="Aktif" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        <h2 className="text-2xl font-bold tracking-tight text-foreground truncate">{viewingEmployee.fullName}</h2>
                         {viewingEmployee.nickname && (
-                          <Badge variant="outline" className="text-xs">
+                          <Badge variant="secondary" className="text-xs font-normal">
                             {viewingEmployee.nickname}
                           </Badge>
                         )}
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {viewingEmployee.jobTitle || 'Staff'} · {viewingEmployee.department} · {viewingEmployee.company}
-                      </p>
-                      <div className="flex items-center gap-2 mt-2">
-                        <Badge className="bg-primary/10 text-primary border-primary/20 text-[11px] font-mono">
-                          NIK: {viewingEmployee.employeeCode || 'Belum diisi'}
-                        </Badge>
-                        <Badge variant="outline" className="text-[11px]">
-                          {viewingEmployee.employmentType || 'Status kerja belum diset'}
+                        <Badge variant="outline" className="text-xs font-semibold border-primary/30 text-primary bg-primary/5">
+                          {viewingEmployee.contractType || viewingEmployee.employmentType || 'Karyawan Aktif'}
                         </Badge>
                       </div>
+                      <p className="text-sm text-muted-foreground mt-1 flex items-center gap-2 flex-wrap font-medium">
+                        <span className="text-foreground font-semibold">{viewingEmployee.jobTitle || 'Staff'}</span>
+                        <span>•</span>
+                        <span>{viewingEmployee.department}</span>
+                        {viewingEmployee.company && (
+                          <>
+                            <span>•</span>
+                            <span>{viewingEmployee.company}</span>
+                          </>
+                        )}
+                      </p>
+                      <div className="flex items-center gap-2 mt-2 flex-wrap">
+                        <Badge variant="secondary" className="font-mono text-[11px] font-normal">
+                          NIP: {viewingEmployee.employeeCode || '—'}
+                        </Badge>
+                        <Badge variant="secondary" className="font-mono text-[11px] font-normal">
+                          NIK: {viewingEmployee.nik || '—'}
+                        </Badge>
+                        <Badge variant="outline" className="text-[11px] text-muted-foreground">
+                          {viewingEmployee.employmentType || 'Full-Time'}
+                        </Badge>
+                      </div>
                     </div>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setViewingEmployee(null)}
-                    className="text-muted-foreground hover:text-foreground"
-                  >
-                    ✕
-                  </Button>
-                </div>
-              </div>
 
-              {/* Detail Sections */}
-              <div className="p-6 space-y-6 max-h-[68vh] overflow-y-auto">
-                {/* 1. Biodata & Personal */}
-                <div>
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2 mb-3">
-                    <Users size={14} className="text-primary" /> Data Pribadi
-                  </h4>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs bg-muted/20 p-4 rounded-xl border border-border/50">
-                    <div>
-                      <span className="text-muted-foreground">Tempat / Tgl Lahir:</span>
-                      <p className="font-semibold text-foreground mt-0.5">
-                        {viewingEmployee.birthPlace || '—'}, {viewingEmployee.dateOfBirth || '—'}
-                      </p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Jenis Kelamin:</span>
-                      <p className="font-semibold text-foreground mt-0.5">{viewingEmployee.gender || '—'}</p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Status Pernikahan:</span>
-                      <p className="font-semibold text-foreground mt-0.5">{viewingEmployee.maritalStatus || '—'}</p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Agama:</span>
-                      <p className="font-semibold text-foreground mt-0.5">{viewingEmployee.religion || '—'}</p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Golongan Darah:</span>
-                      <p className="font-semibold text-foreground mt-0.5">{viewingEmployee.bloodType || '—'}</p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">No. Telepon:</span>
-                      <p className="font-semibold text-foreground mt-0.5">{viewingEmployee.phone || '—'}</p>
-                    </div>
-                    <div className="col-span-2 sm:col-span-3">
-                      <span className="text-muted-foreground">Alamat Domisili:</span>
-                      <p className="font-semibold text-foreground mt-0.5">{viewingEmployee.residentialAddress || viewingEmployee.address || '—'}</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 2. Informasi Kontrak & PKWT */}
-                <div>
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2 mb-3">
-                    <FileText size={14} className="text-primary" /> Kontrak & PKWT
-                  </h4>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs bg-muted/20 p-4 rounded-xl border border-border/50">
-                    <div>
-                      <span className="text-muted-foreground">Nomor PKWT:</span>
-                      <p className="font-mono font-bold text-foreground mt-0.5">{viewingEmployee.pkwtNumber || '—'}</p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Tipe Kontrak:</span>
-                      <p className="font-semibold text-foreground mt-0.5">{viewingEmployee.contractType || viewingEmployee.employmentType || '—'}</p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Status Masa Berlaku:</span>
-                      <p className="font-semibold mt-0.5">
-                        {getContractMeta(viewingEmployee).label}
-                      </p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Tanggal Mulai Kontrak:</span>
-                      <p className="font-semibold text-foreground mt-0.5">{viewingEmployee.contractStartDate || '—'}</p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Tanggal Selesai Kontrak:</span>
-                      <p className="font-semibold text-foreground mt-0.5">{viewingEmployee.contractEndDate || 'Permanen (PKWTT)'}</p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Tanggal Bergabung (Join Date):</span>
-                      <p className="font-semibold text-foreground mt-0.5">{viewingEmployee.joinDate || '—'}</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 3. Payroll, Rekening & Pajak */}
-                <div>
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2 mb-3">
-                    <CreditCard size={14} className="text-primary" /> Payroll & Jamsostek
-                  </h4>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs bg-muted/20 p-4 rounded-xl border border-border/50">
-                    <div>
-                      <span className="text-muted-foreground">Bank & Rekening:</span>
-                      <p className="font-semibold text-foreground mt-0.5">
-                        {viewingEmployee.bankName} - {viewingEmployee.bankAccountNumber || '—'}
-                      </p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Atas Nama Rekening:</span>
-                      <p className="font-semibold text-foreground mt-0.5">{viewingEmployee.bankAccountName || viewingEmployee.fullName}</p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Status Payroll:</span>
-                      <p className="font-semibold text-emerald-600 mt-0.5">{viewingEmployee.payrollStatus || 'Aktif'}</p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">NPWP:</span>
-                      <p className="font-mono font-semibold text-foreground mt-0.5">{viewingEmployee.npwp || '—'}</p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Status Pajak (PTKP):</span>
-                      <p className="font-semibold text-foreground mt-0.5">{viewingEmployee.taxStatus || 'TK/0'}</p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">BPJS Ketenagakerjaan:</span>
-                      <p className="font-mono font-semibold text-foreground mt-0.5">{viewingEmployee.bpjsTkNumber || '—'}</p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">BPJS Kesehatan:</span>
-                      <p className="font-mono font-semibold text-foreground mt-0.5">{viewingEmployee.bpjsHealthNumber || '—'}</p>
-                    </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => setViewingEmployee(null)}
+                      className="rounded-full text-muted-foreground hover:text-foreground"
+                    >
+                      <X size={18} />
+                    </Button>
                   </div>
                 </div>
               </div>
 
-              {/* Modal Footer */}
-              <div className="bg-muted/30 px-6 py-4 border-t border-border/60 flex items-center justify-between">
+              {/* Tabs Navigasi Resmi Shadcn UI */}
+              <Tabs
+                value={detailActiveTab}
+                onValueChange={(val: any) => setDetailActiveTab(val)}
+                className="w-full flex-1 flex flex-col overflow-hidden"
+              >
+                <div className="px-6 border-b border-border bg-muted/20 shrink-0">
+                  <TabsList className="h-11 bg-transparent p-0 gap-6 justify-start w-full rounded-none">
+                    <TabsTrigger
+                      value="profile"
+                      className="data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-foreground data-[state=active]:bg-transparent rounded-none h-full px-1 text-xs font-semibold text-muted-foreground shadow-none"
+                    >
+                      <Users className="mr-2 h-4 w-4" /> Profil & Pribadi
+                    </TabsTrigger>
+
+                    <TabsTrigger
+                      value="contract"
+                      className="data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-foreground data-[state=active]:bg-transparent rounded-none h-full px-1 text-xs font-semibold text-muted-foreground shadow-none"
+                    >
+                      <FileText className="mr-2 h-4 w-4" /> Pekerjaan & Kontrak
+                    </TabsTrigger>
+
+                    <TabsTrigger
+                      value="education"
+                      className="data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-foreground data-[state=active]:bg-transparent rounded-none h-full px-1 text-xs font-semibold text-muted-foreground shadow-none"
+                    >
+                      <GraduationCap className="mr-2 h-4 w-4" /> Pendidikan
+                    </TabsTrigger>
+
+                    <TabsTrigger
+                      value="payroll"
+                      className="data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-foreground data-[state=active]:bg-transparent rounded-none h-full px-1 text-xs font-semibold text-muted-foreground shadow-none"
+                    >
+                      <CreditCard className="mr-2 h-4 w-4" /> Payroll & Pajak
+                    </TabsTrigger>
+
+                    <TabsTrigger
+                      value="documents"
+                      className="data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-foreground data-[state=active]:bg-transparent rounded-none h-full px-1 text-xs font-semibold text-muted-foreground shadow-none"
+                    >
+                      <ShieldCheck className="mr-2 h-4 w-4" /> Dokumen Digital
+                    </TabsTrigger>
+                  </TabsList>
+                </div>
+
+                {/* Konten Tab Area */}
+                <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                  {/* TAB 1: PROFIL & PRIBADI */}
+                  <TabsContent value="profile" className="mt-0 space-y-6">
+                    <Card className="border border-border/70 shadow-none">
+                      <CardHeader className="p-5 pb-3">
+                        <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                          <Users className="h-4 w-4 text-primary" /> Informasi Pribadi & Identitas
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="p-5 pt-0">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-y-4 gap-x-6 text-xs">
+                          <div>
+                            <span className="text-muted-foreground font-medium">Tempat / Tanggal Lahir</span>
+                            <p className="font-semibold text-foreground mt-0.5">
+                              {viewingEmployee.birthPlace || '—'}, {viewingEmployee.dateOfBirth || '—'}
+                            </p>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground font-medium">Jenis Kelamin</span>
+                            <p className="font-semibold text-foreground mt-0.5">{viewingEmployee.gender || '—'}</p>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground font-medium">Status Pernikahan</span>
+                            <p className="font-semibold text-foreground mt-0.5">{viewingEmployee.maritalStatus || '—'}</p>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground font-medium">Agama</span>
+                            <p className="font-semibold text-foreground mt-0.5">{viewingEmployee.religion || '—'}</p>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground font-medium">Golongan Darah</span>
+                            <p className="font-semibold text-foreground mt-0.5">{viewingEmployee.bloodType || '—'}</p>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground font-medium">Nomor Paspor</span>
+                            <p className="font-mono font-semibold text-foreground mt-0.5">{viewingEmployee.passportNumber || '—'}</p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="border border-border/70 shadow-none">
+                      <CardHeader className="p-5 pb-3">
+                        <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                          <MapPin className="h-4 w-4 text-primary" /> Kontak & Alamat Domisili
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="p-5 pt-0">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-4 gap-x-6 text-xs">
+                          <div>
+                            <span className="text-muted-foreground font-medium flex items-center gap-1.5">
+                              <Mail size={12} /> Email Login Akun
+                            </span>
+                            <p className="font-mono font-semibold text-foreground mt-0.5">{viewingEmployee.email}</p>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground font-medium flex items-center gap-1.5">
+                              <Phone size={12} /> Nomor Handphone / WhatsApp
+                            </span>
+                            <p className="font-mono font-semibold text-foreground mt-0.5">{viewingEmployee.phone || '—'}</p>
+                          </div>
+                          <div className="sm:col-span-2 pt-2 border-t border-border/50">
+                            <span className="text-muted-foreground font-medium">Alamat KTP</span>
+                            <p className="font-medium text-foreground mt-0.5">{viewingEmployee.address || '—'}</p>
+                          </div>
+                          <div className="sm:col-span-2">
+                            <span className="text-muted-foreground font-medium">Alamat Domisili Saat Ini</span>
+                            <p className="font-medium text-foreground mt-0.5">{viewingEmployee.residentialAddress || viewingEmployee.address || '—'}</p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </TabsContent>
+
+                  {/* TAB 2: PEKERJAAN & KONTRAK */}
+                  <TabsContent value="contract" className="mt-0 space-y-6">
+                    {/* Status Kontrak Aktif Card */}
+                    <Card className="border border-border/70 shadow-none">
+                      <CardHeader className="p-5 pb-3 flex flex-row items-center justify-between">
+                        <div>
+                          <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                            Status Kontrak Saat Ini
+                          </span>
+                          <div className="flex items-center gap-2 mt-1">
+                            <CardTitle className="text-base font-bold">
+                              {viewingEmployee.contractType || viewingEmployee.employmentType || 'PKWT 1'}
+                            </CardTitle>
+                            <Badge variant="outline" className="text-xs font-semibold">
+                              {getContractMeta(viewingEmployee).label}
+                            </Badge>
+                          </div>
+                        </div>
+
+                        {canManage && (
+                          <Button
+                            size="sm"
+                            onClick={() => openContractTransitionModal(viewingEmployee)}
+                            className="text-xs font-semibold gap-1.5"
+                          >
+                            <FileText size={14} />
+                            <span>Perbarui Status & SK</span>
+                          </Button>
+                        )}
+                      </CardHeader>
+                      <CardContent className="p-5 pt-0">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
+                          <div>
+                            <span className="text-muted-foreground font-medium">Nomor SK / PKWT</span>
+                            <p className="font-mono font-semibold text-foreground mt-1">{viewingEmployee.pkwtNumber || '—'}</p>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground font-medium">Mulai Berlaku</span>
+                            <p className="font-semibold text-foreground mt-1">{viewingEmployee.contractStartDate || '—'}</p>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground font-medium">Berakhir Pada</span>
+                            <p className="font-semibold text-foreground mt-1">
+                              {viewingEmployee.contractEndDate || 'Permanen (PKWTT)'}
+                            </p>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground font-medium">Tanggal Bergabung</span>
+                            <p className="font-semibold text-foreground mt-1">{viewingEmployee.joinDate || '—'}</p>
+                          </div>
+                        </div>
+
+                        {viewingEmployee.skFileUrl && (
+                          <div className="mt-4 pt-3 border-t border-border flex items-center justify-between">
+                            <span className="text-xs text-muted-foreground">Dokumen SK Aktif di Google Drive:</span>
+                            <a
+                              href={viewingEmployee.skFileUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
+                            >
+                              <FileText size={13} />
+                              <span>Buka Dokumen SK</span>
+                              <ArrowUpRight size={12} />
+                            </a>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+
+                    {/* Timeline Riwayat Kontrak & SK */}
+                    <Card className="border border-border/70 shadow-none">
+                      <CardHeader className="p-5 pb-3 flex flex-row items-center justify-between">
+                        <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                          <Clock className="h-4 w-4 text-primary" /> Jejak Riwayat Kontrak & SK (Timeline)
+                        </CardTitle>
+                        <Badge variant="secondary" className="font-mono text-[11px]">
+                          {(contractHistories[String(viewingEmployee.id)] || []).length} Riwayat Tercatat
+                        </Badge>
+                      </CardHeader>
+                      <CardContent className="p-5 pt-0">
+                        {((contractHistories[String(viewingEmployee.id)] || []).length > 0) ? (
+                          <div className="relative pl-6 space-y-4 before:absolute before:left-2 before:top-2 before:bottom-2 before:w-0.5 before:bg-border">
+                            {(contractHistories[String(viewingEmployee.id)] || []).map((hist, hIdx) => {
+                              const isTetapHist = hist.contractType.toUpperCase().includes('PKWTT') || hist.contractType.toUpperCase().includes('TETAP');
+                              return (
+                                <div key={hIdx} className="relative group">
+                                  <span className={`absolute -left-6 top-1.5 w-4 h-4 rounded-full ring-4 ring-background ${
+                                    isTetapHist ? 'bg-emerald-500' : 'bg-primary'
+                                  }`} />
+                                  <div className="rounded-lg border border-border/70 bg-card p-3.5 text-xs space-y-2">
+                                    <div className="flex items-center justify-between flex-wrap gap-2">
+                                      <div className="flex items-center gap-2">
+                                        <Badge variant={isTetapHist ? 'default' : 'secondary'} className="font-semibold">
+                                          {hist.contractType}
+                                        </Badge>
+                                        {hist.skNumber && (
+                                          <span className="font-mono text-[11px] text-muted-foreground font-medium">
+                                            No. {hist.skNumber}
+                                          </span>
+                                        )}
+                                      </div>
+                                      {hist.skFileUrl && (
+                                        <a
+                                          href={hist.skFileUrl}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
+                                        >
+                                          <FileText size={12} />
+                                          <span>File SK Google Drive</span>
+                                          <ArrowUpRight size={11} />
+                                        </a>
+                                      )}
+                                    </div>
+                                    <div className="text-[11px] text-muted-foreground flex items-center gap-3">
+                                      <span>Periode: <b>{hist.contractStartDate}</b> s/d <b>{isTetapHist ? 'Permanen' : (hist.contractEndDate || '—')}</b></span>
+                                      {hist.createdBy && <span>• Dicatat: {hist.createdBy}</span>}
+                                    </div>
+                                    {hist.notes && (
+                                      <p className="text-[11px] text-foreground bg-muted/40 p-2.5 rounded-md italic border border-border/40">
+                                        "{hist.notes}"
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <div className="py-8 text-center text-xs text-muted-foreground border border-dashed rounded-lg border-border/70 p-6">
+                            <FileText size={24} className="mx-auto text-muted-foreground/40 mb-2" />
+                            <p className="font-medium text-foreground">Belum ada riwayat transisi kontrak sebelumnya</p>
+                            <p className="text-[11px] text-muted-foreground mt-1 max-w-md mx-auto">
+                              Saat status karyawan naik (misal: selesai masa Probation ke PKWT 1, atau PKWT ke Karyawan Tetap), gunakan tombol <strong>"Perbarui Status & SK"</strong> di atas.
+                            </p>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </TabsContent>
+
+                  {/* TAB 3: PENDIDIKAN */}
+                  <TabsContent value="education" className="mt-0 space-y-6">
+                    <Card className="border border-border/70 shadow-none">
+                      <CardHeader className="p-5 pb-3">
+                        <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                          <GraduationCap className="h-4 w-4 text-primary" /> Riwayat Pendidikan Terakhir
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="p-5 pt-0">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-y-4 gap-x-6 text-xs">
+                          <div>
+                            <span className="text-muted-foreground font-medium">Jenjang Terakhir</span>
+                            <div className="mt-1">
+                              <Badge variant="secondary" className="font-bold">
+                                {viewingEmployee.lastEducation || '—'}
+                              </Badge>
+                            </div>
+                          </div>
+                          <div className="sm:col-span-2">
+                            <span className="text-muted-foreground font-medium">Institusi / Universitas / Sekolah</span>
+                            <p className="font-bold text-foreground mt-1">{viewingEmployee.institutionName || '—'}</p>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground font-medium">Jurusan / Program Studi</span>
+                            <p className="font-semibold text-foreground mt-1">{viewingEmployee.major || '—'}</p>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground font-medium">Tahun Pendidikan</span>
+                            <p className="font-semibold text-foreground mt-1">
+                              {viewingEmployee.educationStartYear ? `${viewingEmployee.educationStartYear} s/d ` : ''}
+                              {viewingEmployee.graduationYear || '—'}
+                            </p>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground font-medium">IPK / Nilai Akhir</span>
+                            <p className="font-bold text-foreground mt-1">{viewingEmployee.gpa || '—'}</p>
+                          </div>
+                          <div className="sm:col-span-3 pt-2 border-t border-border/50">
+                            <span className="text-muted-foreground font-medium">Nomor Seri Ijazah</span>
+                            <p className="font-mono font-semibold text-foreground mt-1">{viewingEmployee.diplomaNumber || '—'}</p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </TabsContent>
+
+                  {/* TAB 4: PAYROLL & PAJAK */}
+                  <TabsContent value="payroll" className="mt-0 space-y-6">
+                    <Card className="border border-border/70 shadow-none">
+                      <CardHeader className="p-5 pb-3">
+                        <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                          <CreditCard className="h-4 w-4 text-primary" /> Rekening Bank & Status Payroll
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="p-5 pt-0">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-y-4 gap-x-6 text-xs">
+                          <div>
+                            <span className="text-muted-foreground font-medium">Nama Bank</span>
+                            <p className="font-bold text-foreground mt-1">{viewingEmployee.bankName || '—'}</p>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground font-medium">Nomor Rekening</span>
+                            <p className="font-mono font-bold text-foreground mt-1">{viewingEmployee.bankAccountNumber || '—'}</p>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground font-medium">Atas Nama Rekening</span>
+                            <p className="font-semibold text-foreground mt-1">{viewingEmployee.bankAccountName || viewingEmployee.fullName}</p>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground font-medium">Status Payroll</span>
+                            <p className="font-semibold text-emerald-600 mt-1">{viewingEmployee.payrollStatus || 'Active'}</p>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground font-medium">Status Pajak (PTKP)</span>
+                            <p className="font-bold text-foreground mt-1">{viewingEmployee.taxStatus || 'TK/0'}</p>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground font-medium">Nomor NPWP</span>
+                            <p className="font-mono font-semibold text-foreground mt-1">{viewingEmployee.npwp || '—'}</p>
+                          </div>
+                          <div className="pt-2 border-t border-border/50">
+                            <span className="text-muted-foreground font-medium">BPJS Ketenagakerjaan</span>
+                            <p className="font-mono font-semibold text-foreground mt-1">{viewingEmployee.bpjsTkNumber || '—'}</p>
+                          </div>
+                          <div className="pt-2 border-t border-border/50">
+                            <span className="text-muted-foreground font-medium">BPJS Kesehatan</span>
+                            <p className="font-mono font-semibold text-foreground mt-1">{viewingEmployee.bpjsHealthNumber || '—'}</p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </TabsContent>
+
+                  {/* TAB 5: DOKUMEN DIGITAL (GOOGLE DRIVE) */}
+                  <TabsContent value="documents" className="mt-0 space-y-6">
+                    <Card className="border border-border/70 shadow-none">
+                      <CardHeader className="p-5 pb-3 flex flex-row items-center justify-between">
+                        <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                          <ShieldCheck className="h-4 w-4 text-emerald-600" /> Dokumen Karyawan (Google Drive Restricted)
+                        </CardTitle>
+                        <Badge variant="outline" className="text-[10px] text-emerald-600 border-emerald-500/30">
+                          Akses Terenkripsi HR & Karyawan
+                        </Badge>
+                      </CardHeader>
+                      <CardContent className="p-5 pt-0">
+                        {(canManage || (currentUser && String(currentUser.id) === String(viewingEmployee.id))) ? (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            {viewingEmployee.ktpFileUrl ? (
+                              <RestrictedDocViewer
+                                fileUrl={viewingEmployee.ktpFileUrl}
+                                fileName={`KTP - ${viewingEmployee.fullName}.pdf`}
+                                categoryLabel="KTP"
+                                targetEmail={viewingEmployee.email}
+                              />
+                            ) : (
+                              <div className="rounded-lg border border-dashed border-border/80 p-4 text-xs text-muted-foreground flex items-center gap-2.5 bg-muted/10">
+                                <FileText size={16} className="text-muted-foreground/50 shrink-0" />
+                                <span>Dokumen KTP belum diunggah</span>
+                              </div>
+                            )}
+
+                            {viewingEmployee.ijazahFileUrl ? (
+                              <RestrictedDocViewer
+                                fileUrl={viewingEmployee.ijazahFileUrl}
+                                fileName={`Ijazah - ${viewingEmployee.fullName}.pdf`}
+                                categoryLabel="Ijazah"
+                                targetEmail={viewingEmployee.email}
+                              />
+                            ) : (
+                              <div className="rounded-lg border border-dashed border-border/80 p-4 text-xs text-muted-foreground flex items-center gap-2.5 bg-muted/10">
+                                <FileText size={16} className="text-muted-foreground/50 shrink-0" />
+                                <span>Dokumen Ijazah belum diunggah</span>
+                              </div>
+                            )}
+
+                            {viewingEmployee.skFileUrl ? (
+                              <RestrictedDocViewer
+                                fileUrl={viewingEmployee.skFileUrl}
+                                fileName={`SK Karyawan - ${viewingEmployee.fullName}.pdf`}
+                                categoryLabel="SK Karyawan"
+                                targetEmail={viewingEmployee.email}
+                              />
+                            ) : (
+                              <div className="rounded-lg border border-dashed border-border/80 p-4 text-xs text-muted-foreground flex items-center gap-2.5 bg-muted/10">
+                                <FileText size={16} className="text-muted-foreground/50 shrink-0" />
+                                <span>Dokumen SK belum diunggah</span>
+                              </div>
+                            )}
+
+                            {viewingEmployee.bpjsFileUrl ? (
+                              <RestrictedDocViewer
+                                fileUrl={viewingEmployee.bpjsFileUrl}
+                                fileName={`Kartu BPJS - ${viewingEmployee.fullName}.pdf`}
+                                categoryLabel="BPJS"
+                                targetEmail={viewingEmployee.email}
+                              />
+                            ) : (
+                              <div className="rounded-lg border border-dashed border-border/80 p-4 text-xs text-muted-foreground flex items-center gap-2.5 bg-muted/10">
+                                <FileText size={16} className="text-muted-foreground/50 shrink-0" />
+                                <span>Dokumen BPJS belum diunggah</span>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="rounded-lg border border-amber-200 bg-amber-50/70 p-4 text-xs text-amber-900 flex items-center gap-3">
+                            <ShieldAlert size={18} className="text-amber-600 shrink-0" />
+                            <span>
+                              Akses Dibatasi: Dokumen pribadi karyawan hanya dapat diakses oleh HR yang berwenang dan pemilik akun yang bersangkutan.
+                            </span>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </TabsContent>
+                </div>
+              </Tabs>
+
+              {/* Modal Footer ala Shadcn UI */}
+              <div className="bg-muted/30 px-6 py-3.5 border-t border-border flex items-center justify-between shrink-0">
                 <Button
-                  variant="outline"
+                  variant="ghost"
                   onClick={() => setViewingEmployee(null)}
-                  className="text-xs"
+                  className="text-xs text-muted-foreground hover:text-foreground"
                 >
                   Tutup
                 </Button>
+
                 {canManage && (
                   <div className="flex items-center gap-2">
                     <Button
                       variant="outline"
+                      size="sm"
                       onClick={() => {
                         const target = viewingEmployee;
                         setViewingEmployee(null);
                         openTransferModal(target);
                       }}
-                      className="text-xs text-blue-600 border-blue-500/30 hover:bg-blue-500/10"
+                      className="text-xs font-medium"
                     >
-                      <ArrowRightLeft size={13} className="mr-1.5" /> Mutasi
+                      <ArrowRightLeft size={13} className="mr-1.5 text-muted-foreground" /> Mutasi
                     </Button>
+
                     <Button
+                      size="sm"
                       onClick={() => {
                         const target = viewingEmployee;
                         setViewingEmployee(null);
                         setEditingEmployee(target);
                         setIsFormModalOpen(true);
                       }}
-                      className="text-xs font-bold"
+                      className="text-xs font-semibold"
                     >
                       <Pencil size={13} className="mr-1.5" /> Edit Lengkap
                     </Button>
@@ -1568,6 +2171,311 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
         employeeMode={true}
       />
 
+      {/* MODAL PERBARUI STATUS KONTRAK / NAIK STATUS (REDESIGNED ENTERPRISE LIFECYCLE) */}
+      {transitionEmployee && (
+        <Dialog open={!!transitionEmployee} onOpenChange={(open) => !open && !isTransitionProcessing && setTransitionEmployee(null)}>
+          <DialogContent className="sm:max-w-2xl lg:max-w-3xl w-[90vw] max-w-[90vw] max-h-[90vh] flex flex-col p-0 overflow-hidden rounded-xl border border-border shadow-2xl bg-background">
+            {/* Header */}
+            <DialogHeader className="p-6 pb-4 border-b border-border/60 bg-muted/20 shrink-0">
+              <div className="flex items-center gap-3.5">
+                <div className="w-11 h-11 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center font-bold shrink-0 ring-1 ring-emerald-500/20">
+                  <Award size={22} />
+                </div>
+                <div>
+                  <DialogTitle className="text-lg font-bold text-foreground">
+                    Perbarui Status Kontrak & Terbitkan SK
+                  </DialogTitle>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Proses transisi jenjang kerja (Probation ➔ Kontrak PKWT ➔ Karyawan Tetap PKWTT) dan pengarsipan SK resmi ke Google Drive.
+                  </p>
+                </div>
+              </div>
+            </DialogHeader>
+
+            {/* Scrollable Form Body */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-5 text-xs">
+              {/* Employee Summary Transition Strip */}
+              <div className="rounded-xl border border-border/70 bg-gradient-to-r from-muted/40 via-muted/20 to-card p-4 flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3 min-w-0">
+                  <UserAvatar name={transitionEmployee.fullName} url={transitionEmployee.avatarUrl} size="md" />
+                  <div className="min-w-0">
+                    <p className="font-bold text-sm text-foreground truncate">{transitionEmployee.fullName}</p>
+                    <p className="text-[11px] text-muted-foreground truncate">
+                      NIP: {transitionEmployee.employeeCode || '—'} • {transitionEmployee.jobTitle || 'Staff'} • {transitionEmployee.department}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <div className="text-right">
+                    <span className="text-[10px] uppercase font-bold text-muted-foreground block">Status Saat Ini</span>
+                    <Badge variant="outline" className="text-[10px] font-bold mt-0.5">
+                      {transitionEmployee.contractType || transitionEmployee.employmentType || 'Belum diatur'}
+                    </Badge>
+                  </div>
+                  <ArrowRightLeft size={14} className="text-muted-foreground" />
+                  <div className="text-left">
+                    <span className="text-[10px] uppercase font-bold text-emerald-600 block">Status Baru</span>
+                    <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[10px] font-bold mt-0.5">
+                      {transitionForm.contractType}
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+
+              {/* Status Pilihan Interaktif (Interactive Option Cards) */}
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-foreground">
+                  Pilih Tahapan / Status Kerja Baru *
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {[
+                    {
+                      id: 'PKWTT',
+                      title: 'PKWTT (Karyawan Tetap)',
+                      desc: 'Pengangkatan permanen tanpa batas masa berlaku',
+                      badge: 'Permanen',
+                      icon: Award,
+                      color: 'border-emerald-500 text-emerald-600'
+                    },
+                    {
+                      id: 'PKWT 1',
+                      title: 'PKWT 1 (Kontrak 1)',
+                      desc: 'Kontrak kerja berjangka periode pertama',
+                      badge: 'Berjangka',
+                      icon: FileText,
+                      color: 'border-blue-500 text-blue-600'
+                    },
+                    {
+                      id: 'PKWT 2',
+                      title: 'PKWT 2 (Kontrak 2)',
+                      desc: 'Perpanjangan masa kontrak kerja berjangka',
+                      badge: 'Perpanjangan',
+                      icon: RefreshCcw,
+                      color: 'border-indigo-500 text-indigo-600'
+                    },
+                    {
+                      id: 'Probation',
+                      title: 'Probation (Masa Percobaan)',
+                      desc: 'Masa evaluasi kerja 3 bulan pertama',
+                      badge: 'Evaluasi',
+                      icon: Clock,
+                      color: 'border-amber-500 text-amber-600'
+                    }
+                  ].map((opt) => {
+                    const isSelected = transitionForm.contractType === opt.id;
+                    const IconComp = opt.icon;
+                    return (
+                      <div
+                        key={opt.id}
+                        onClick={() => {
+                          setTransitionForm(f => ({
+                            ...f,
+                            contractType: opt.id,
+                            endDate: (opt.id === 'PKWTT' || opt.id.includes('Tetap')) ? '' : f.endDate
+                          }));
+                        }}
+                        className={`p-3 rounded-xl border transition-all cursor-pointer flex items-start gap-3 relative ${
+                          isSelected
+                            ? 'border-emerald-500 bg-emerald-500/5 ring-1 ring-emerald-500/30 shadow-xs'
+                            : 'border-border/70 hover:border-border hover:bg-muted/30 bg-card'
+                        }`}
+                      >
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
+                          isSelected ? 'bg-emerald-500 text-white' : 'bg-muted text-muted-foreground'
+                        }`}>
+                          <IconComp size={15} />
+                        </div>
+                        <div className="flex-1 min-w-0 pr-4">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-bold text-foreground text-xs">{opt.title}</span>
+                          </div>
+                          <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">{opt.desc}</p>
+                        </div>
+                        {isSelected && (
+                          <CheckCircle2 size={16} className="text-emerald-600 absolute top-3 right-3" />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Form Input Detail SK & Periode */}
+              <div className="rounded-xl border border-border/70 bg-card p-4 space-y-4 shadow-xs">
+                <div>
+                  <label className="block text-xs font-bold text-foreground mb-1.5 flex items-center gap-1.5">
+                    <FileText size={13} className="text-primary" /> Nomor SK Baru / Nomor Dokumen PKWT *
+                  </label>
+                  <Input
+                    placeholder={
+                      transitionForm.contractType === 'PKWTT'
+                        ? 'Contoh: SK-TETAP/DIR/2027/005'
+                        : 'Contoh: PKWT-01/HR/2026/088'
+                    }
+                    value={transitionForm.skNumber}
+                    onChange={(e) => setTransitionForm(f => ({ ...f, skNumber: e.target.value }))}
+                    className="text-xs h-9 font-mono"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-foreground mb-1.5 flex items-center gap-1.5">
+                      <Calendar size={13} className="text-primary" /> Tanggal Mulai Berlaku SK *
+                    </label>
+                    <Input
+                      type="date"
+                      value={transitionForm.startDate}
+                      onChange={(e) => setTransitionForm(f => ({ ...f, startDate: e.target.value }))}
+                      className="text-xs h-9"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-foreground mb-1.5 flex items-center gap-1.5">
+                      <Clock size={13} className="text-primary" /> Tanggal Selesai Kontrak
+                    </label>
+                    {transitionForm.contractType === 'PKWTT' ? (
+                      <div className="h-9 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 flex items-center text-xs font-semibold text-emerald-800 dark:text-emerald-300 gap-1.5">
+                        <CheckCircle2 size={13} />
+                        <span>Masa Kerja Permanen (Tanpa Batas Akhir)</span>
+                      </div>
+                    ) : (
+                      <Input
+                        type="date"
+                        value={transitionForm.endDate}
+                        onChange={(e) => setTransitionForm(f => ({ ...f, endDate: e.target.value }))}
+                        className="text-xs h-9"
+                      />
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Upload Dokumen SK ke Google Drive */}
+              <div className="rounded-xl border border-border/70 bg-card p-4 space-y-3 shadow-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                    <ShieldCheck size={14} className="text-emerald-600" /> Upload Berkas SK Resmi (Google Drive)
+                  </span>
+                  <Badge variant="outline" className="text-[10px] text-muted-foreground font-mono">
+                    PDF / DOCX
+                  </Badge>
+                </div>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  Unggah berkas scan surat keputusan (SK) yang telah ditandatangani. Berkas akan langsung diarsipkan ke folder Google Drive perusahaan secara terenkripsi.
+                </p>
+
+                {transitionForm.skFileUrl ? (
+                  <div className="flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3 text-xs">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-8 h-8 rounded-lg bg-emerald-500/15 text-emerald-600 flex items-center justify-center shrink-0">
+                        <FileText size={16} />
+                      </div>
+                      <div className="min-w-0">
+                        <a
+                          href={transitionForm.skFileUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-bold text-foreground hover:underline truncate block"
+                        >
+                          Berkas SK Tersimpan di Google Drive
+                        </a>
+                        <span className="text-[10px] text-emerald-600 font-medium flex items-center gap-1">
+                          <CheckCircle2 size={10} /> Berhasil diunggah
+                        </span>
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setTransitionForm(f => ({ ...f, skFileUrl: '' }))}
+                      className="text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/30 font-semibold"
+                    >
+                      Ganti Berkas
+                    </Button>
+                  </div>
+                ) : (
+                  <div>
+                    <label className="border-2 border-dashed border-border/80 hover:border-emerald-500/60 rounded-xl p-4 text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-2 bg-muted/10 hover:bg-emerald-500/5">
+                      <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
+                        {uploadingTransitionSk ? (
+                          <Loader2 size={20} className="animate-spin" />
+                        ) : (
+                          <Upload size={20} />
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-foreground">
+                          {uploadingTransitionSk ? 'Mengunggah ke Google Drive...' : 'Klik untuk Pilih atau Tarik File SK (PDF / Word)'}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">
+                          Maksimal 15 MB • Tersimpan di Folder Restricted HCM
+                        </p>
+                      </div>
+                      <input
+                        type="file"
+                        accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
+                        onChange={handleUploadTransitionSK}
+                        disabled={uploadingTransitionSk}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                )}
+              </div>
+
+              {/* Catatan / Evaluasi */}
+              <div>
+                <label className="block text-xs font-bold text-foreground mb-1.5">
+                  Catatan Evaluasi / Keterangan SK
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="Contoh: Evaluasi performa kerja memuaskan dengan nilai KPI 94/100. Disetujui kenaikan status PKWTT Tetap oleh Direksi."
+                  value={transitionForm.notes}
+                  onChange={(e) => setTransitionForm(f => ({ ...f, notes: e.target.value }))}
+                  className="w-full rounded-xl border border-border bg-card px-3 py-2 text-xs text-foreground focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 outline-none resize-none"
+                />
+              </div>
+            </div>
+
+            {/* Footer */}
+            <DialogFooter className="p-4 px-6 border-t border-border/60 bg-muted/20 flex items-center justify-between sm:justify-between shrink-0">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setTransitionEmployee(null)}
+                disabled={isTransitionProcessing}
+                className="text-xs"
+              >
+                Batal
+              </Button>
+              <Button
+                size="sm"
+                onClick={executeContractTransition}
+                disabled={isTransitionProcessing || uploadingTransitionSk}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1.5 shadow-sm"
+              >
+                {isTransitionProcessing ? (
+                  <>
+                    <Loader2 size={13} className="animate-spin" />
+                    <span>Menyimpan Transisi...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 size={13} />
+                    <span>Simpan & Terbitkan SK</span>
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
       {/* RESET PASSWORD MODAL */}
       {resetPasswordEmployee && (
         <ResetPasswordModal
@@ -1590,6 +2498,24 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
           isLoading={isProcessing}
         />
       )}
+
+      {/* IMPORT EXCEL MODAL */}
+      <EmployeeImportModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        onImportSuccess={() => fetchEmployees()}
+        currentUserEmail={currentUser?.email}
+      />
+
+      {/* EXPORT EXCEL MODAL (FULL LENGKAP & DINAMIS) */}
+      <EmployeeExportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        allEmployees={employees.filter(e => !isTechnicalAccount(e))}
+        filteredEmployees={filteredEmployees}
+        activeTab={activeTab}
+        getContractMeta={getContractMeta}
+      />
     </div>
   );
 };

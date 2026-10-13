@@ -23,9 +23,30 @@ interface UserAvatarProps {
     className?: string;
 }
 
+export const formatAvatarImageUrl = (url?: string | null): string | null => {
+    if (!url) return null;
+    const clean = url.trim();
+    if (!clean) return null;
+    if (clean.startsWith('data:image/')) return clean;
+
+    // Convert Google Drive view/open link to thumbnail direct image
+    const driveMatch = clean.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || clean.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+    if (driveMatch && driveMatch[1]) {
+        return `https://drive.google.com/thumbnail?id=${driveMatch[1]}&sz=w400`;
+    }
+    return clean;
+};
+
 export const UserAvatar: React.FC<UserAvatarProps> = ({ name, url, size = 'sm', className = '' }) => {
     const fallbackColor = getAvatarColor(name);
     const initial = (name || 'S').trim().charAt(0).toUpperCase();
+    const [hasError, setHasError] = React.useState(false);
+
+    React.useEffect(() => {
+        setHasError(false);
+    }, [url]);
+
+    const resolvedUrl = formatAvatarImageUrl(url);
 
     const sizeClasses = {
         xs: 'w-6 h-6 text-[10px]',
@@ -35,10 +56,18 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({ name, url, size = 'sm', 
         xl: 'w-16 h-16 text-lg'
     };
 
+    const showImage = Boolean(resolvedUrl && !hasError);
+
     return (
-        <div className={`${sizeClasses[size]} rounded-full flex items-center justify-center font-bold text-white shadow-sm overflow-hidden border border-white/10 ring-2 ring-slate-100/50 dark:ring-white/5 shrink-0 ${url ? 'bg-slate-100' : fallbackColor} ${className}`}>
-            {url ? (
-                <img src={url} alt="" aria-hidden="true" className="w-full h-full object-cover" />
+        <div className={`${sizeClasses[size]} rounded-full flex items-center justify-center font-bold text-white shadow-sm overflow-hidden border border-white/10 ring-2 ring-slate-100/50 dark:ring-white/5 shrink-0 ${showImage ? 'bg-slate-100' : fallbackColor} ${className}`}>
+            {showImage ? (
+                <img 
+                    src={resolvedUrl!} 
+                    alt={name || 'Avatar'} 
+                    aria-hidden="true" 
+                    className="w-full h-full object-cover" 
+                    onError={() => setHasError(true)}
+                />
             ) : initial}
         </div>
     );

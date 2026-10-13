@@ -13,7 +13,7 @@ export const ModalWrapper = ({ isOpen, onClose, children, className }: ModalWrap
   <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()} disablePointerDismissal>
     <DialogContent 
       showCloseButton={false} 
-      className={cn('bg-white dark:bg-zinc-900 rounded-lg shadow-lg w-full sm:max-w-4xl flex flex-col max-h-[95vh] p-0 overflow-hidden border border-slate-200 dark:border-zinc-800', className)}
+      className={cn('bg-card text-card-foreground rounded-2xl shadow-2xl w-full sm:max-w-4xl flex flex-col max-h-[95vh] p-0 overflow-hidden border border-border', className)}
     >
       {children}
     </DialogContent>

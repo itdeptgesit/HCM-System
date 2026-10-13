@@ -230,6 +230,32 @@ export interface UserAccount {
   bankAccountName?: string;
   bankAccountNumber?: string;
   taxStatus?: string;
+  // Data Pendidikan
+  lastEducation?: string;
+  institutionName?: string;
+  major?: string;
+  graduationYear?: string;
+  educationStartYear?: string;
+  gpa?: string;
+  diplomaNumber?: string;
+  // Dokumen Karyawan (Google Drive)
+  ktpFileUrl?: string;
+  ijazahFileUrl?: string;
+  skFileUrl?: string;
+  bpjsFileUrl?: string;
+  createdAt?: string;
+}
+
+export interface EmployeeContractHistory {
+  id: number | string;
+  employeeId: number | string;
+  contractType: string;
+  skNumber?: string;
+  contractStartDate: string;
+  contractEndDate?: string;
+  skFileUrl?: string;
+  notes?: string;
+  createdBy?: string;
   createdAt?: string;
 }
 
@@ -610,3 +636,43 @@ export interface LegalCompany {
   name: string;
   createdAt?: string;
 }
+
+// =========================================================================
+// HCM GOOGLE DRIVE & DOCUMENT REPOSITORY TYPES
+// =========================================================================
+
+export type DocumentCategory = 
+  | 'ktp' 
+  | 'ijazah' 
+  | 'sk_karyawan' 
+  | 'bpjs' 
+  | 'foto_profil' 
+  | 'news_attachment' 
+  | 'news_image' 
+  | 'sk_perusahaan' 
+  | 'internal_hr';
+
+export type DocumentVisibility = 'private' | 'all_active' | 'hr_only';
+export type DocumentStatus = 'processing' | 'draft' | 'published' | 'failed' | 'deleted';
+
+export interface HCMDocument {
+  id: string;
+  employeeId?: number | string | null;
+  uploaderId?: number | string | null;
+  gdriveFileId: string;
+  gdriveWebViewLink: string;
+  gdriveDownloadLink?: string | null;
+  folderId?: string | null;
+  fileName: string;
+  mimeType: string;
+  fileSize: number;
+  category: DocumentCategory;
+  visibility: DocumentVisibility;
+  status: DocumentStatus;
+  targetEmail?: string | null;
+  permissionsMetadata?: any[];
+  notes?: string | null;
+  createdAt: string;
+  updatedAt?: string;
+}
+
