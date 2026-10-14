@@ -57,15 +57,16 @@ GRANT EXECUTE ON FUNCTION public.submit_outside_radius_attendance TO authenticat
 -- 4. Fungsi submit_attendance_correction_request (Koreksi Absen)
 CREATE OR REPLACE FUNCTION public.submit_attendance_correction_request(
   p_attendance_date date,
-  p_clock_in timestamptz,
-  p_clock_out timestamptz,
-  p_reason text
+  p_clock_in timestamptz default null,
+  p_clock_out timestamptz default null,
+  p_reason text default ''
 ) RETURNS public.attendance_correction_requests LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
 DECLARE
   v_user text := public.current_account_id();
   v_row public.attendance_correction_requests;
 BEGIN
   IF v_user IS NULL THEN RAISE EXCEPTION 'USER_ACCOUNT_NOT_FOUND'; END IF;
+  IF p_clock_in IS NULL AND p_clock_out IS NULL THEN RAISE EXCEPTION 'Wajib mengisi jam masuk atau jam pulang yang ingin dikoreksi.'; END IF;
   INSERT INTO public.attendance_correction_requests(user_id, attendance_date, clock_in_time, clock_out_time, reason, status)
     VALUES(v_user, p_attendance_date, p_clock_in, p_clock_out, trim(p_reason), 'pending')
     ON CONFLICT (user_id, attendance_date) DO UPDATE
@@ -74,6 +75,101 @@ BEGIN
   RETURN v_row;
 END; $$;
 GRANT EXECUTE ON FUNCTION public.submit_attendance_correction_request TO authenticated, anon;
+
+-- 4b. Fungsi Review Outside Radius & Correction dengan UPSERT (Mencegah Unique Violation)
+CREATE OR REPLACE FUNCTION public.review_outside_radius_attendance(
+  p_request_id uuid,
+  p_status text,
+  p_reviewer_note text DEFAULT NULL
+) RETURNS public.attendance_requests LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_row public.attendance_requests;
+  v_reviewer text := public.current_account_id();
+  v_existing_rec public.attendance_records;
+BEGIN
+  IF NOT public.is_hr_admin() THEN RAISE EXCEPTION 'NOT_AUTHORIZED'; END IF;
+  IF p_status NOT IN ('approved', 'rejected') THEN RAISE EXCEPTION 'INVALID_REVIEW_STATUS'; END IF;
+  SELECT * INTO v_row FROM public.attendance_requests WHERE id = p_request_id FOR UPDATE;
+  IF v_row.id IS NULL THEN RAISE EXCEPTION 'REQUEST_NOT_FOUND'; END IF;
+  IF v_row.status <> 'pending' THEN RAISE EXCEPTION 'REQUEST_ALREADY_REVIEWED'; END IF;
+  IF v_row.user_id = v_reviewer THEN RAISE EXCEPTION 'CANNOT_REVIEW_OWN_REQUEST'; END IF;
+
+  IF p_status = 'approved' THEN
+    SELECT * INTO v_existing_rec FROM public.attendance_records WHERE user_id = v_row.user_id AND date = v_row.request_date FOR UPDATE;
+    IF v_existing_rec.id IS NOT NULL THEN
+      UPDATE public.attendance_records
+      SET clock_in = COALESCE(clock_in, v_row.requested_at),
+          clock_in_lat = COALESCE(clock_in_lat, v_row.latitude),
+          clock_in_lng = COALESCE(clock_in_lng, v_row.longitude),
+          photo_url = COALESCE(v_row.photo_url, photo_url),
+          work_mode = 'dinas',
+          status = 'present',
+          notes = TRIM(COALESCE(notes, '') || ' [Dinas Luar: ' || COALESCE(v_row.reason, '') || ']'),
+          approved_by = v_reviewer,
+          approved_at = now(),
+          updated_at = now()
+      WHERE id = v_existing_rec.id;
+    ELSE
+      INSERT INTO public.attendance_records(user_id, date, clock_in, clock_in_lat, clock_in_lng, photo_url, work_mode, status, notes, approved_by, approved_at)
+      VALUES (v_row.user_id, v_row.request_date, v_row.requested_at, v_row.latitude, v_row.longitude, v_row.photo_url, 'dinas', 'present', 'Dinas Luar: ' || COALESCE(v_row.reason, ''), v_reviewer, now());
+    END IF;
+  END IF;
+
+  UPDATE public.attendance_requests SET status = p_status, reviewer_id = v_reviewer, reviewed_at = now(), reviewer_note = p_reviewer_note WHERE id = p_request_id RETURNING * INTO v_row;
+  RETURN v_row;
+END; $$;
+GRANT EXECUTE ON FUNCTION public.review_outside_radius_attendance TO authenticated, anon;
+
+CREATE OR REPLACE FUNCTION public.review_attendance_correction_request(
+  p_request_id uuid,
+  p_status text,
+  p_reviewer_note text DEFAULT NULL
+) RETURNS public.attendance_correction_requests LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_row public.attendance_correction_requests;
+  v_reviewer text := public.current_account_id();
+  v_existing_rec public.attendance_records;
+  v_final_in timestamptz;
+  v_final_out timestamptz;
+  v_work_minutes integer := 0;
+BEGIN
+  IF NOT public.is_hr_admin() THEN RAISE EXCEPTION 'NOT_AUTHORIZED'; END IF;
+  IF p_status NOT IN ('approved', 'rejected') THEN RAISE EXCEPTION 'INVALID_REVIEW_STATUS'; END IF;
+  SELECT * INTO v_row FROM public.attendance_correction_requests WHERE id = p_request_id FOR UPDATE;
+  IF v_row.id IS NULL THEN RAISE EXCEPTION 'REQUEST_NOT_FOUND'; END IF;
+  IF v_row.status <> 'pending' THEN RAISE EXCEPTION 'REQUEST_ALREADY_REVIEWED'; END IF;
+  IF v_row.user_id = v_reviewer THEN RAISE EXCEPTION 'CANNOT_REVIEW_OWN_REQUEST'; END IF;
+
+  IF p_status = 'approved' THEN
+    SELECT * INTO v_existing_rec FROM public.attendance_records WHERE user_id = v_row.user_id AND date = v_row.attendance_date FOR UPDATE;
+    IF v_existing_rec.id IS NOT NULL THEN
+      v_final_in := COALESCE(v_row.clock_in_time, v_existing_rec.clock_in);
+      v_final_out := COALESCE(v_row.clock_out_time, v_existing_rec.clock_out);
+      IF v_final_in IS NOT NULL AND v_final_out IS NOT NULL THEN
+        v_work_minutes := GREATEST(0, ROUND(EXTRACT(EPOCH FROM (v_final_out - v_final_in)) / 60)::integer);
+      ELSE
+        v_work_minutes := COALESCE(v_existing_rec.total_work_minutes, 0);
+      END IF;
+      UPDATE public.attendance_records
+      SET clock_in = v_final_in, clock_out = v_final_out, status = 'present', total_work_minutes = v_work_minutes,
+          notes = TRIM(COALESCE(notes, '') || ' [Koreksi Disetujui: ' || COALESCE(v_row.reason, '') || ']'),
+          approved_by = v_reviewer, approved_at = now(), updated_at = now()
+      WHERE id = v_existing_rec.id;
+    ELSE
+      v_final_in := v_row.clock_in_time;
+      v_final_out := v_row.clock_out_time;
+      IF v_final_in IS NOT NULL AND v_final_out IS NOT NULL THEN
+        v_work_minutes := GREATEST(0, ROUND(EXTRACT(EPOCH FROM (v_final_out - v_final_in)) / 60)::integer);
+      END IF;
+      INSERT INTO public.attendance_records(user_id, date, clock_in, clock_out, status, notes, total_work_minutes, approved_by, approved_at)
+      VALUES (v_row.user_id, v_row.attendance_date, v_final_in, v_final_out, 'present', 'Koreksi Presensi Disetujui: ' || COALESCE(v_row.reason, ''), v_work_minutes, v_reviewer, now());
+    END IF;
+  END IF;
+
+  UPDATE public.attendance_correction_requests SET status = p_status, reviewer_id = v_reviewer, reviewed_at = now(), reviewer_note = p_reviewer_note WHERE id = p_request_id RETURNING * INTO v_row;
+  RETURN v_row;
+END; $$;
+GRANT EXECUTE ON FUNCTION public.review_attendance_correction_request TO authenticated, anon;
 
 -- 5. Fungsi get_my_leave_balance (Untuk Saldo Cuti di app-absen)
 CREATE OR REPLACE FUNCTION public.get_my_leave_balance(p_as_of date default current_date)
