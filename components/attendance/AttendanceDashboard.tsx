@@ -172,10 +172,57 @@ const ClockPanel: React.FC<{
 
       if (type === 'in') {
         const { error: upsertError } = await supabase.rpc('clock_in_attendance', { p_date: jakartaDate(now), p_lat: pos.lat, p_lng: pos.lng, p_status: isLate ? 'late' : 'present', p_work_mode: 'wfo' });
-        if (upsertError) throw upsertError;
+        if (upsertError) {
+          if (upsertError.message?.includes('current_account_id') && currentUser?.id) {
+            const { error: fbErr } = await supabase.from('attendance_records').insert({
+              user_id: currentUser.id,
+              date: jakartaDate(now),
+              clock_in: now.toISOString(),
+              clock_in_lat: pos.lat,
+              clock_in_lng: pos.lng,
+              status: isLate ? 'late' : 'present',
+              work_mode: 'wfo',
+              notes: '[Kantor (WFO)]'
+            });
+            if (fbErr) throw upsertError;
+          } else {
+            throw upsertError;
+          }
+        }
       } else {
         const { error: updateError } = await supabase.rpc('clock_out_attendance', { p_date: jakartaDate(now), p_lat: pos.lat, p_lng: pos.lng });
-        if (updateError) throw updateError;
+        if (updateError) {
+          if (updateError.message?.includes('current_account_id') && currentUser?.id) {
+            const todayStr = jakartaDate(now);
+            const { data: rec } = await supabase
+              .from('attendance_records')
+              .select('id, clock_in')
+              .eq('user_id', currentUser.id)
+              .eq('date', todayStr)
+              .is('clock_out', null)
+              .maybeSingle();
+
+            if (rec) {
+              const inTime = new Date(rec.clock_in).getTime();
+              const mins = Math.max(0, Math.floor((now.getTime() - inTime) / 60000));
+              const ovt = Math.max(0, mins - 540);
+              const { error: fbErr } = await supabase.from('attendance_records').update({
+                clock_out: now.toISOString(),
+                clock_out_lat: pos.lat,
+                clock_out_lng: pos.lng,
+                total_work_minutes: mins,
+                work_duration_minutes: mins,
+                total_overtime_minutes: ovt,
+                updated_at: now.toISOString()
+              }).eq('id', rec.id);
+              if (fbErr) throw updateError;
+            } else {
+              throw updateError;
+            }
+          } else {
+            throw updateError;
+          }
+        }
       }
       onClockAction();
     } catch (err: any) {
