@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Routes, Route, NavLink, useNavigate, useLocation } from 'react-router-dom';
+import { Routes, Route, NavLink, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   Users,
@@ -83,7 +83,8 @@ import { LoginPage } from './components/auth/LoginPage';
 import { ModulePlaceholder } from './components/ModulePlaceholder';
 import { AccessDenied } from './components/AccessDenied';
 import { UserProfilePage } from './components/profile/UserProfilePage';
-import { PayrollManager } from './components/payroll/PayrollManager';
+// PayrollManager sementara dinonaktifkan karena penggajian dikelola oleh tim Finance
+// import { PayrollManager } from './components/payroll/PayrollManager';
 import { RecruitmentManager } from './components/recruitment/RecruitmentManager';
 import { AnalyticsDashboard } from './components/analytics/AnalyticsDashboard';
 import { supabase } from './lib/supabaseClient';
@@ -202,9 +203,10 @@ export default function App() {
     ...(canView('Cuti & Izin')
       ? [{ label: 'Pengajuan & Approval', path: '/requests', icon: CheckCircle2 }]
       : []),
-    ...(canView('Payroll & Gaji')
-      ? [{ label: 'Payroll', path: '/payroll', icon: CreditCard }]
-      : []),
+    // Menu Payroll dinonaktifkan sementara (dikelola Finance, bukan HR)
+    // ...(canView('Payroll & Gaji')
+    //   ? [{ label: 'Payroll', path: '/payroll', icon: CreditCard }]
+    //   : []),
     ...(canView('Rekrutmen')
       ? [{ label: 'Rekrutmen', path: '/recruitment', icon: Briefcase }]
       : []),
@@ -834,19 +836,10 @@ export default function App() {
                 )
               }
             />
+            {/* Payroll Module (Dinonaktifkan sementara - diurus oleh Finance) */}
             <Route
               path="/payroll"
-              element={
-                canView('Payroll & Gaji') ? (
-                  <PayrollManager />
-                ) : (
-                  <AccessDenied
-                    moduleName="Payroll & Gaji"
-                    requiredAccess="Izin Lihat Payroll & Gaji"
-                    currentUser={currentUser}
-                  />
-                )
-              }
+              element={<Navigate to="/" replace />}
             />
             <Route
               path="/recruitment"

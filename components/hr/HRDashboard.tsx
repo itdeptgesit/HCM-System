@@ -142,11 +142,6 @@ export const HRDashboard: React.FC<HRDashboardProps> = ({ currentUser }) => {
             <span>Oktober 2026</span>
             <ChevronDown className="h-3.5 w-3.5 text-[#64748B]" />
           </button>
-
-          <button className="inline-flex items-center gap-2 rounded-xl bg-[#12346a] px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-[#1a4382] transition-colors">
-            <Download className="h-3.5 w-3.5" />
-            <span>Unduh laporan</span>
-          </button>
         </div>
       </div>
 

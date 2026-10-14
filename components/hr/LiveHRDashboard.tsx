@@ -624,16 +624,6 @@ export default function LiveHRDashboard({ currentUser }: LiveHRDashboardProps) {
             Kenali profil, pergerakan, dan kebutuhan karyawan dalam satu pandangan terpadu.
           </p>
         </div>
-
-        <div className="flex items-center gap-3">
-          <button
-            onClick={handleExportKPI}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#0f172a] hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-white dark:text-slate-900 text-white text-xs font-semibold shadow-xs hover:shadow-sm transition-all cursor-pointer"
-          >
-            <Download className="h-4 w-4" />
-            <span>Unduh KPI</span>
-          </button>
-        </div>
       </div>
 
       {/* ── FILTER BAR CARD ── */}

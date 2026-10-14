@@ -15,6 +15,8 @@ import { uploadFileToGoogleDrive } from '../lib/googleDriveUpload';
 import { useToast } from './ToastProvider';
 import { exportToExcel } from '../lib/excelExport';
 import { trackActivity } from '../lib/auditLogger';
+import { hasPermission } from '../lib/permissions';
+import { isHRAccount } from '../lib/workforce-contract';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -106,11 +108,16 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
   const roleLower = (currentUser?.role || '').toLowerCase();
   const isSuperAdmin = roleLower === 'super admin' || roleLower === 'super_admin';
   const isAdminOrSuperAdmin = isSuperAdmin || roleLower === 'admin';
-  const isHR = (currentUser?.groups || []).some(g =>
-    ['hr', 'hrd', 'employee-data'].includes(String(g).toLowerCase().trim())
-  );
-  const canView = isAdminOrSuperAdmin || isHR;
-  const canManage = isAdminOrSuperAdmin || isHR;
+  const isHR = isHRAccount(currentUser) ||
+    ['hr manager', 'hr staff', 'hr'].includes(roleLower) ||
+    (currentUser?.groups || []).some(g =>
+      ['hr', 'hrd', 'employee-data'].includes(String(g).toLowerCase().trim())
+    );
+  const canView = hasPermission(currentUser?.role, 'Data Karyawan', 'view') || isAdminOrSuperAdmin || isHR;
+  const canManage = hasPermission(currentUser?.role, 'Data Karyawan', 'edit') ||
+    hasPermission(currentUser?.role, 'Data Karyawan', 'create') ||
+    isAdminOrSuperAdmin || isHR;
+  const canDelete = isSuperAdmin || hasPermission(currentUser?.role, 'Data Karyawan', 'delete');
 
   // Filter out system technical accounts
   const isTechnicalAccount = (u: any) => {
@@ -840,9 +847,9 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
   if (!canView) {
     return (
       <AccessDenied
-        moduleName="Data Employee"
-        description="Modul ini berisi data kepegawaian, kontrak PKWT, dan payroll perusahaan yang bersifat rahasia."
-        requiredAccess="Administrator, Tim HR, atau grup 'employee-data'"
+        moduleName="Data Karyawan"
+        description="Modul ini berisi data kepegawaian dan kontrak PKWT perusahaan yang bersifat rahasia."
+        requiredAccess="Administrator, Tim HR, atau izin 'Data Karyawan'"
         currentUser={currentUser}
       />
     );
@@ -852,8 +859,8 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
     <div className="space-y-6 animate-in fade-in duration-500 pb-12">
       {/* PAGE HEADER */}
       <PageHeader
-        title="Data Employee"
-        description="Master data karyawan, kontrak, PKWT, dan payroll"
+        title="Data Karyawan"
+        description="Master data karyawan, riwayat kontrak, status PKWT, dan mutasi penempatan"
       >
         <div className="flex items-center gap-2">
           <Button
@@ -1003,7 +1010,7 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
                   )}
                 </TabsTrigger>
                 <TabsTrigger value="payroll" className="text-xs font-semibold gap-1.5 px-3 py-1.5">
-                  <CreditCard size={14} /> Payroll & Pajak
+                  <CreditCard size={14} /> Rekening & Pajak
                 </TabsTrigger>
                 <TabsTrigger value="transfers" className="text-xs font-semibold gap-1.5 px-3 py-1.5">
                   <ArrowRightLeft size={14} /> Riwayat Transfer
@@ -1436,8 +1443,8 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
                             </Button>
                           )}
 
-                          {/* Delete Button (Super Admin Only) */}
-                          {isSuperAdmin && (
+                          {/* Delete Button (Super Admin or Permitted) */}
+                          {canDelete && (
                             <Button
                               variant="ghost"
                               size="icon-sm"
