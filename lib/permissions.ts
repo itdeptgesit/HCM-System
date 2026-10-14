@@ -15,7 +15,7 @@ export type UserRole = typeof ALL_ROLES[number];
 
 export const DEFAULT_PERMISSIONS: Record<string, ModulePermission[]> = {
   'Super Admin': [
-    { module: 'Dashboard & KPI', category: 'Workspace', view: true, create: true, edit: true, approve: true, delete: true },
+    { module: 'Dashboard', category: 'Workspace', view: true, create: true, edit: true, approve: true, delete: true },
     { module: 'Data Karyawan', category: 'Workspace', view: true, create: true, edit: true, approve: true, delete: true },
     { module: 'Absensi & Presensi', category: 'Workspace', view: true, create: true, edit: true, approve: true, delete: true },
     { module: 'Cuti & Izin', category: 'Workspace', view: true, create: true, edit: true, approve: true, delete: true },
@@ -30,7 +30,7 @@ export const DEFAULT_PERMISSIONS: Record<string, ModulePermission[]> = {
     { module: 'Pengaturan Sistem', category: 'Administration', view: true, create: true, edit: true, approve: true, delete: true },
   ],
   'Admin': [
-    { module: 'Dashboard & KPI', category: 'Workspace', view: true, create: true, edit: true, approve: true, delete: true },
+    { module: 'Dashboard', category: 'Workspace', view: true, create: true, edit: true, approve: true, delete: true },
     { module: 'Data Karyawan', category: 'Workspace', view: true, create: true, edit: true, approve: true, delete: true },
     { module: 'Absensi & Presensi', category: 'Workspace', view: true, create: true, edit: true, approve: true, delete: true },
     { module: 'Cuti & Izin', category: 'Workspace', view: true, create: true, edit: true, approve: true, delete: true },
@@ -45,7 +45,7 @@ export const DEFAULT_PERMISSIONS: Record<string, ModulePermission[]> = {
     { module: 'Pengaturan Sistem', category: 'Administration', view: true, create: true, edit: true, approve: true, delete: false },
   ],
   'HR Manager': [
-    { module: 'Dashboard & KPI', category: 'Workspace', view: true, create: true, edit: true, approve: true, delete: false },
+    { module: 'Dashboard', category: 'Workspace', view: true, create: true, edit: true, approve: true, delete: false },
     { module: 'Data Karyawan', category: 'Workspace', view: true, create: true, edit: true, approve: true, delete: false },
     { module: 'Absensi & Presensi', category: 'Workspace', view: true, create: true, edit: true, approve: true, delete: false },
     { module: 'Cuti & Izin', category: 'Workspace', view: true, create: true, edit: true, approve: true, delete: false },
@@ -60,7 +60,7 @@ export const DEFAULT_PERMISSIONS: Record<string, ModulePermission[]> = {
     { module: 'Pengaturan Sistem', category: 'Administration', view: true, create: true, edit: true, approve: false, delete: false },
   ],
   'HR Staff': [
-    { module: 'Dashboard & KPI', category: 'Workspace', view: true, create: false, edit: false, approve: false, delete: false },
+    { module: 'Dashboard', category: 'Workspace', view: true, create: false, edit: false, approve: false, delete: false },
     { module: 'Data Karyawan', category: 'Workspace', view: true, create: true, edit: true, approve: false, delete: false },
     { module: 'Absensi & Presensi', category: 'Workspace', view: true, create: true, edit: true, approve: false, delete: false },
     { module: 'Cuti & Izin', category: 'Workspace', view: true, create: true, edit: false, approve: false, delete: false },
@@ -75,7 +75,7 @@ export const DEFAULT_PERMISSIONS: Record<string, ModulePermission[]> = {
     { module: 'Pengaturan Sistem', category: 'Administration', view: false, create: false, edit: false, approve: false, delete: false },
   ],
   'Employee': [
-    { module: 'Dashboard & KPI', category: 'Workspace', view: true, create: false, edit: false, approve: false, delete: false },
+    { module: 'Dashboard', category: 'Workspace', view: true, create: false, edit: false, approve: false, delete: false },
     { module: 'Data Karyawan', category: 'Workspace', view: false, create: false, edit: false, approve: false, delete: false },
     { module: 'Absensi & Presensi', category: 'Workspace', view: true, create: true, edit: false, approve: false, delete: false },
     { module: 'Cuti & Izin', category: 'Workspace', view: true, create: true, edit: false, approve: false, delete: false },
@@ -139,7 +139,7 @@ export function hasPermission(
   action: PermissionAction = 'view'
 ): boolean {
   const normalizedRole = (role || 'Employee').trim();
-  
+
   // Super Admin selalu memiliki akses penuh ke seluruh modul
   if (normalizedRole.toLowerCase() === 'super admin') {
     return true;
@@ -151,11 +151,11 @@ export function hasPermission(
     k => k.toLowerCase() === normalizedRole.toLowerCase()
   );
   const roleList = targetKey ? allPerms[targetKey] : [];
-  
+
   const item = roleList.find(
     p => p.module.toLowerCase() === moduleName.toLowerCase() ||
-         p.module.toLowerCase().includes(moduleName.toLowerCase()) ||
-         moduleName.toLowerCase().includes(p.module.toLowerCase())
+      p.module.toLowerCase().includes(moduleName.toLowerCase()) ||
+      moduleName.toLowerCase().includes(p.module.toLowerCase())
   );
 
   if (item) {

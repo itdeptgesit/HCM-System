@@ -196,7 +196,7 @@ export default function App() {
   ];
 
   const navWorkspacePrimary = [
-    ...(canView('Dashboard & KPI') ? [{ label: 'Dashboard', path: '/', icon: LayoutDashboard }] : []),
+    ...(canView('Dashboard') ? [{ label: 'Dashboard', path: '/', icon: LayoutDashboard }] : []),
     ...(canView('Data Karyawan') ? [{ label: 'Data Karyawan', path: '/employees', icon: Users }] : []),
   ];
 
@@ -212,7 +212,7 @@ export default function App() {
     // ...(canView('Rekrutmen')
     //   ? [{ label: 'Rekrutmen', path: '/recruitment', icon: Briefcase }]
     //   : []),
-    ...(isHR || canView('Dashboard & KPI')
+    ...(isHR || canView('Dashboard')
       ? [{ label: 'News & Pengumuman', path: '/news', icon: Megaphone }]
       : []),
   ];
@@ -709,11 +709,11 @@ export default function App() {
             <Route
               path="/"
               element={
-                canView('Dashboard & KPI') ? (
+                canView('Dashboard') ? (
                   <HRDashboard currentUser={currentUser} />
                 ) : (
                   <AccessDenied
-                    moduleName="Dashboard & KPI"
+                    moduleName="Dashboard"
                     requiredAccess="Izin Lihat Dashboard"
                     currentUser={currentUser}
                   />
