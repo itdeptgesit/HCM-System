@@ -74,7 +74,7 @@ export interface LeaveQuotaSummary {
   fullName: string;
   employeeCode: string;
   department: string;
-  contractType: 'PKWTT' | 'PKWT' | 'Probation' | 'Magang';
+  contractType: 'PKWTT' | 'PKWT' | 'Probation' | 'Magang' | 'Unknown';
   joinDate: string | null;
   tenureYears: number;
   tenureMonths: number;
@@ -93,9 +93,25 @@ export interface LeaveQuotaSummary {
 }
 
 /**
- * Default potongan cuti bersama tahun berjalan (SKB 3 Menteri)
+ * Default potongan cuti bersama tahun berjalan (SKB 3 Menteri).
+ * Dipakai hanya untuk tahun yang belum ada di tabel SKB resmi di bawah.
  */
 export const DEFAULT_COLLECTIVE_LEAVE_DAYS = 4;
+
+/**
+ * Cuti bersama resmi SKB 3 Menteri per tahun (jumlah hari).
+ * Sumber: tabel SKB yang sama dengan aplikasi absensi. Tahun yang belum
+ * tercantum memakai DEFAULT_COLLECTIVE_LEAVE_DAYS sebagai estimasi.
+ */
+const SKB_COLLECTIVE_LEAVE_DAYS: Record<number, number> = {
+  2025: 10,
+  2026: 8,
+  2027: 8,
+};
+
+export function collectiveLeaveDaysForYear(year: number): number {
+  return SKB_COLLECTIVE_LEAVE_DAYS[year] ?? DEFAULT_COLLECTIVE_LEAVE_DAYS;
+}
 
 /**
  * Mengambil riwayat penyesuaian kuota cuti dari tabel user_activity_logs di Supabase
@@ -201,7 +217,9 @@ export function calculateWorkingDays(startDateStr: string, endDateStr: string): 
     }
     cur.setDate(cur.getDate() + 1);
   }
-  return Math.max(1, count);
+  // Rentang akhir pekan saja menghasilkan 0 (tidak dibulatkan ke 1):
+  // pengajuan tanpa hari kerja ditolak validasi, bukan dihitung 1 hari.
+  return count;
 }
 
 /**
@@ -213,20 +231,22 @@ export function calculateEmployeeLeaveQuota(
   year = new Date().getFullYear(),
   adjustments: LeaveAdjustmentRecord[] = [],
   leaveRequests: any[] = [],
-  collectiveLeaveDeduction = DEFAULT_COLLECTIVE_LEAVE_DAYS
+  collectiveLeaveDeduction = collectiveLeaveDaysForYear(year)
 ): LeaveQuotaSummary {
   const userId = String(employee.id || '');
-  const rawType = String(employee.contract_type || employee.contractType || employee.employment_type || 'PKWTT').toUpperCase();
-  
-  // Normalisasi contract type ke 4 kategori
-  let contractType: 'PKWTT' | 'PKWT' | 'Probation' | 'Magang' = 'PKWT';
+  const rawType = String(employee.contract_type || employee.contractType || employee.employment_type || '').toUpperCase();
+
+  // Normalisasi contract type. Nilai tak dikenal TIDAK diberi kuota (deny by
+  // default) agar tidak ada hak cuti yang muncul dari data yang salah ketik.
+  // Sama dengan aplikasi absensi: hanya PKWTT/PKWT/Probation/Magang yang punya aturan.
+  let contractType: 'PKWTT' | 'PKWT' | 'Probation' | 'Magang' | 'Unknown' = 'Unknown';
   if (rawType.includes('PKWTT') || rawType.includes('TETAP') || rawType.includes('PERMANENT')) {
     contractType = 'PKWTT';
   } else if (rawType.includes('PROBATION') || rawType.includes('PERCOBAAN')) {
     contractType = 'Probation';
   } else if (rawType.includes('MAGANG') || rawType.includes('INTERN')) {
     contractType = 'Magang';
-  } else {
+  } else if (rawType.includes('PKWT') || rawType.includes('CONTRACT') || rawType.includes('KONTRAK')) {
     contractType = 'PKWT';
   }
 
@@ -249,24 +269,24 @@ export function calculateEmployeeLeaveQuota(
     }
   }
 
-  // Cek apakah tanggal saat ini sudah melewati 30 Juni tahun berjalan
-  const today = new Date();
-  const june30 = new Date(year, 5, 30, 23, 59, 59);
-  const isAfterJune30 = today > june30;
+  // Batas 30 Juni hanya relevan bila ada saldo carry forward teraudit;
+  // karena saldo tidak diestimasi, tidak ada yang bisa expired di sini.
 
   // Filter penyesuaian khusus untuk user ini di tahun berjalan
   const userAdjustments = adjustments.filter(a => String(a.userId) === userId && a.year === year);
   const totalAdjustmentDays = userAdjustments.reduce((acc, curr) => acc + curr.adjustmentDays, 0);
 
-  // Hitung cuti tahunan yang sudah disetujui (approved)
+  // Hitung cuti tahunan yang sudah disetujui (approved).
+  // Hanya leave_type 'annual' yang memotong kuota tahunan; izin khusus
+  // Pasal 22 punya batas per pengajuan sendiri dan tidak memotong kuota.
+  // Sama dengan aplikasi absensi.
   let leaveTakenDays = 0;
   leaveRequests.forEach(req => {
     if (String(req.user_id) === userId && req.status === 'approved') {
       const lType = String(req.leave_type || '').toLowerCase();
-      // Hanya cuti tahunan atau izin yang memotong cuti
-      if (lType === 'annual' || lType === 'cuti_tahunan' || lType === 'personal' || lType === 'other') {
+      if (lType === 'annual') {
         const days = req.total_days || calculateWorkingDays(req.start_date, req.end_date);
-        leaveTakenDays += Number(days || 1);
+        leaveTakenDays += Number(days || 0);
       }
     }
   });
@@ -299,8 +319,8 @@ export function calculateEmployeeLeaveQuota(
       // Cek apakah baru genap 1 tahun di tahun ini
       const reachedOneYearInCurrentYear = (joinYear + 1) === year;
       if (reachedOneYearInCurrentYear) {
-        // Prorata formula (12 - bulan join)
-        proratedQuota = Math.max(1, 12 - joinMonth);
+        // Prorata formula (12 - bulan join), sama dengan aplikasi absensi.
+        proratedQuota = Math.max(0, Math.min(12, 12 - joinMonth));
         baseQuota = proratedQuota;
         eligibilityNote = `Prorata tahun pertama setelah 1 thn: (12 - ${joinMonth} bln join) = ${proratedQuota} hari.`;
       } else {
@@ -309,17 +329,11 @@ export function calculateEmployeeLeaveQuota(
         eligibilityNote = 'Hak Cuti Tahunan Reguler: 12 hari per tahun (Refill 1 Januari).';
       }
 
-      // Carry forward handling (default asumsi 3 hari sisa tahun lalu jika karyawan lama)
-      if (tenureYears >= 2) {
-        const estimatedPreviousRemainder = 3;
-        if (isAfterJune30) {
-          carryForwardQuota = 0;
-          carryForwardExpired = true;
-        } else {
-          carryForwardQuota = estimatedPreviousRemainder;
-          carryForwardExpired = false;
-        }
-      }
+      // Carry forward tidak diestimasi: tanpa ledger teraudit, sisa tahun
+      // lalu dianggap 0. Penyesuaian manual HR (adjustments) tetap berlaku.
+      // Sama dengan aplikasi absensi.
+      carryForwardQuota = 0;
+      carryForwardExpired = false;
     }
   } else if (contractType === 'PKWT') {
     // -------------------------------------------------------------
@@ -352,7 +366,7 @@ export function calculateEmployeeLeaveQuota(
     carryForwardQuota = 0;
     carryForwardExpired = false;
     eligibilityNote = 'Probation: Hak cuti evaluasi 3 hari (1 hari / bulan masa percobaan).';
-  } else {
+  } else if (contractType === 'Magang') {
     // Magang
     isEligible = false;
     baseQuota = 0;
@@ -360,6 +374,14 @@ export function calculateEmployeeLeaveQuota(
     carryForwardQuota = 0;
     carryForwardExpired = false;
     eligibilityNote = 'Magang / Praktik Kerja tidak memiliki kuota cuti tahunan berbayar.';
+  } else {
+    // Jenis kontrak tak dikenal: tidak diberi kuota sampai data diperbaiki.
+    isEligible = false;
+    baseQuota = 0;
+    proratedQuota = 0;
+    carryForwardQuota = 0;
+    carryForwardExpired = false;
+    eligibilityNote = 'Jenis kontrak tidak dikenali. Minta HR memperbaiki data kepegawaian.';
   }
 
   // Hitung total sisa saldo cuti
