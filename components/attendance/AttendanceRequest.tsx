@@ -3,7 +3,7 @@ import {
   Calendar, Clock, Timer, Wallet, FileText, CheckCircle2, XCircle,
   Filter, Search, RefreshCw, Eye, Check, X, Building2, User, ChevronRight,
   Stethoscope, Gift, Receipt, AlertCircle, AlertTriangle, RotateCcw, Briefcase,
-  BookOpen, ShieldCheck, Info, Sparkles, HelpCircle
+  BookOpen, ShieldCheck, Info, Sparkles, HelpCircle, Plus
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../../lib/supabaseClient';
@@ -32,6 +32,16 @@ import {
   LEAVE_TYPES, STATUS_CONFIG, REIMBURSEMENT_TYPES, isPendingApprovalStatus,
   buildApprovalSteps, getReimbType, renderStatusBadge, formatMinutes
 } from './attendanceTypes';
+import {
+  calculateEmployeeLeaveQuota,
+  fetchLeaveAdjustments,
+  ARTICLE_22_LEAVE_TYPES,
+  LeaveQuotaSummary,
+  LeaveQuotaAdjustment
+} from '../../lib/leaveQuotaService';
+import { LeaveQuotaOverviewTab } from './LeaveQuotaOverviewTab';
+import { LeaveQuotaAdjustmentModal } from './LeaveQuotaAdjustmentModal';
+import { NewLeaveRequestModal } from './NewLeaveRequestModal';
 
 export interface AttendanceRequestProps {
   currentUser?: any;
@@ -59,9 +69,18 @@ export const AttendanceRequest: React.FC<AttendanceRequestProps> = ({ currentUse
   const [requestCompany, setRequestCompany] = useState('all');
   const [viewRequest, setViewRequest] = useState<{ kind: 'cuti' | 'lembur' | 'reimbursement'; req: any } | null>(null);
   const [showPolicyModal, setShowPolicyModal] = useState(false);
-  const [policyModalTab, setPolicyModalTab] = useState<'kacamata' | 'cuti'>('kacamata');
+  const [policyModalTab, setPolicyModalTab] = useState<'kacamata' | 'cuti' | 'pasal22'>('kacamata');
   const [loading, setLoading] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+
+  // Leave Quota Management states
+  const [leaveSubTab, setLeaveSubTab] = useState<'requests' | 'quotas'>('requests');
+  const [showNewLeaveModal, setShowNewLeaveModal] = useState(false);
+  const [adjustingQuota, setAdjustingQuota] = useState<LeaveQuotaSummary | null>(null);
+  const [leaveAdjustments, setLeaveAdjustments] = useState<LeaveQuotaAdjustment[]>([]);
+  const [loadingAdjustments, setLoadingAdjustments] = useState(false);
+
+  const currentYear = useMemo(() => new Date().getFullYear(), []);
 
   const userMap = useMemo(() => {
     const map = new Map<string, UserAccount>();
@@ -69,17 +88,29 @@ export const AttendanceRequest: React.FC<AttendanceRequestProps> = ({ currentUse
     return map;
   }, [allUsers]);
 
+  // Compute live leave quotas for each employee
+  const employeeLeaveQuotas = useMemo<LeaveQuotaSummary[]>(() => {
+    return allUsers.map(user => {
+      return calculateEmployeeLeaveQuota(user, currentYear, leaveAdjustments, leaveRequests);
+    });
+  }, [allUsers, leaveRequests, leaveAdjustments, currentYear]);
+
+  const myQuota = useMemo(() => {
+    return employeeLeaveQuotas.find(q => String(q.userId) === userId) || null;
+  }, [employeeLeaveQuotas, userId]);
+
   const loadAllData = async () => {
     setLoading(true);
     setLoadError('');
     try {
-      const [users, leaves, overtime, reimb, corrections, outside] = await Promise.all([
+      const [users, leaves, overtime, reimb, corrections, outside, adjustments] = await Promise.all([
         loadWorkforceAccounts(),
         fetchAllRows((from, to) => supabase.from('leave_requests').select('*').order('id').range(from, to)),
         fetchAllRows((from, to) => supabase.from('overtime_requests').select('*').order('id').range(from, to)),
         fetchAllRows((from, to) => supabase.from('reimbursements').select('*').order('id').range(from, to)),
         fetchAllRows((from, to) => supabase.from('attendance_correction_requests').select('*').order('id').range(from, to)),
         fetchAllRows((from, to) => supabase.from('attendance_requests').select('*').order('id').range(from, to)),
+        fetchLeaveAdjustments().catch(e => { console.warn('Gagal memuat adjustments cuti:', e); return []; })
       ]);
       const recentFirst = (a: any, b: any) => String(b.created_at || b.requested_at || '').localeCompare(String(a.created_at || a.requested_at || ''));
       setAllUsers(users);
@@ -90,6 +121,7 @@ export const AttendanceRequest: React.FC<AttendanceRequestProps> = ({ currentUse
         ...corrections.map(row => ({ ...row, request_kind: 'correction' })),
         ...outside.map(row => ({ ...row, request_kind: 'outside', attendance_date: row.request_date, clock_in_time: row.requested_at })),
       ].sort(recentFirst));
+      setLeaveAdjustments(adjustments);
     } catch (err: any) {
       console.error('Error fetching request data:', err);
       setLoadError(err.message || 'Gagal memuat pengajuan.');
@@ -481,171 +513,243 @@ export const AttendanceRequest: React.FC<AttendanceRequestProps> = ({ currentUse
     };
 
     return (
-      <Card className="border-border/60 shadow-sm overflow-hidden">
-        {/* Toolbar Header */}
-        <CardHeader className="flex flex-row items-center justify-between pb-4 border-b border-border/40 bg-muted/20">
-          <div>
-            <CardTitle className="text-sm font-bold flex items-center gap-2">
-              <Calendar size={16} className="text-primary" />
-              Daftar Pengajuan Cuti &amp; Izin
-            </CardTitle>
-            <p className="text-[11px] font-medium text-muted-foreground mt-1">
-              {filtered.length} pengajuan cuti &bull; Menunggu persetujuan: {pendingCount}
-            </p>
+      <div className="space-y-4">
+        {/* Sub-tab Navigation Bar & Action */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-muted/40 p-2 rounded-xl border border-border/60">
+          <div className="flex items-center gap-1.5 p-1 bg-background/80 rounded-lg border border-border/50">
+            <button
+              type="button"
+              onClick={() => setLeaveSubTab('requests')}
+              className={cn(
+                'px-3.5 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer',
+                leaveSubTab === 'requests'
+                  ? 'bg-primary text-primary-foreground shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
+              )}
+            >
+              <FileText size={13} />
+              <span>Daftar Pengajuan Cuti</span>
+              {pendingCount > 0 && (
+                <span className={cn(
+                  'px-1.5 py-0.2 rounded-full text-[10px] font-bold',
+                  leaveSubTab === 'requests' ? 'bg-white/20 text-white' : 'bg-amber-500/20 text-amber-600 dark:text-amber-400'
+                )}>
+                  {pendingCount}
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setLeaveSubTab('quotas')}
+              className={cn(
+                'px-3.5 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer',
+                leaveSubTab === 'quotas'
+                  ? 'bg-primary text-primary-foreground shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
+              )}
+            >
+              <Calendar size={13} />
+              <span>Rekap Kuota &amp; Saldo Cuti</span>
+              <span className={cn(
+                'px-1.5 py-0.2 rounded-full text-[10px] font-bold',
+                leaveSubTab === 'quotas' ? 'bg-white/20 text-white' : 'bg-muted text-muted-foreground'
+              )}>
+                {employeeLeaveQuotas.length}
+              </span>
+            </button>
           </div>
-          <div className="flex flex-wrap items-center gap-1.5">
-            {([
-              { id: 'all', label: 'Semua', count: s.length },
-              { id: 'pending', label: 'Menunggu', count: pendingCount },
-              { id: 'approved', label: 'Disetujui', count: s.filter(l => l.status === 'approved').length },
-              { id: 'rejected', label: 'Ditolak', count: s.filter(l => l.status === 'rejected').length },
-            ] as const).map(f => (
-              <button
-                key={f.id}
-                onClick={() => setRequestFilter(f.id as any)}
-                className={cn(
-                  'rounded-md px-2.5 py-1 text-xs font-semibold transition-all',
-                  requestFilter === f.id
-                    ? 'bg-primary dark:bg-blue-600 text-primary-foreground shadow-2xs'
-                    : 'border border-border/60 dark:border-zinc-800 bg-muted/30 dark:bg-zinc-900/60 text-muted-foreground hover:text-foreground hover:bg-muted/60 dark:hover:bg-zinc-800'
-                )}
-              >
-                {f.label}
-                <span className="ml-1 text-[10px] opacity-70">({f.count})</span>
-              </button>
-            ))}
+
+          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => setShowNewLeaveModal(true)}
+              className="h-8 gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-xs cursor-pointer"
+            >
+              <Plus size={14} />
+              <span>+ Ajukan Cuti / Izin</span>
+            </Button>
           </div>
-        </CardHeader>
+        </div>
 
-        {/* Table Content */}
-        <CardContent className="p-0">
-          {filtered.length === 0 ? (
-            <div className="flex flex-col items-center gap-2 py-16 text-center text-muted-foreground">
-              <FileText size={36} className="opacity-30" />
-              <p className="text-sm font-semibold text-foreground">Belum ada pengajuan cuti</p>
-              <p className="text-xs text-muted-foreground">Tidak ada permohonan yang sesuai filter saat ini</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow className="hover:bg-transparent">
-                    {isApprover && <TableHead className="w-[240px]">Karyawan</TableHead>}
-                    <TableHead>Jenis Cuti</TableHead>
-                    <TableHead>Periode</TableHead>
-                    <TableHead>Durasi</TableHead>
-                    <TableHead className="min-w-[200px]">Alasan</TableHead>
-                    <TableHead>Diajukan</TableHead>
-                    <TableHead>Status</TableHead>
-                    {isApprover && <TableHead className="text-right pr-4">Aksi</TableHead>}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filtered.map((req) => {
-                    const typeInfo = LEAVE_TYPES.find(t => t.id === req.leave_type);
-                    const days = Math.ceil((new Date(req.end_date).getTime() - new Date(req.start_date).getTime()) / 86400000) + 1;
-                    const showApprove = isApprover && canApproveRequest(req.user_id, req.status);
-                    const showReject = isApprover && canRejectRequest(req.user_id, req.status);
-                    const empName = getRequestEmployeeName(req.user_id);
-                    const empAvatar = userMap.get(String(req.user_id))?.avatar_url;
-                    const empDept = userMap.get(String(req.user_id))?.department || '—';
+        {/* View switcher */}
+        {leaveSubTab === 'quotas' ? (
+          <LeaveQuotaOverviewTab
+            quotas={employeeLeaveQuotas}
+            loading={loading || loadingAdjustments}
+            onRefresh={loadAllData}
+            onOpenAdjust={(q) => setAdjustingQuota(q)}
+            isAdminOrHR={isManager}
+            currentYear={currentYear}
+          />
+        ) : (
+          <Card className="border-border/60 shadow-sm overflow-hidden">
+            {/* Toolbar Header */}
+            <CardHeader className="flex flex-row items-center justify-between pb-4 border-b border-border/40 bg-muted/20">
+              <div>
+                <CardTitle className="text-sm font-bold flex items-center gap-2">
+                  <Calendar size={16} className="text-primary" />
+                  Daftar Pengajuan Cuti &amp; Izin
+                </CardTitle>
+                <p className="text-[11px] font-medium text-muted-foreground mt-1">
+                  {filtered.length} pengajuan cuti &bull; Menunggu persetujuan: {pendingCount}
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {([
+                  { id: 'all', label: 'Semua', count: s.length },
+                  { id: 'pending', label: 'Menunggu', count: pendingCount },
+                  { id: 'approved', label: 'Disetujui', count: s.filter(l => l.status === 'approved').length },
+                  { id: 'rejected', label: 'Ditolak', count: s.filter(l => l.status === 'rejected').length },
+                ] as const).map(f => (
+                  <button
+                    key={f.id}
+                    onClick={() => setRequestFilter(f.id as any)}
+                    className={cn(
+                      'rounded-md px-2.5 py-1 text-xs font-semibold transition-all',
+                      requestFilter === f.id
+                        ? 'bg-primary dark:bg-blue-600 text-primary-foreground shadow-2xs'
+                        : 'border border-border/60 dark:border-zinc-800 bg-muted/30 dark:bg-zinc-900/60 text-muted-foreground hover:text-foreground hover:bg-muted/60 dark:hover:bg-zinc-800'
+                    )}
+                  >
+                    {f.label}
+                    <span className="ml-1 text-[10px] opacity-70">({f.count})</span>
+                  </button>
+                ))}
+              </div>
+            </CardHeader>
 
-                    return (
-                      <TableRow
-                        key={req.id}
-                        onClick={() => setViewRequest({ kind: (req as any).amount != null ? 'reimbursement' : (req as any).leave_type != null ? 'cuti' : 'lembur', req })}
-                        className="cursor-pointer hover:bg-muted/30 dark:hover:bg-zinc-800/40 transition-colors"
-                      >
-                        {isApprover && (
-                          <TableCell className="py-3">
-                            <div className="flex items-center gap-2.5">
-                              <UserAvatar name={empName} url={empAvatar} size="sm" />
-                              <div className="min-w-0">
-                                <div className="text-xs font-semibold text-foreground truncate">{empName}</div>
-                                <div className="text-[11px] text-muted-foreground truncate">{empDept}</div>
-                              </div>
-                            </div>
-                          </TableCell>
-                        )}
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <span className={cn('flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-sm', typeInfo?.badge || 'bg-muted')}>
-                              {typeInfo?.icon || '📝'}
-                            </span>
-                            <span className="text-xs font-semibold text-foreground">{typeInfo?.label || req.leave_type}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-xs tabular-nums text-foreground/80 whitespace-nowrap">
-                          {new Date(req.start_date).toLocaleDateString('id-ID')}
-                          <span className="mx-1 text-muted-foreground">—</span>
-                          {new Date(req.end_date).toLocaleDateString('id-ID')}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className="border-border/60 bg-muted/40 text-foreground text-xs font-semibold">
-                            {days} hari
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="max-w-[240px] truncate text-xs text-muted-foreground" title={req.reason}>
-                          {req.reason}
-                        </TableCell>
-                        <TableCell className="text-xs tabular-nums text-muted-foreground whitespace-nowrap">
-                          {new Date(req.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
-                        </TableCell>
-                        <TableCell>
-                          {renderStatusBadge(req.status)}
-                          {req.status === 'rejected' && req.rejection_reason && (
-                            <div className="text-[10px] text-rose-500 mt-0.5 max-w-[160px] truncate">{req.rejection_reason}</div>
-                          )}
-                          {renderApprovalHistory(req)}
-                        </TableCell>
-                        {isApprover && (
-                          <TableCell className="text-right pr-4">
-                            {showApprove || showReject ? (
-                              <div className="flex items-center justify-end gap-1.5">
-                                {showApprove && (
-                                  <Button
-                                    size="sm"
-                                    onClick={(e) => { e.stopPropagation(); handleApproveLeave(req); }}
-                                    className="h-7 px-2.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
-                                    title="Setujui Cuti"
-                                  >
-                                    <Check size={12} className="mr-1" /> Setujui
-                                  </Button>
-                                )}
-                                {showReject && (
-                                  <Button
-                                    size="sm"
-                                    variant="destructive"
-                                    onClick={(e) => { e.stopPropagation(); handleRejectRequest('leave_requests', req.id); }}
-                                    className="h-7 px-2.5 text-xs font-semibold"
-                                    title="Tolak Cuti"
-                                  >
-                                    <X size={12} className="mr-1" /> Tolak
-                                  </Button>
-                                )}
-                              </div>
-                            ) : req.status === 'rejected' ? (
-                              <span className="text-xs text-rose-500 font-semibold">Ditolak</span>
-                            ) : req.status === 'approved' ? (
-                              <span className="text-xs text-emerald-500 font-semibold">Selesai</span>
-                            ) : isRequester(req.user_id) ? (
-                              <span className="text-xs text-amber-500 font-medium">Menunggu {getApproverName(req.user_id, req.status)}</span>
-                            ) : (
-                              <span className="text-xs text-muted-foreground font-medium">
-                                {req.approved_by ? `oleh ${req.approved_by}` : '—'}
-                              </span>
-                            )}
-                          </TableCell>
-                        )}
+            {/* Table Content */}
+            <CardContent className="p-0">
+              {filtered.length === 0 ? (
+                <div className="flex flex-col items-center gap-2 py-16 text-center text-muted-foreground">
+                  <FileText size={36} className="opacity-30" />
+                  <p className="text-sm font-semibold text-foreground">Belum ada pengajuan cuti</p>
+                  <p className="text-xs text-muted-foreground">Tidak ada permohonan yang sesuai filter saat ini</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="hover:bg-transparent">
+                        {isApprover && <TableHead className="w-[240px]">Karyawan</TableHead>}
+                        <TableHead>Jenis Cuti</TableHead>
+                        <TableHead>Periode</TableHead>
+                        <TableHead>Durasi</TableHead>
+                        <TableHead className="min-w-[200px]">Alasan</TableHead>
+                        <TableHead>Diajukan</TableHead>
+                        <TableHead>Status</TableHead>
+                        {isApprover && <TableHead className="text-right pr-4">Aksi</TableHead>}
                       </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                    </TableHeader>
+                    <TableBody>
+                      {filtered.map((req) => {
+                        const typeInfo = LEAVE_TYPES.find(t => t.id === req.leave_type);
+                        const days = Math.ceil((new Date(req.end_date).getTime() - new Date(req.start_date).getTime()) / 86400000) + 1;
+                        const showApprove = isApprover && canApproveRequest(req.user_id, req.status);
+                        const showReject = isApprover && canRejectRequest(req.user_id, req.status);
+                        const empName = getRequestEmployeeName(req.user_id);
+                        const empAvatar = userMap.get(String(req.user_id))?.avatar_url;
+                        const empDept = userMap.get(String(req.user_id))?.department || '—';
+
+                        return (
+                          <TableRow
+                            key={req.id}
+                            onClick={() => setViewRequest({ kind: (req as any).amount != null ? 'reimbursement' : (req as any).leave_type != null ? 'cuti' : 'lembur', req })}
+                            className="cursor-pointer hover:bg-muted/30 dark:hover:bg-zinc-800/40 transition-colors"
+                          >
+                            {isApprover && (
+                              <TableCell className="py-3">
+                                <div className="flex items-center gap-2.5">
+                                  <UserAvatar name={empName} url={empAvatar} size="sm" />
+                                  <div className="min-w-0">
+                                    <div className="text-xs font-semibold text-foreground truncate">{empName}</div>
+                                    <div className="text-[11px] text-muted-foreground truncate">{empDept}</div>
+                                  </div>
+                                </div>
+                              </TableCell>
+                            )}
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <span className={cn('flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-sm', typeInfo?.badge || 'bg-muted')}>
+                                  {typeInfo?.icon || '📝'}
+                                </span>
+                                <span className="text-xs font-semibold text-foreground">{typeInfo?.label || req.leave_type}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-xs tabular-nums text-foreground/80 whitespace-nowrap">
+                              {new Date(req.start_date).toLocaleDateString('id-ID')}
+                              <span className="mx-1 text-muted-foreground">—</span>
+                              {new Date(req.end_date).toLocaleDateString('id-ID')}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="border-border/60 bg-muted/40 text-foreground text-xs font-semibold">
+                                {days} hari
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="max-w-[240px] truncate text-xs text-muted-foreground" title={req.reason}>
+                              {req.reason}
+                            </TableCell>
+                            <TableCell className="text-xs tabular-nums text-muted-foreground whitespace-nowrap">
+                              {new Date(req.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                            </TableCell>
+                            <TableCell>
+                              {renderStatusBadge(req.status)}
+                              {req.status === 'rejected' && req.rejection_reason && (
+                                <div className="text-[10px] text-rose-500 mt-0.5 max-w-[160px] truncate">{req.rejection_reason}</div>
+                              )}
+                              {renderApprovalHistory(req)}
+                            </TableCell>
+                            {isApprover && (
+                              <TableCell className="text-right pr-4">
+                                {showApprove || showReject ? (
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    {showApprove && (
+                                      <Button
+                                        size="sm"
+                                        onClick={(e) => { e.stopPropagation(); handleApproveLeave(req); }}
+                                        className="h-7 px-2.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
+                                        title="Setujui Cuti"
+                                      >
+                                        <Check size={12} className="mr-1" /> Setujui
+                                      </Button>
+                                    )}
+                                    {showReject && (
+                                      <Button
+                                        size="sm"
+                                        variant="destructive"
+                                        onClick={(e) => { e.stopPropagation(); handleRejectRequest('leave_requests', req.id); }}
+                                        className="h-7 px-2.5 text-xs font-semibold"
+                                        title="Tolak Cuti"
+                                      >
+                                        <X size={12} className="mr-1" /> Tolak
+                                      </Button>
+                                    )}
+                                  </div>
+                                ) : req.status === 'rejected' ? (
+                                  <span className="text-xs text-rose-500 font-semibold">Ditolak</span>
+                                ) : req.status === 'approved' ? (
+                                  <span className="text-xs text-emerald-500 font-semibold">Selesai</span>
+                                ) : isRequester(req.user_id) ? (
+                                  <span className="text-xs text-amber-500 font-medium">Menunggu {getApproverName(req.user_id, req.status)}</span>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground font-medium">
+                                    {req.approved_by ? `oleh ${req.approved_by}` : '—'}
+                                  </span>
+                                )}
+                              </TableCell>
+                            )}
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+      </div>
     );
   };
 
@@ -1800,14 +1904,18 @@ export const AttendanceRequest: React.FC<AttendanceRequestProps> = ({ currentUse
                 onValueChange={(val) => setPolicyModalTab(val as any)}
                 className="w-full"
               >
-                <TabsList className="grid w-full grid-cols-2 max-w-md">
+                <TabsList className="grid w-full grid-cols-3 max-w-xl">
                   <TabsTrigger value="kacamata" className="text-xs font-semibold gap-1.5">
                     <Stethoscope size={14} />
-                    <span>SK Bantuan Kacamata &amp; Lensa</span>
+                    <span>SK Kacamata</span>
                   </TabsTrigger>
                   <TabsTrigger value="cuti" className="text-xs font-semibold gap-1.5">
                     <Calendar size={14} />
-                    <span>Ketentuan Cuti (PKWTT vs PKWT)</span>
+                    <span>Cuti Tahunan</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="pasal22" className="text-xs font-semibold gap-1.5">
+                    <Gift size={14} />
+                    <span>Pasal 22 (Izin Berbayar)</span>
                   </TabsTrigger>
                 </TabsList>
               </Tabs>
@@ -2000,6 +2108,61 @@ export const AttendanceRequest: React.FC<AttendanceRequestProps> = ({ currentUse
                   </div>
                 </div>
               )}
+
+              {policyModalTab === 'pasal22' && (
+                <div className="space-y-4 animate-in fade-in duration-300">
+                  <div className="rounded-xl border border-blue-500/30 bg-blue-50/50 dark:bg-blue-950/20 p-4 space-y-2">
+                    <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400 font-bold text-sm">
+                      <Sparkles size={16} />
+                      <span>Pasal 22 — Izin Meninggalkan Pekerjaan dengan Mendapat Upah</span>
+                    </div>
+                    <p className="text-xs text-foreground/90 leading-relaxed">
+                      Sesuai Peraturan Perusahaan Bab V Pasal 22, izin-izin khusus di bawah ini tetap diberikan upah penuh dan <strong className="text-emerald-600 dark:text-emerald-400">TIDAK memotong hak cuti tahunan</strong>.
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl border border-border overflow-hidden">
+                    <Table>
+                      <TableHeader className="bg-muted/50">
+                        <TableRow>
+                          <TableHead className="text-xs font-bold w-[14%]">Ayat 1</TableHead>
+                          <TableHead className="text-xs font-bold w-[56%]">Alasan Izin Resmi</TableHead>
+                          <TableHead className="text-xs font-bold text-right w-[30%]">Hak Hari Kerja</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody className="text-xs">
+                        {ARTICLE_22_LEAVE_TYPES.map(item => (
+                          <TableRow key={item.id} className="hover:bg-muted/30">
+                            <TableCell className="font-bold text-primary">{item.articleClause}</TableCell>
+                            <TableCell>
+                              <div className="font-semibold text-foreground">{item.label}</div>
+                              <div className="text-[11px] text-muted-foreground">{item.description}</div>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 font-bold">
+                                {item.maxDays} hari kerja
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+
+                  <div className="rounded-xl border border-amber-500/20 bg-amber-50/40 dark:bg-amber-950/20 p-3.5 space-y-1.5 text-xs text-foreground/90">
+                    <div className="flex items-center gap-1.5 font-bold text-amber-600 dark:text-amber-400">
+                      <AlertCircle size={14} />
+                      <span>Ketentuan Tambahan Pasal 22</span>
+                    </div>
+                    <p>
+                      <strong>Ayat 2:</strong> Izin meninggalkan Pekerjaan dapat dilakukan setelah mendapat persetujuan dari Perusahaan.
+                    </p>
+                    <p>
+                      <strong>Ayat 3:</strong> Alasan-alasan lain yang tidak diatur dalam ayat 1 (satu), maka akan <strong className="text-rose-600 dark:text-rose-400">memotong Hak Cuti Tahunan</strong>.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Modal Footer */}
@@ -2011,7 +2174,7 @@ export const AttendanceRequest: React.FC<AttendanceRequestProps> = ({ currentUse
                 variant="outline"
                 size="sm"
                 onClick={() => setShowPolicyModal(false)}
-                className="h-8 text-xs font-semibold"
+                className="h-8 text-xs font-semibold cursor-pointer"
               >
                 Tutup
               </Button>
@@ -2019,6 +2182,31 @@ export const AttendanceRequest: React.FC<AttendanceRequestProps> = ({ currentUse
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Leave Quota Adjustment Modal (HR) */}
+      <LeaveQuotaAdjustmentModal
+        isOpen={!!adjustingQuota}
+        onClose={() => setAdjustingQuota(null)}
+        quota={adjustingQuota}
+        currentUser={currentUser}
+        onSuccess={() => {
+          setAdjustingQuota(null);
+          loadAllData();
+        }}
+      />
+
+      {/* New Leave / Permit Request Modal */}
+      <NewLeaveRequestModal
+        isOpen={showNewLeaveModal}
+        onClose={() => setShowNewLeaveModal(false)}
+        currentUser={currentUser}
+        allUsers={allUsers}
+        myQuota={myQuota}
+        onSuccess={() => {
+          setShowNewLeaveModal(false);
+          loadAllData();
+        }}
+      />
     </div>
   );
 };
