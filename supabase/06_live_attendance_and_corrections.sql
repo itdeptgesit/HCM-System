@@ -3,7 +3,7 @@
 -- Penanganan Live Attendance Luar Radius (Dinas Luar) & Koreksi Absen (Lupa Absen Masuk/Pulang/Seharian)
 -- ==============================================================================
 
--- 1. Pastikan tabel attendance_requests memiliki kolom pendukung
+-- 1. Pastikan tabel attendance_requests dan attendance_correction_requests memiliki kolom pendukung
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'attendance_requests' AND column_name = 'reviewer_note') THEN
@@ -31,7 +31,7 @@ DECLARE
   v_row public.attendance_requests;
 BEGIN
   IF v_user IS NULL THEN 
-    RAISE EXCEPTION 'USER_ACCOUNT_NOT_FOUND'; 
+    RAISE EXCEPTION 'USER_ACCOUNT_NOT_FOUND: Akun pengguna tidak ditemukan.'; 
   END IF;
   
   IF p_lat IS NULL OR p_lng IS NULL OR p_lat NOT BETWEEN -90 AND 90 OR p_lng NOT BETWEEN -180 AND 180 THEN
@@ -39,9 +39,11 @@ BEGIN
   END IF;
 
   INSERT INTO public.attendance_requests(
-    user_id, request_date, latitude, longitude, photo_url, reason, status, requested_at
+    user_id, request_date, latitude, longitude, photo_url, reason, status, requested_at,
+    reviewer_id, reviewed_at, reviewer_note
   ) VALUES (
-    v_user, p_date, p_lat, p_lng, p_photo_url, TRIM(COALESCE(p_reason, 'Dinas Luar / Luar Radius')), 'pending', now()
+    v_user, p_date, p_lat, p_lng, p_photo_url, TRIM(COALESCE(p_reason, 'Dinas Luar / Luar Radius')), 'pending', now(),
+    NULL, NULL, NULL
   )
   ON CONFLICT (user_id, request_date) DO UPDATE
     SET latitude = EXCLUDED.latitude,
@@ -49,7 +51,10 @@ BEGIN
         photo_url = EXCLUDED.photo_url,
         reason = EXCLUDED.reason,
         status = 'pending',
-        requested_at = now()
+        requested_at = now(),
+        reviewer_id = NULL,
+        reviewed_at = NULL,
+        reviewer_note = NULL
   RETURNING * INTO v_row;
 
   RETURN v_row;
@@ -111,6 +116,11 @@ BEGIN
           photo_url = COALESCE(v_row.photo_url, photo_url),
           work_mode = 'dinas',
           status = 'present',
+          total_work_minutes = CASE 
+            WHEN clock_out IS NOT NULL AND COALESCE(clock_in, v_row.requested_at) IS NOT NULL
+            THEN GREATEST(0, ROUND(EXTRACT(EPOCH FROM (clock_out - COALESCE(clock_in, v_row.requested_at))) / 60)::integer)
+            ELSE total_work_minutes
+          END,
           notes = TRIM(COALESCE(notes, '') || ' [Dinas Luar Disetujui HR: ' || COALESCE(v_row.reason, '') || ']'),
           approved_by = v_reviewer,
           approved_at = now(),
@@ -168,11 +178,15 @@ DECLARE
   v_row public.attendance_correction_requests;
 BEGIN
   IF v_user IS NULL THEN 
-    RAISE EXCEPTION 'USER_ACCOUNT_NOT_FOUND'; 
+    RAISE EXCEPTION 'USER_ACCOUNT_NOT_FOUND: Akun pengguna tidak ditemukan.'; 
   END IF;
 
   IF p_clock_in IS NULL AND p_clock_out IS NULL THEN
     RAISE EXCEPTION 'Wajib mengisi jam masuk atau jam pulang yang ingin dikoreksi.';
+  END IF;
+
+  IF p_clock_in IS NOT NULL AND p_clock_out IS NOT NULL AND p_clock_out < p_clock_in THEN
+    RAISE EXCEPTION 'Jam pulang tidak boleh lebih awal dari jam masuk.';
   END IF;
 
   IF TRIM(COALESCE(p_reason, '')) = '' THEN
@@ -180,16 +194,21 @@ BEGIN
   END IF;
 
   INSERT INTO public.attendance_correction_requests(
-    user_id, attendance_date, clock_in_time, clock_out_time, reason, status, requested_at
+    user_id, attendance_date, clock_in_time, clock_out_time, reason, status, requested_at,
+    reviewer_id, reviewed_at, reviewer_note
   ) VALUES (
-    v_user, p_attendance_date, p_clock_in, p_clock_out, TRIM(p_reason), 'pending', now()
+    v_user, p_attendance_date, p_clock_in, p_clock_out, TRIM(p_reason), 'pending', now(),
+    NULL, NULL, NULL
   )
   ON CONFLICT (user_id, attendance_date) DO UPDATE
     SET clock_in_time = EXCLUDED.clock_in_time,
         clock_out_time = EXCLUDED.clock_out_time,
         reason = EXCLUDED.reason,
         status = 'pending',
-        requested_at = now()
+        requested_at = now(),
+        reviewer_id = NULL,
+        reviewed_at = NULL,
+        reviewer_note = NULL
   RETURNING * INTO v_row;
 
   RETURN v_row;
@@ -249,6 +268,10 @@ BEGIN
       v_final_in := COALESCE(v_row.clock_in_time, v_existing_rec.clock_in);
       v_final_out := COALESCE(v_row.clock_out_time, v_existing_rec.clock_out);
 
+      IF v_final_in IS NOT NULL AND v_final_out IS NOT NULL AND v_final_out < v_final_in THEN
+        RAISE EXCEPTION 'INVALID_TIME_RANGE: Jam pulang tidak boleh lebih awal dari jam masuk.';
+      END IF;
+
       IF v_final_in IS NOT NULL AND v_final_out IS NOT NULL THEN
         v_work_minutes := GREATEST(0, ROUND(EXTRACT(EPOCH FROM (v_final_out - v_final_in)) / 60)::integer);
       ELSE
@@ -269,6 +292,10 @@ BEGIN
       -- Skenario: Karyawan lupa absen seharian (tidak ada clock_in dan clock_out sama sekali)
       v_final_in := v_row.clock_in_time;
       v_final_out := v_row.clock_out_time;
+
+      IF v_final_in IS NOT NULL AND v_final_out IS NOT NULL AND v_final_out < v_final_in THEN
+        RAISE EXCEPTION 'INVALID_TIME_RANGE: Jam pulang tidak boleh lebih awal dari jam masuk.';
+      END IF;
 
       IF v_final_in IS NOT NULL AND v_final_out IS NOT NULL THEN
         v_work_minutes := GREATEST(0, ROUND(EXTRACT(EPOCH FROM (v_final_out - v_final_in)) / 60)::integer);
