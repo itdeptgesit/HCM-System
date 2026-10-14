@@ -1,11 +1,12 @@
 'use client';
 
-import React from 'react';
-import { ShieldAlert, ArrowLeft, LifeBuoy, Lock, Mail, ChevronRight, AlertCircle } from 'lucide-react';
+import React, { useState } from 'react';
+import { ShieldAlert, ArrowLeft, LifeBuoy, Copy, Check, Lock, UserCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { UserAvatar } from './UserAvatar';
+import { toast } from 'sonner';
 import { UserAccount } from '../types';
 
 interface AccessDeniedProps {
@@ -24,6 +25,7 @@ export const AccessDenied: React.FC<AccessDeniedProps> = ({
   onBack
 }) => {
   const navigate = useNavigate();
+  const [copied, setCopied] = useState(false);
 
   const handleBack = () => {
     if (onBack) {
@@ -35,105 +37,159 @@ export const AccessDenied: React.FC<AccessDeniedProps> = ({
 
   const userRole = currentUser?.role || 'User';
   const userGroups = currentUser?.groups || [];
+  const userName = currentUser?.fullName || 'Pengguna';
+  const userEmail = currentUser?.email || '-';
+
+  const referenceCode = `SEC-403-${(moduleName || 'MOD').replace(/[^a-zA-Z0-9]/g, '').slice(0, 8).toUpperCase()}`;
+
+  const handleCopyDetails = () => {
+    const details = [
+      `[Gesit People - Laporan Izin Akses]`,
+      `Referensi: ${referenceCode}`,
+      `Modul: ${moduleName}`,
+      `Akun: ${userName} (${userEmail})`,
+      `Role: ${userRole}`,
+      `Grup: ${userGroups.join(', ') || 'None'}`,
+      `Akses Diperlukan: ${requiredAccess}`
+    ].join('\n');
+
+    navigator.clipboard.writeText(details).then(() => {
+      setCopied(true);
+      toast.success('Rincian akses disalin ke clipboard untuk tiket Helpdesk');
+      setTimeout(() => setCopied(false), 2500);
+    }).catch(() => {
+      toast.error('Gagal menyalin rincian akses');
+    });
+  };
 
   return (
-    <div className="min-h-[75vh] flex items-center justify-center p-4 sm:p-6 animate-in fade-in zoom-in-95 duration-400">
-      <Card className="max-w-xl w-full border-border/70 shadow-xl overflow-hidden bg-card/95 backdrop-blur-sm">
-        {/* Top Header Glow Bar */}
-        <div className="h-1.5 w-full bg-gradient-to-r from-amber-500 via-rose-500 to-indigo-500" />
-
-        <CardContent className="p-6 sm:p-8 space-y-6">
-          {/* Icon & Title */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-            <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0 shadow-sm">
-              <ShieldAlert size={28} />
+    <div className="min-h-[75vh] flex items-center justify-center p-4 sm:p-6">
+      <div className="max-w-xl w-full bg-card border border-border rounded-xl shadow-xs overflow-hidden">
+        {/* Header section with refined security emblem */}
+        <div className="p-6 sm:p-8 pb-5 border-b border-border/60">
+          <div className="flex items-start gap-4">
+            <div className="w-11 h-11 rounded-lg bg-slate-100 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 text-slate-700 dark:text-zinc-200 flex items-center justify-center shrink-0">
+              <ShieldAlert className="w-5 h-5" strokeWidth={1.75} aria-hidden="true" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <Badge variant="outline" className="border-amber-500/30 text-amber-600 dark:text-amber-400 bg-amber-500/5 text-[10px] font-bold uppercase tracking-wider">
-                  Akses Terbatas
-                </Badge>
-                <Badge variant="outline" className="text-[10px] font-mono text-muted-foreground">
-                  403 Forbidden
-                </Badge>
+
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="text-lg sm:text-xl font-semibold text-foreground tracking-tight">
+                  Akses Tidak Diizinkan
+                </h2>
+                <span className="text-[11px] font-mono text-muted-foreground bg-muted/60 dark:bg-muted/30 px-2 py-0.5 rounded border border-border/50 shrink-0">
+                  HTTP 403
+                </span>
               </div>
-              <h2 className="text-xl sm:text-2xl font-bold text-foreground mt-1 tracking-tight">
-                Tidak Memiliki Izin Akses
-              </h2>
+              <p className="text-xs sm:text-sm text-muted-foreground mt-1.5 leading-relaxed">
+                Akses ke modul <span className="font-medium text-foreground">{moduleName}</span> dibatasi berdasarkan kebijakan wewenang peran (role-based access control). {description}
+              </p>
             </div>
           </div>
+        </div>
 
-          {/* Description */}
-          <p className="text-sm text-muted-foreground leading-relaxed">
-            Halaman <b className="text-foreground">{moduleName}</b> dilindungi dan memerlukan otorisasi khusus. {description}
-          </p>
+        {/* Credentials & Access Specification Table */}
+        <div className="p-6 sm:p-8 py-5 space-y-4">
+          <div className="text-xs font-semibold text-muted-foreground tracking-wider uppercase">
+            Informasi Sesi & Wewenang
+          </div>
 
-          {/* User & Access Details Box */}
-          <div className="rounded-xl border border-border/60 bg-muted/30 p-4 space-y-3 text-xs">
-            <div className="flex items-center justify-between pb-2 border-b border-border/40">
-              <span className="text-muted-foreground font-medium">Akun Pengguna</span>
-              <span className="font-semibold text-foreground text-right">
-                {currentUser?.fullName || 'Pengguna'} <span className="text-muted-foreground font-normal">({currentUser?.email || '-'})</span>
+          <div className="rounded-lg border border-border/80 bg-muted/20 divide-y divide-border/60 text-xs">
+            {/* User Account */}
+            <div className="p-3 sm:px-4 sm:py-3 flex items-center justify-between gap-3">
+              <span className="text-muted-foreground shrink-0">Identitas Pengguna</span>
+              <div className="flex items-center gap-2 min-w-0 text-right">
+                <UserAvatar name={userName} url={currentUser?.avatarUrl} size="xs" />
+                <div className="truncate">
+                  <span className="font-medium text-foreground">{userName}</span>
+                  <span className="text-muted-foreground ml-1 hidden sm:inline">({userEmail})</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Current Role */}
+            <div className="p-3 sm:px-4 sm:py-3 flex items-center justify-between gap-3">
+              <span className="text-muted-foreground shrink-0">Role Saat Ini</span>
+              <div className="flex items-center gap-1.5">
+                <Badge variant="outline" className="font-medium text-xs rounded-md">
+                  {userRole}
+                </Badge>
+              </div>
+            </div>
+
+            {/* Required Entitlement */}
+            <div className="p-3 sm:px-4 sm:py-3 flex items-start justify-between gap-3">
+              <span className="text-muted-foreground shrink-0 flex items-center gap-1">
+                <Lock className="w-3.5 h-3.5" />
+                Hak Diperlukan
               </span>
-            </div>
-
-            <div className="flex items-center justify-between pb-2 border-b border-border/40">
-              <span className="text-muted-foreground font-medium">Role Saat Ini</span>
-              <Badge variant="outline" className="text-[11px] font-semibold">
-                {userRole}
-              </Badge>
-            </div>
-
-            <div className="flex items-center justify-between pb-2 border-b border-border/40">
-              <span className="text-muted-foreground font-medium">Akses Diperlukan</span>
-              <span className="font-semibold text-amber-600 dark:text-amber-400 text-right">
+              <span className="font-medium text-foreground text-right">
                 {requiredAccess}
               </span>
             </div>
 
-            <div className="flex flex-col gap-1 pt-1">
-              <span className="text-muted-foreground font-medium">Grup Terdaftar</span>
-              <div className="flex flex-wrap gap-1 mt-0.5">
+            {/* Registered Groups */}
+            <div className="p-3 sm:px-4 sm:py-3 flex items-start justify-between gap-3">
+              <span className="text-muted-foreground shrink-0">Grup Akses</span>
+              <div className="flex flex-wrap justify-end gap-1 text-right">
                 {userGroups.length > 0 ? (
                   userGroups.map((g) => (
-                    <span key={g} className="px-2 py-0.5 rounded-md bg-background border border-border text-[11px] text-muted-foreground">
+                    <span
+                      key={g}
+                      className="px-2 py-0.5 rounded bg-background border border-border text-[11px] text-muted-foreground font-mono"
+                    >
                       {g}
                     </span>
                   ))
                 ) : (
-                  <span className="text-muted-foreground italic">Tidak ada grup tambahan</span>
+                  <span className="text-muted-foreground italic text-[11px]">Tidak ada grup terdaftar</span>
                 )}
               </div>
             </div>
           </div>
 
-          {/* Guidance note */}
-          <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 p-3.5 flex items-start gap-3 text-xs text-amber-900 dark:text-amber-200">
-            <AlertCircle size={16} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-            <p className="leading-relaxed">
-              Jika Anda memerlukan akses ke modul ini untuk keperluan tugas pekerjaan, silakan ajukan permohonan hak akses kepada <b>Administrator IT</b> atau <b>Tim HR</b> melalui tiket Helpdesk.
+          {/* Helpdesk & Support Resolution Box */}
+          <div className="rounded-lg border border-border/70 bg-muted/40 p-3.5 sm:p-4 text-xs space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="font-semibold text-foreground">Prosedur Permohonan Akses</span>
+              <span className="text-[11px] font-mono text-muted-foreground">{referenceCode}</span>
+            </div>
+            <p className="text-muted-foreground leading-relaxed">
+              Bila tugas operasional Anda memerlukan modul ini, ajukan permohonan melalui Gesit Helpdesk dengan mencantumkan persetujuan atasan langsung.
             </p>
+            <div className="pt-1">
+              <button
+                type="button"
+                onClick={handleCopyDetails}
+                className="inline-flex items-center gap-1.5 text-xs text-primary font-medium hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded px-1 -mx-1 py-0.5 transition-colors"
+              >
+                {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                {copied ? 'Rincian berhasil disalin' : 'Salin rincian akses untuk tiket Helpdesk'}
+              </button>
+            </div>
           </div>
+        </div>
 
-          {/* Action Buttons */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
-            <Button
-              variant="outline"
-              onClick={handleBack}
-              className="w-full sm:w-auto text-xs font-semibold gap-1.5"
-            >
-              <ArrowLeft size={14} /> Kembali ke Beranda
-            </Button>
+        {/* Footer Actions */}
+        <div className="p-6 sm:p-8 pt-0 flex flex-col-reverse sm:flex-row items-center justify-between gap-3">
+          <Button
+            variant="outline"
+            onClick={handleBack}
+            className="w-full sm:w-auto text-xs font-medium gap-1.5 h-9"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            Kembali ke Beranda
+          </Button>
 
-            <Button
-              onClick={() => navigate('/helpdesk')}
-              className="w-full sm:w-auto text-xs font-bold gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90"
-            >
-              <LifeBuoy size={14} /> Minta Akses via Helpdesk <ChevronRight size={14} />
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+          <Button
+            onClick={() => navigate('/helpdesk')}
+            className="w-full sm:w-auto text-xs font-semibold gap-1.5 h-9 bg-brand-navy hover:bg-brand-navy/90 text-white dark:bg-primary dark:text-primary-foreground"
+          >
+            <LifeBuoy className="w-3.5 h-3.5" />
+            Ajukan Tiket Helpdesk
+          </Button>
+        </div>
+      </div>
     </div>
   );
 };

@@ -2,10 +2,12 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
   MapPin, Plus, Search, Filter, RefreshCw, Trash2, Edit3,
   Loader2, Locate, ExternalLink, Map as MapIcon, MapPinOff, Ban,
-  Building2, CheckCircle2, Navigation, AlertTriangle, RotateCcw, Info
+  Building2, CheckCircle2, Navigation, AlertTriangle, RotateCcw, Info,
+  Users, UserCheck, Lock, Unlock, Check, X, ShieldAlert
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../../lib/supabaseClient';
+import { loadWorkforceAccounts } from '../../lib/workforceData';
 import { cn } from '@/lib/utils';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -20,7 +22,10 @@ import { MapContainer, TileLayer, Marker, Circle, Popup, useMapEvents } from 're
 import 'leaflet/dist/leaflet.css';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { StatCard } from '../StatCard';
-import { OfficeLocation } from './attendanceTypes';
+import { UserAvatar } from '../UserAvatar';
+import {
+  OfficeLocation, UserAccount, parseLocationMeta, encodeLocationAddress
+} from './attendanceTypes';
 
 const MapPicker: React.FC<{
   lat: string;
@@ -68,12 +73,17 @@ const OfficeLocationsManager: React.FC<{
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [radiusFilter, setRadiusFilter] = useState<'all' | '50' | '100' | 'more'>('all');
+  const [accessFilter, setAccessFilter] = useState<'all' | 'all_users' | 'restricted'>('all');
 
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<OfficeLocation | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleteId, setDeleteId] = useState<string | number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Workforce Accounts state
+  const [allEmployees, setAllEmployees] = useState<UserAccount[]>([]);
+  const [loadingEmployees, setLoadingEmployees] = useState(false);
 
   // Form state
   const [name, setName] = useState('');
@@ -82,6 +92,44 @@ const OfficeLocationsManager: React.FC<{
   const [longitude, setLongitude] = useState('106.833600');
   const [radius, setRadius] = useState('50');
   const [isActive, setIsActive] = useState(true);
+  const [assignmentMode, setAssignmentMode] = useState<'all' | 'restricted'>('all');
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+  const [userSearchText, setUserSearchText] = useState('');
+  const [userDeptFilter, setUserDeptFilter] = useState('all');
+
+  // Quick Employee Assignment Modal state
+  const [managingLocation, setManagingLocation] = useState<OfficeLocation | null>(null);
+  const [quickMode, setQuickMode] = useState<'all' | 'restricted'>('all');
+  const [quickSelectedUserIds, setQuickSelectedUserIds] = useState<string[]>([]);
+  const [quickSearchText, setQuickSearchText] = useState('');
+  const [quickDeptFilter, setQuickDeptFilter] = useState('all');
+  const [quickSaving, setQuickSaving] = useState(false);
+
+  useEffect(() => {
+    loadEmployees();
+  }, []);
+
+  const loadEmployees = async () => {
+    setLoadingEmployees(true);
+    try {
+      const data = await loadWorkforceAccounts();
+      if (data && data.length > 0) {
+        setAllEmployees(data as any[]);
+      }
+    } catch (err: any) {
+      console.error('Error loading workforce accounts:', err);
+    } finally {
+      setLoadingEmployees(false);
+    }
+  };
+
+  const departmentsList = useMemo(() => {
+    const set = new Set<string>();
+    allEmployees.forEach(e => {
+      if (e.department && e.department.trim()) set.add(e.department.trim());
+    });
+    return Array.from(set).sort();
+  }, [allEmployees]);
 
   const openAdd = () => {
     setEditing(null);
@@ -91,19 +139,69 @@ const OfficeLocationsManager: React.FC<{
     setLongitude('106.833600');
     setRadius('50');
     setIsActive(true);
+    setAssignmentMode('all');
+    setSelectedUserIds([]);
+    setUserSearchText('');
+    setUserDeptFilter('all');
     setShowForm(true);
   };
 
   const openEdit = (loc: OfficeLocation) => {
     setEditing(loc);
     setName(loc.name);
-    setAddress(loc.address);
+    const meta = parseLocationMeta(loc);
+    setAddress(meta.cleanAddress);
     setLatitude(String(loc.latitude));
     setLongitude(String(loc.longitude));
     setRadius(String(loc.radius_meters));
     setIsActive(loc.is_active);
+    setAssignmentMode(meta.assignmentMode);
+    setSelectedUserIds(meta.assignedUserIds);
+    setUserSearchText('');
+    setUserDeptFilter('all');
     setShowForm(true);
   };
+
+  const openQuickManage = (loc: OfficeLocation) => {
+    setManagingLocation(loc);
+    const meta = parseLocationMeta(loc);
+    setQuickMode(meta.assignmentMode);
+    setQuickSelectedUserIds(meta.assignedUserIds);
+    setQuickSearchText('');
+    setQuickDeptFilter('all');
+  };
+
+  const filteredEmployees = useMemo(() => {
+    return allEmployees.filter(emp => {
+      if (userDeptFilter !== 'all' && (emp.department || '').trim() !== userDeptFilter) {
+        return false;
+      }
+      if (userSearchText.trim()) {
+        const q = userSearchText.toLowerCase().trim();
+        const matchName = (emp.full_name || '').toLowerCase().includes(q);
+        const matchEmail = (emp.email || '').toLowerCase().includes(q);
+        const matchCode = (emp.employee_code || '').toLowerCase().includes(q);
+        if (!matchName && !matchEmail && !matchCode) return false;
+      }
+      return true;
+    });
+  }, [allEmployees, userSearchText, userDeptFilter]);
+
+  const quickFilteredEmployees = useMemo(() => {
+    return allEmployees.filter(emp => {
+      if (quickDeptFilter !== 'all' && (emp.department || '').trim() !== quickDeptFilter) {
+        return false;
+      }
+      if (quickSearchText.trim()) {
+        const q = quickSearchText.toLowerCase().trim();
+        const matchName = (emp.full_name || '').toLowerCase().includes(q);
+        const matchEmail = (emp.email || '').toLowerCase().includes(q);
+        const matchCode = (emp.employee_code || '').toLowerCase().includes(q);
+        if (!matchName && !matchEmail && !matchCode) return false;
+      }
+      return true;
+    });
+  }, [allEmployees, quickSearchText, quickDeptFilter]);
 
   const handleGetCurrentPosition = () => {
     if (!navigator.geolocation) {
@@ -132,6 +230,7 @@ const OfficeLocationsManager: React.FC<{
         const { data, error } = await supabase.from('office_locations').select('*').order('name');
         if (!error && data) setLocations(data);
       }
+      await loadEmployees();
       toast.success('Data titik kantor berhasil diperbarui');
     } catch (err: any) {
       toast.error('Gagal memuat ulang: ' + (err.message || 'Error'));
@@ -151,14 +250,23 @@ const OfficeLocationsManager: React.FC<{
         setSaving(false);
         return;
       }
-      const payload = {
+
+      const finalAddress = encodeLocationAddress(address.trim() || name.trim(), assignmentMode, selectedUserIds);
+      const payload: any = {
         name: name.trim(),
-        address: address.trim() || name.trim(),
+        address: finalAddress,
         latitude: lat,
         longitude: lng,
         radius_meters: radiusM,
         is_active: isActive,
       };
+
+      const payloadWithNative: any = {
+        ...payload,
+        assignment_mode: assignmentMode,
+        assigned_user_ids: selectedUserIds,
+      };
+
       if (editing) {
         const { data: before, error: beforeError } = await supabase
           .from('office_locations')
@@ -168,11 +276,13 @@ const OfficeLocationsManager: React.FC<{
         if (beforeError) throw beforeError;
         if (!before) throw new Error('Lokasi tidak ditemukan atau tidak bisa dibaca.');
 
-        const { error } = await supabase
-          .from('office_locations')
-          .update(payload)
-          .eq('id', editing.id);
-        if (error) throw error;
+        let updateErr: any = null;
+        const res1 = await supabase.from('office_locations').update(payloadWithNative).eq('id', editing.id);
+        if (res1.error) {
+          const res2 = await supabase.from('office_locations').update(payload).eq('id', editing.id);
+          updateErr = res2.error;
+        }
+        if (updateErr) throw updateErr;
 
         const { data: saved, error: verifyError } = await supabase
           .from('office_locations')
@@ -182,14 +292,29 @@ const OfficeLocationsManager: React.FC<{
         if (verifyError) throw verifyError;
         if (!saved) throw new Error('Update ditolak RLS: data tidak terlihat setelah disimpan.');
 
-        setLocations(prev => prev.map(l => (l.id === editing.id ? { ...l, ...saved } as OfficeLocation : l)));
+        setLocations(prev => prev.map(l => (l.id === editing.id ? {
+          ...l,
+          ...saved,
+          assignment_mode: assignmentMode,
+          assigned_user_ids: selectedUserIds
+        } as OfficeLocation : l)));
+
         toast.success(`Lokasi "${saved.name}" berhasil diperbarui`);
       } else {
-        const { data, error } = await supabase.from('office_locations').insert([payload]).select().single();
-        if (error) throw error;
-        if (data) {
-          setLocations(prev => [...prev, data as OfficeLocation]);
-          toast.success(`Lokasi "${data.name}" berhasil ditambahkan`);
+        let insertRes: any = await supabase.from('office_locations').insert([payloadWithNative]).select().single();
+        if (insertRes.error) {
+          insertRes = await supabase.from('office_locations').insert([payload]).select().single();
+        }
+        if (insertRes.error) throw insertRes.error;
+
+        if (insertRes.data) {
+          const savedLoc: OfficeLocation = {
+            ...(insertRes.data as OfficeLocation),
+            assignment_mode: assignmentMode,
+            assigned_user_ids: selectedUserIds
+          };
+          setLocations(prev => [...prev, savedLoc]);
+          toast.success(`Lokasi "${savedLoc.name}" berhasil ditambahkan`);
         }
       }
       setShowForm(false);
@@ -198,6 +323,50 @@ const OfficeLocationsManager: React.FC<{
       toast.error('Gagal simpan lokasi: ' + err.message);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleQuickSave = async () => {
+    if (!managingLocation) return;
+    setQuickSaving(true);
+    try {
+      const meta = parseLocationMeta(managingLocation);
+      const finalAddress = encodeLocationAddress(meta.cleanAddress || managingLocation.name, quickMode, quickSelectedUserIds);
+      const payload: any = {
+        address: finalAddress,
+      };
+      const payloadWithNative: any = {
+        ...payload,
+        assignment_mode: quickMode,
+        assigned_user_ids: quickSelectedUserIds,
+      };
+
+      let err: any = null;
+      const res1 = await supabase.from('office_locations').update(payloadWithNative).eq('id', managingLocation.id);
+      if (res1.error) {
+        const res2 = await supabase.from('office_locations').update(payload).eq('id', managingLocation.id);
+        err = res2.error;
+      }
+      if (err) throw err;
+
+      setLocations(prev => prev.map(l => {
+        if (l.id === managingLocation.id) {
+          return {
+            ...l,
+            address: finalAddress,
+            assignment_mode: quickMode,
+            assigned_user_ids: quickSelectedUserIds,
+          };
+        }
+        return l;
+      }));
+
+      toast.success(`Hak akses presensi untuk "${managingLocation.name}" berhasil diperbarui`);
+      setManagingLocation(null);
+    } catch (err: any) {
+      toast.error('Gagal menyimpan hak akses: ' + err.message);
+    } finally {
+      setQuickSaving(false);
     }
   };
 
@@ -451,94 +620,125 @@ const OfficeLocationsManager: React.FC<{
                 <Table>
                   <TableHeader>
                     <TableRow className="hover:bg-transparent">
-                      <TableHead className="w-[340px]">Lokasi Kantor &amp; Alamat</TableHead>
+                      <TableHead className="w-[320px]">Lokasi Kantor &amp; Alamat</TableHead>
                       <TableHead>Koordinat GPS</TableHead>
                       <TableHead>Radius Geofence</TableHead>
+                      <TableHead>Hak Akses Karyawan</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="text-right pr-4">Aksi</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredLocations.map(loc => (
-                      <TableRow key={loc.id} className="hover:bg-muted/30 dark:hover:bg-zinc-800/40 transition-colors">
-                        <TableCell className="py-3.5">
-                          <div className="flex items-start gap-3">
-                            <div className={cn(
-                              'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-colors',
-                              loc.is_active
-                                ? 'bg-primary/10 text-primary dark:bg-blue-500/15 dark:text-blue-400'
-                                : 'bg-muted text-muted-foreground'
-                            )}>
-                              <MapPin size={18} />
-                            </div>
-                            <div className="min-w-0">
-                              <div className="text-xs font-bold text-foreground leading-snug">{loc.name}</div>
-                              <div className="text-[11px] text-muted-foreground truncate max-w-[320px] mt-0.5" title={loc.address}>
-                                {loc.address}
+                    {filteredLocations.map(loc => {
+                      const meta = parseLocationMeta(loc);
+                      const isRestricted = meta.assignmentMode === 'restricted';
+                      return (
+                        <TableRow key={loc.id} className="hover:bg-muted/30 dark:hover:bg-zinc-800/40 transition-colors">
+                          <TableCell className="py-3.5">
+                            <div className="flex items-start gap-3">
+                              <div className={cn(
+                                'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-colors',
+                                loc.is_active
+                                  ? 'bg-primary/10 text-primary dark:bg-blue-500/15 dark:text-blue-400'
+                                  : 'bg-muted text-muted-foreground'
+                              )}>
+                                <MapPin size={18} />
+                              </div>
+                              <div className="min-w-0">
+                                <div className="text-xs font-bold text-foreground leading-snug">{loc.name}</div>
+                                <div className="text-[11px] text-muted-foreground truncate max-w-[300px] mt-0.5" title={meta.cleanAddress}>
+                                  {meta.cleanAddress}
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="font-mono text-xs text-foreground/80 tabular-nums">
-                            {Number(loc.latitude).toFixed(6)}, {Number(loc.longitude).toFixed(6)}
-                          </div>
-                          <a
-                            href={`https://www.google.com/maps/search/?api=1&query=${loc.latitude},${loc.longitude}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary dark:text-blue-400 hover:underline mt-0.5"
-                          >
-                            <span>Buka Google Maps</span>
-                            <ExternalLink size={10} />
-                          </a>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1.5">
-                            <Badge variant="secondary" className="font-mono text-xs font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 px-2 py-0.5">
-                              {loc.radius_meters}m
+                          </TableCell>
+                          <TableCell>
+                            <div className="font-mono text-xs text-foreground/80 tabular-nums">
+                              {Number(loc.latitude).toFixed(6)}, {Number(loc.longitude).toFixed(6)}
+                            </div>
+                            <a
+                              href={`https://www.google.com/maps/search/?api=1&query=${loc.latitude},${loc.longitude}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary dark:text-blue-400 hover:underline mt-0.5"
+                            >
+                              <span>Buka Google Maps</span>
+                              <ExternalLink size={10} />
+                            </a>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1.5">
+                              <Badge variant="secondary" className="font-mono text-xs font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 px-2 py-0.5">
+                                {loc.radius_meters}m
+                              </Badge>
+                            </div>
+                            <span className="text-[10px] text-muted-foreground block mt-0.5 font-medium">Area presensi mobile</span>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1.5">
+                              {isRestricted ? (
+                                <Badge variant="outline" className="text-[11px] font-semibold border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400 gap-1 px-2 py-0.5">
+                                  <Lock size={11} /> {meta.assignedUserIds.length} Karyawan
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="text-[11px] font-semibold border-slate-300 dark:border-zinc-700 bg-muted/40 text-muted-foreground gap-1 px-2 py-0.5">
+                                  <Users size={11} /> Semua Karyawan
+                                </Badge>
+                              )}
+                            </div>
+                            <span className="text-[10px] text-muted-foreground block mt-0.5 font-medium">
+                              {isRestricted ? 'Akses dibatasi per akun' : 'Terbuka untuk semua'}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant="outline"
+                              className={cn(
+                                'text-[11px] font-semibold gap-1.5 px-2 py-0.5',
+                                loc.is_active
+                                  ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                                  : 'border-border/60 bg-muted/40 text-muted-foreground'
+                              )}
+                            >
+                              <span className={cn('h-1.5 w-1.5 rounded-full', loc.is_active ? 'bg-emerald-500 animate-pulse' : 'bg-muted-foreground/50')} />
+                              {loc.is_active ? 'Aktif' : 'Nonaktif'}
                             </Badge>
-                          </div>
-                          <span className="text-[10px] text-muted-foreground block mt-0.5 font-medium">Area presensi mobile</span>
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            variant="outline"
-                            className={cn(
-                              'text-[11px] font-semibold gap-1.5 px-2 py-0.5',
-                              loc.is_active
-                                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                                : 'border-border/60 bg-muted/40 text-muted-foreground'
-                            )}
-                          >
-                            <span className={cn('h-1.5 w-1.5 rounded-full', loc.is_active ? 'bg-emerald-500 animate-pulse' : 'bg-muted-foreground/50')} />
-                            {loc.is_active ? 'Aktif' : 'Nonaktif'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right pr-4">
-                          <div className="flex items-center justify-end gap-1">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => openEdit(loc)}
-                              className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground hover:bg-muted"
-                              title="Edit Lokasi"
-                            >
-                              <Edit3 size={14} className="mr-1" /> Edit
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setDeleteId(loc.id)}
-                              className="h-8 px-2 text-xs text-rose-500 hover:text-rose-600 hover:bg-rose-500/10"
-                              title="Hapus Lokasi"
-                            >
-                              <Trash2 size={14} />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                          </TableCell>
+                          <TableCell className="text-right pr-4">
+                            <div className="flex items-center justify-end gap-1">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => openQuickManage(loc)}
+                                className="h-8 px-2 text-xs font-semibold gap-1 border-border/70 text-foreground hover:bg-muted"
+                                title="Atur Hak Akses Karyawan"
+                              >
+                                <Users size={13} className="text-primary dark:text-blue-400" />
+                                <span className="hidden sm:inline">Akses</span>
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => openEdit(loc)}
+                                className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground hover:bg-muted"
+                                title="Edit Lokasi"
+                              >
+                                <Edit3 size={14} className="mr-1" /> Edit
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setDeleteId(loc.id)}
+                                className="h-8 px-2 text-xs text-rose-500 hover:text-rose-600 hover:bg-rose-500/10"
+                                title="Hapus Lokasi"
+                              >
+                                <Trash2 size={14} />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>
@@ -739,6 +939,171 @@ const OfficeLocationsManager: React.FC<{
               </button>
             </div>
 
+            {/* Hak Akses Presensi Karyawan */}
+            <div className="space-y-3 pt-3 border-t border-border/60">
+              <div>
+                <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                  <Users size={14} className="text-primary dark:text-blue-400" />
+                  Hak Akses Presensi Karyawan
+                </Label>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  Pilih apakah lokasi ini dibuka untuk seluruh karyawan atau dibatasi untuk akun-akun tertentu saja.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setAssignmentMode('all')}
+                  className={cn(
+                    'p-3 rounded-lg border text-left transition-all',
+                    assignmentMode === 'all'
+                      ? 'border-primary bg-primary/5 text-foreground ring-1 ring-primary/40'
+                      : 'border-border/70 hover:border-border bg-card text-muted-foreground'
+                  )}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-bold flex items-center gap-1.5 text-foreground">
+                      <Users size={13} className="text-primary dark:text-blue-400" />
+                      Semua Karyawan
+                    </span>
+                    {assignmentMode === 'all' && (
+                      <span className="h-2 w-2 rounded-full bg-primary dark:bg-blue-500" />
+                    )}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    Terbuka untuk semua akun karyawan aktif tanpa batasan penugasan.
+                  </p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setAssignmentMode('restricted')}
+                  className={cn(
+                    'p-3 rounded-lg border text-left transition-all',
+                    assignmentMode === 'restricted'
+                      ? 'border-amber-500 bg-amber-500/5 text-foreground ring-1 ring-amber-500/40'
+                      : 'border-border/70 hover:border-border bg-card text-muted-foreground'
+                  )}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-bold flex items-center gap-1.5 text-foreground">
+                      <Lock size={13} className="text-amber-600 dark:text-amber-400" />
+                      Karyawan Tertentu
+                    </span>
+                    {assignmentMode === 'restricted' && (
+                      <span className="h-2 w-2 rounded-full bg-amber-500" />
+                    )}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    Hanya akun karyawan yang dipilih yang dapat absen di lokasi ini.
+                  </p>
+                </button>
+              </div>
+
+              {assignmentMode === 'restricted' && (
+                <div className="rounded-lg border border-border/80 bg-muted/20 p-3 space-y-3">
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+                    <div className="text-xs font-semibold text-foreground">
+                      Daftar Akun Diizinkan ({selectedUserIds.length} Dipilih)
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="xs"
+                        onClick={() => {
+                          const ids = filteredEmployees.map(e => String(e.id));
+                          setSelectedUserIds(prev => Array.from(new Set([...prev, ...ids])));
+                        }}
+                        className="h-6 px-2 text-[11px] font-medium text-primary hover:bg-primary/10"
+                      >
+                        Pilih Semua Tampil
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="xs"
+                        onClick={() => setSelectedUserIds([])}
+                        className="h-6 px-2 text-[11px] font-medium text-rose-500 hover:bg-rose-500/10"
+                      >
+                        Hapus Semua
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div className="relative">
+                      <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                      <Input
+                        value={userSearchText}
+                        onChange={e => setUserSearchText(e.target.value)}
+                        placeholder="Cari nama, NIP, email..."
+                        className="pl-8 h-8 text-xs"
+                      />
+                    </div>
+                    <select
+                      value={userDeptFilter}
+                      onChange={e => setUserDeptFilter(e.target.value)}
+                      className="h-8 rounded-md border border-border/60 bg-background px-2 text-xs text-foreground outline-none"
+                    >
+                      <option value="all">Semua Departemen ({allEmployees.length})</option>
+                      {departmentsList.map(d => (
+                        <option key={d} value={d}>{d}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="max-h-52 overflow-y-auto rounded-md border border-border/60 bg-background divide-y divide-border/40 text-xs">
+                    {filteredEmployees.length === 0 ? (
+                      <div className="p-4 text-center text-muted-foreground text-xs">
+                        Tidak ada karyawan ditemukan
+                      </div>
+                    ) : (
+                      filteredEmployees.map(emp => {
+                        const isChecked = selectedUserIds.includes(String(emp.id));
+                        return (
+                          <label
+                            key={emp.id}
+                            className={cn(
+                              'flex items-center justify-between p-2.5 hover:bg-muted/40 cursor-pointer transition-colors',
+                              isChecked && 'bg-primary/5'
+                            )}
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={(e) => {
+                                  const idStr = String(emp.id);
+                                  if (e.target.checked) {
+                                    setSelectedUserIds(prev => [...prev, idStr]);
+                                  } else {
+                                    setSelectedUserIds(prev => prev.filter(id => id !== idStr));
+                                  }
+                                }}
+                                className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                              />
+                              <UserAvatar name={emp.full_name} url={emp.avatar_url} size="xs" />
+                              <div className="min-w-0">
+                                <div className="font-medium text-foreground truncate">{emp.full_name}</div>
+                                <div className="text-[11px] text-muted-foreground truncate">
+                                  {emp.department || 'Umum'} &bull; {emp.role || 'Employee'}
+                                </div>
+                              </div>
+                            </div>
+                            <span className="text-[11px] font-mono text-muted-foreground shrink-0 ml-2">
+                              {emp.employee_code || `#${emp.id}`}
+                            </span>
+                          </label>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div className="flex items-start gap-2.5 rounded-xl border border-blue-500/20 bg-blue-500/10 p-3 text-xs leading-relaxed text-blue-700 dark:text-blue-300">
               <Info size={15} className="mt-0.5 shrink-0" />
               <span>
@@ -759,6 +1124,221 @@ const OfficeLocationsManager: React.FC<{
               {saving ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
               {editing ? 'Simpan Perubahan' : 'Simpan Lokasi'}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Quick Employee Assignment Dialog */}
+      <Dialog open={!!managingLocation} onOpenChange={(open) => !open && setManagingLocation(null)}>
+        <DialogContent className="sm:max-w-xl max-h-[90vh] flex flex-col p-0 border-border/60 bg-background overflow-hidden" showCloseButton={false}>
+          <DialogHeader className="shrink-0 p-6 pb-4 border-b border-border/40 bg-muted/20">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary dark:text-blue-400">
+                  <Users size={18} />
+                </div>
+                <div>
+                  <DialogTitle className="text-base font-bold text-foreground">
+                    Hak Akses Presensi &mdash; {managingLocation?.name}
+                  </DialogTitle>
+                  <DialogDescription className="text-xs text-muted-foreground mt-0.5">
+                    Tentukan akun-akun karyawan yang berhak melakukan absensi di titik kantor ini.
+                  </DialogDescription>
+                </div>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setManagingLocation(null)}
+                className="h-8 w-8 text-muted-foreground hover:text-foreground"
+              >
+                <X size={16} />
+              </Button>
+            </div>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <button
+                type="button"
+                onClick={() => setQuickMode('all')}
+                className={cn(
+                  'p-3 rounded-lg border text-left transition-all',
+                  quickMode === 'all'
+                    ? 'border-primary bg-primary/5 text-foreground ring-1 ring-primary/40'
+                    : 'border-border/70 hover:border-border bg-card text-muted-foreground'
+                )}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-bold flex items-center gap-1.5 text-foreground">
+                    <Users size={13} className="text-primary dark:text-blue-400" />
+                    Semua Karyawan (Umum)
+                  </span>
+                  {quickMode === 'all' && (
+                    <span className="h-2 w-2 rounded-full bg-primary dark:bg-blue-500" />
+                  )}
+                </div>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  Semua karyawan aktif perusahaan dapat absen di kantor ini.
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setQuickMode('restricted')}
+                className={cn(
+                  'p-3 rounded-lg border text-left transition-all',
+                  quickMode === 'restricted'
+                    ? 'border-amber-500 bg-amber-500/5 text-foreground ring-1 ring-amber-500/40'
+                    : 'border-border/70 hover:border-border bg-card text-muted-foreground'
+                )}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-bold flex items-center gap-1.5 text-foreground">
+                    <Lock size={13} className="text-amber-600 dark:text-amber-400" />
+                    Karyawan Tertentu (Khusus)
+                  </span>
+                  {quickMode === 'restricted' && (
+                    <span className="h-2 w-2 rounded-full bg-amber-500" />
+                  )}
+                </div>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  Hanya karyawan yang dipilih di bawah ini yang dapat absen di sini.
+                </p>
+              </button>
+            </div>
+
+            {quickMode === 'restricted' && (
+              <div className="rounded-lg border border-border/80 bg-muted/20 p-3 space-y-3">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+                  <div className="text-xs font-semibold text-foreground">
+                    Daftar Karyawan Diizinkan ({quickSelectedUserIds.length} Dipilih)
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="xs"
+                      onClick={() => {
+                        const ids = quickFilteredEmployees.map(e => String(e.id));
+                        setQuickSelectedUserIds(prev => Array.from(new Set([...prev, ...ids])));
+                      }}
+                      className="h-6 px-2 text-[11px] font-medium text-primary hover:bg-primary/10"
+                    >
+                      Pilih Semua Tampil
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="xs"
+                      onClick={() => setQuickSelectedUserIds([])}
+                      className="h-6 px-2 text-[11px] font-medium text-rose-500 hover:bg-rose-500/10"
+                    >
+                      Hapus Semua
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div className="relative">
+                    <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      value={quickSearchText}
+                      onChange={e => setQuickSearchText(e.target.value)}
+                      placeholder="Cari nama, NIP, email..."
+                      className="pl-8 h-8 text-xs"
+                    />
+                  </div>
+                  <select
+                    value={quickDeptFilter}
+                    onChange={e => setQuickDeptFilter(e.target.value)}
+                    className="h-8 rounded-md border border-border/60 bg-background px-2 text-xs text-foreground outline-none"
+                  >
+                    <option value="all">Semua Departemen ({allEmployees.length})</option>
+                    {departmentsList.map(d => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="max-h-60 overflow-y-auto rounded-md border border-border/60 bg-background divide-y divide-border/40 text-xs">
+                  {quickFilteredEmployees.length === 0 ? (
+                    <div className="p-4 text-center text-muted-foreground text-xs">
+                      Tidak ada karyawan ditemukan
+                    </div>
+                  ) : (
+                    quickFilteredEmployees.map(emp => {
+                      const isChecked = quickSelectedUserIds.includes(String(emp.id));
+                      return (
+                        <label
+                          key={emp.id}
+                          className={cn(
+                            'flex items-center justify-between p-2.5 hover:bg-muted/40 cursor-pointer transition-colors',
+                            isChecked && 'bg-primary/5'
+                          )}
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={(e) => {
+                                const idStr = String(emp.id);
+                                if (e.target.checked) {
+                                  setQuickSelectedUserIds(prev => [...prev, idStr]);
+                                } else {
+                                  setQuickSelectedUserIds(prev => prev.filter(id => id !== idStr));
+                                }
+                              }}
+                              className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                            />
+                            <UserAvatar name={emp.full_name} url={emp.avatar_url} size="xs" />
+                            <div className="min-w-0">
+                              <div className="font-medium text-foreground truncate">{emp.full_name}</div>
+                              <div className="text-[11px] text-muted-foreground truncate">
+                                {emp.department || 'Umum'} &bull; {emp.role || 'Employee'}
+                              </div>
+                            </div>
+                          </div>
+                          <span className="text-[11px] font-mono text-muted-foreground shrink-0 ml-2">
+                            {emp.employee_code || `#${emp.id}`}
+                          </span>
+                        </label>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="shrink-0 border-t border-border/40 px-6 py-4 bg-muted/20 flex items-center justify-between">
+            <div className="text-xs text-muted-foreground">
+              {quickMode === 'restricted' ? (
+                <span><b>{quickSelectedUserIds.length}</b> karyawan berhak absen di kantor ini</span>
+              ) : (
+                <span>Semua karyawan aktif diizinkan</span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setManagingLocation(null)}
+                disabled={quickSaving}
+                className="h-8 text-xs font-semibold"
+              >
+                Batal
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleQuickSave}
+                disabled={quickSaving}
+                className="h-8 gap-1.5 bg-[#103065] dark:bg-blue-600 text-white hover:bg-[#173e77] dark:hover:bg-blue-700 text-xs font-semibold"
+              >
+                {quickSaving ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
+                Simpan Akses Karyawan
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>

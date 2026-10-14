@@ -20,23 +20,31 @@ import { StatCard } from '../StatCard';
 import { UserAvatar } from '../UserAvatar';
 import {
   AttendanceRecord, AttendanceSchedule, OfficeLocation, AttendanceSettings,
-  UserAccount, LeaveRequest, OvertimeRequest, GPS_BG, STATUS_CONFIG, formatTime, formatDate, formatMinutes,
-  getDistanceMeters, getGeoLocation, renderStatusBadge
+  UserAccount, LeaveRequest, OvertimeRequest, GPS_BG, GPS_DOT, STATUS_CONFIG, formatTime, formatDate, formatMinutes,
+  getDistanceMeters, getGeoLocation, renderStatusBadge, isUserAllowedAtLocation, parseLocationMeta
 } from './attendanceTypes';
 
 const ClockPanel: React.FC<{
   userId: string;
+  currentUser?: any;
   todayRecord: AttendanceRecord | null;
   schedule: AttendanceSchedule | null;
   locations: OfficeLocation[];
   onClockAction: () => void;
-}> = ({ userId, todayRecord, schedule, locations, onClockAction }) => {
+}> = ({ userId, currentUser, todayRecord, schedule, locations, onClockAction }) => {
   const [loading, setLoading] = useState(false);
   const [now, setNow] = useState(new Date());
-  const [locationStatus, setLocationStatus] = useState<'checking' | 'inside' | 'outside' | 'unknown'>('checking');
+  const [locationStatus, setLocationStatus] = useState<'checking' | 'inside' | 'outside' | 'restricted' | 'unknown'>('checking');
   const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(null);
-  const [nearestLocation, setNearestLocation] = useState<{ name: string; distance: number } | null>(null);
+  const [nearestLocation, setNearestLocation] = useState<{ name: string; distance: number; allowed: boolean } | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const userAccount = useMemo(() => currentUser || { id: userId }, [currentUser, userId]);
+
+  // Filter lokasi aktif yang diizinkan untuk akun karyawan ini
+  const userAllowedLocations = useMemo(() => {
+    return locations.filter(loc => loc.is_active && isUserAllowedAtLocation(userAccount, loc));
+  }, [locations, userAccount]);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
@@ -50,17 +58,45 @@ const ClockPanel: React.FC<{
         const pos = await getGeoLocation();
         setCurrentLocation(pos);
 
-        if (locations.length > 0) {
+        const activeLocations = locations.filter(loc => loc.is_active);
+        if (activeLocations.length > 0) {
           let minDist = Infinity;
-          let nearest: OfficeLocation | null = null;
-          for (const loc of locations) {
-            if (!loc.is_active) continue;
+          let nearestAny: { loc: OfficeLocation; dist: number } | null = null;
+          let insideAllowedLoc: OfficeLocation | null = null;
+          let insideRestrictedLoc: OfficeLocation | null = null;
+
+          for (const loc of activeLocations) {
             const dist = getDistanceMeters(pos.lat, pos.lng, loc.latitude, loc.longitude);
-            if (dist < minDist) { minDist = dist; nearest = loc; }
+            if (dist < minDist) {
+              minDist = dist;
+              nearestAny = { loc, dist };
+            }
+
+            const allowed = isUserAllowedAtLocation(userAccount, loc);
+            if (dist <= loc.radius_meters) {
+              if (allowed) {
+                insideAllowedLoc = loc;
+              } else if (!insideRestrictedLoc) {
+                insideRestrictedLoc = loc;
+              }
+            }
           }
-          if (nearest) {
-            setNearestLocation({ name: nearest.name, distance: Math.round(minDist) });
-            setLocationStatus(minDist <= nearest.radius_meters ? 'inside' : 'outside');
+
+          if (insideAllowedLoc) {
+            // Berada di dalam radius kantor yang diizinkan
+            setNearestLocation({ name: insideAllowedLoc.name, distance: Math.round(minDist), allowed: true });
+            setLocationStatus('inside');
+            setError(null);
+          } else if (insideRestrictedLoc) {
+            // Berada di kantor yang dibatasi dan akun tidak terdaftar
+            setNearestLocation({ name: insideRestrictedLoc.name, distance: 0, allowed: false });
+            setLocationStatus('restricted');
+            setError(`Anda berada di ${insideRestrictedLoc.name}, namun akun Anda belum terdaftar untuk absensi di lokasi ini.`);
+          } else if (nearestAny) {
+            // Di luar radius kantor terdekat
+            const allowed = isUserAllowedAtLocation(userAccount, nearestAny.loc);
+            setNearestLocation({ name: nearestAny.loc.name, distance: Math.round(nearestAny.dist), allowed });
+            setLocationStatus('outside');
           } else {
             setLocationStatus('unknown');
           }
@@ -74,7 +110,7 @@ const ClockPanel: React.FC<{
     checkLocation();
     const timer = setInterval(checkLocation, 30000);
     return () => clearInterval(timer);
-  }, [locations]);
+  }, [locations, userAccount]);
 
   const isClockedIn = !!todayRecord?.clock_in;
   const isClockedOut = !!todayRecord?.clock_out;
@@ -120,6 +156,15 @@ const ClockPanel: React.FC<{
   const remainingMinutes = Math.max(0, targetMinutes - elapsedMinutes);
 
   const handleClock = async (type: 'in' | 'out') => {
+    if (locationStatus === 'restricted') {
+      const msg = nearestLocation
+        ? `Absensi ditolak: Akun Anda tidak memiliki hak presensi di ${nearestLocation.name}.`
+        : 'Absensi ditolak: Akun Anda tidak terdaftar di lokasi ini.';
+      setError(msg);
+      toast.error(msg);
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
@@ -134,7 +179,9 @@ const ClockPanel: React.FC<{
       }
       onClockAction();
     } catch (err: any) {
-      setError(err.message || 'Gagal melakukan absensi');
+      const msg = err.message || 'Gagal melakukan absensi';
+      setError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -143,8 +190,20 @@ const ClockPanel: React.FC<{
   const clockTime = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
   const dateStr = now.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
-  const gpsColor = locationStatus === 'inside' ? 'text-emerald-400' : locationStatus === 'outside' ? 'text-red-400' : 'text-slate-400';
-  const gpsDotColor = locationStatus === 'inside' ? 'bg-emerald-400 shadow-[0_0_6px_#10b981]' : locationStatus === 'outside' ? 'bg-red-400 shadow-[0_0_6px_#ef4444]' : 'bg-slate-400';
+  const gpsColor = locationStatus === 'inside'
+    ? 'text-emerald-700'
+    : locationStatus === 'restricted'
+    ? 'text-amber-800'
+    : locationStatus === 'outside'
+    ? 'text-red-700'
+    : 'text-slate-600';
+  const gpsDotColor = locationStatus === 'inside'
+    ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.7)]'
+    : locationStatus === 'restricted'
+    ? 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.7)]'
+    : locationStatus === 'outside'
+    ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.7)]'
+    : 'bg-slate-400';
 
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -172,24 +231,57 @@ const ClockPanel: React.FC<{
       {/* Floating clock button + status card */}
       <div className="relative -mt-14 px-5">
         {/* GPS pill */}
-        <div className={cn('mx-auto mb-4 flex w-fit items-center gap-2 rounded-full px-4 py-1.5 text-[11px] font-medium', GPS_BG[locationStatus], locationStatus === 'inside' ? 'text-emerald-600' : locationStatus === 'outside' ? 'text-red-600' : 'text-slate-500')}>
-          <span className={cn('h-2 w-2 rounded-full', gpsDotColor)} />
-          {locationStatus === 'checking' && 'Memeriksa lokasi...'}
-          {locationStatus === 'inside' && `Di dalam area${nearestLocation ? ` — ${nearestLocation.name}` : ''}`}
-          {locationStatus === 'outside' && `Di luar area${nearestLocation ? ` — ${nearestLocation.name} (${nearestLocation.distance}m)` : ''}`}
-          {locationStatus === 'unknown' && 'Lokasi tidak diketahui'}
+        <div className={cn(
+          'mx-auto mb-2 flex w-fit max-w-full items-center justify-center gap-2 rounded-full px-4 py-1.5 text-[11px] font-medium shadow-xs transition-all',
+          GPS_BG[locationStatus] || GPS_BG.unknown,
+          gpsColor
+        )}>
+          <span className={cn('h-2 w-2 rounded-full shrink-0', gpsDotColor)} />
+          <span>
+            {locationStatus === 'checking' && 'Memeriksa lokasi GPS...'}
+            {locationStatus === 'inside' && `Di dalam area — ${nearestLocation?.name || 'Kantor'}`}
+            {locationStatus === 'restricted' && `Akses Terbatas — ${nearestLocation?.name || 'Kantor'} (Akun tidak terdaftar)`}
+            {locationStatus === 'outside' && `Di luar area${nearestLocation ? ` — ${nearestLocation.name} (${nearestLocation.distance}m)` : ''}`}
+            {locationStatus === 'unknown' && 'Lokasi GPS tidak diketahui'}
+          </span>
         </div>
+
+        {/* Assigned Location Info */}
+        {userAllowedLocations.length > 0 ? (
+          <div className="mx-auto mb-4 flex w-fit max-w-sm items-center justify-center gap-1.5 text-center text-[11px] text-slate-500">
+            <MapPin size={12} className="text-[#BC9C33] shrink-0" />
+            <span className="truncate">
+              Lokasi Presensi Anda:{' '}
+              <strong className="font-semibold text-slate-700">
+                {userAllowedLocations.map(l => l.name).join(', ')}
+              </strong>
+            </span>
+          </div>
+        ) : locations.length > 0 ? (
+          <div className="mx-auto mb-4 flex w-fit max-w-sm items-center justify-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50/80 px-3 py-1.5 text-center text-[11px] text-amber-800">
+            <Shield size={12} className="text-amber-600 shrink-0" />
+            <span>Akun Anda belum didaftarkan pada lokasi presensi manapun. Hubungi HR.</span>
+          </div>
+        ) : null}
 
         {/* Clock action button */}
         <div className="flex justify-center">
           {!isClockedIn ? (
             <button
               onClick={() => handleClock('in')}
-              disabled={loading}
-              className="group relative flex h-[120px] w-[120px] items-center justify-center rounded-full border-4 border-white bg-gradient-to-br from-[#BC9C33] to-[#a88929] text-white shadow-lg shadow-amber-600/30 transition-all active:scale-95 disabled:opacity-60"
+              disabled={loading || locationStatus === 'restricted'}
+              title={locationStatus === 'restricted' ? 'Akun Anda tidak memiliki hak presensi di lokasi ini' : undefined}
+              className={cn(
+                "group relative flex h-[120px] w-[120px] items-center justify-center rounded-full border-4 border-white text-white shadow-lg transition-all active:scale-95 disabled:opacity-60",
+                locationStatus === 'restricted'
+                  ? "bg-gradient-to-br from-amber-700 to-amber-900 shadow-amber-900/30 cursor-not-allowed"
+                  : "bg-gradient-to-br from-[#BC9C33] to-[#a88929] shadow-amber-600/30"
+              )}
             >
               {loading ? (
                 <Loader2 size={36} className="animate-spin" />
+              ) : locationStatus === 'restricted' ? (
+                <Shield size={32} strokeWidth={1.8} className="text-amber-200" />
               ) : (
                 <>
                   <div className="absolute inset-0 rounded-full bg-white/20 opacity-0 transition-opacity group-hover:opacity-100" />
@@ -200,11 +292,19 @@ const ClockPanel: React.FC<{
           ) : !isClockedOut ? (
             <button
               onClick={() => handleClock('out')}
-              disabled={loading}
-              className="group relative flex h-[120px] w-[120px] items-center justify-center rounded-full border-4 border-white bg-gradient-to-br from-[#103065] to-[#173E77] text-white shadow-lg shadow-blue-900/30 transition-all active:scale-95 disabled:opacity-60"
+              disabled={loading || locationStatus === 'restricted'}
+              title={locationStatus === 'restricted' ? 'Akun Anda tidak memiliki hak presensi di lokasi ini' : undefined}
+              className={cn(
+                "group relative flex h-[120px] w-[120px] items-center justify-center rounded-full border-4 border-white text-white shadow-lg transition-all active:scale-95 disabled:opacity-60",
+                locationStatus === 'restricted'
+                  ? "bg-gradient-to-br from-amber-700 to-amber-900 shadow-amber-900/30 cursor-not-allowed"
+                  : "bg-gradient-to-br from-[#103065] to-[#173E77] shadow-blue-900/30"
+              )}
             >
               {loading ? (
                 <Loader2 size={36} className="animate-spin" />
+              ) : locationStatus === 'restricted' ? (
+                <Shield size={32} strokeWidth={1.8} className="text-amber-200" />
               ) : (
                 <>
                   <div className="absolute inset-0 rounded-full bg-white/20 opacity-0 transition-opacity group-hover:opacity-100" />
@@ -222,13 +322,23 @@ const ClockPanel: React.FC<{
         {/* Label under button */}
         <div className="mt-3 text-center">
           <div className="text-[15px] font-semibold text-slate-800">
-            {isClockedIn && !isClockedOut ? 'Clock Out' : isClockedIn && isClockedOut ? 'Absensi Selesai' : 'Clock In'}
+            {locationStatus === 'restricted'
+              ? 'Akses Lokasi Terbatas'
+              : isClockedIn && !isClockedOut
+              ? 'Clock Out'
+              : isClockedIn && isClockedOut
+              ? 'Absensi Selesai'
+              : 'Clock In'}
           </div>
-          {todayRecord && (
+          {locationStatus === 'restricted' ? (
+            <div className="mt-1 text-[12px] font-medium text-amber-600">
+              Akun Anda tidak memiliki hak akses presensi di lokasi ini
+            </div>
+          ) : todayRecord ? (
             <div className="mt-1 text-[12px] text-slate-400">
               {isClockedIn && !isClockedOut ? `Mulai pukul ${formatTime(todayRecord.clock_in)}` : isClockedIn && isClockedOut ? 'Selamat beristirahat' : 'Siap untuk memulai hari'}
             </div>
-          )}
+          ) : null}
         </div>
 
         {/* Card Real-Time Target Jam Pulang (9 Jam Kerja) */}
@@ -443,6 +553,7 @@ export const AttendanceDashboard: React.FC<AttendanceDashboardProps> = ({ curren
     <div className="flex flex-col gap-5">
       <ClockPanel
         userId={userId}
+        currentUser={currentUser}
         todayRecord={todayRecord}
         schedule={schedule}
         locations={locations}

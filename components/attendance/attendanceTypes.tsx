@@ -32,7 +32,67 @@ export interface OfficeLocation {
   radius_meters: number;
   is_active: boolean;
   created_at?: string;
+  assignment_mode?: 'all' | 'restricted';
+  assigned_user_ids?: string[];
 }
+
+export interface LocationMeta {
+  cleanAddress: string;
+  assignmentMode: 'all' | 'restricted';
+  assignedUserIds: string[];
+}
+
+export function parseLocationMeta(loc: Partial<OfficeLocation> | null | undefined): LocationMeta {
+  if (!loc) return { cleanAddress: '', assignmentMode: 'all', assignedUserIds: [] };
+
+  const rawAddr = loc.address || '';
+  const match = rawAddr.match(/\[RESTRICTED_USERS:([^\]]*)\]/);
+  const embeddedIds = match ? match[1].split(',').map(s => s.trim()).filter(Boolean) : [];
+  const cleanAddress = rawAddr.replace(/\[RESTRICTED_USERS:[^\]]*\]/, '').trim();
+
+  // Native column takes priority if present, otherwise fallback to embedded marker
+  const assignedUserIds = (Array.isArray(loc.assigned_user_ids) && loc.assigned_user_ids.length > 0)
+    ? loc.assigned_user_ids.map(String)
+    : embeddedIds;
+
+  const assignmentMode = loc.assignment_mode || (assignedUserIds.length > 0 ? 'restricted' : 'all');
+
+  return {
+    cleanAddress,
+    assignmentMode,
+    assignedUserIds
+  };
+}
+
+export function encodeLocationAddress(cleanAddress: string, mode: 'all' | 'restricted', userIds: string[]): string {
+  const base = (cleanAddress || '').replace(/\[RESTRICTED_USERS:[^\]]*\]/, '').trim();
+  if (mode === 'restricted' && userIds && userIds.length > 0) {
+    return `${base}\n[RESTRICTED_USERS:${userIds.join(',')}]`;
+  }
+  return base;
+}
+
+export function isUserAllowedAtLocation(
+  user: { id?: string | number; email?: string } | null | undefined,
+  loc: OfficeLocation
+): boolean {
+  if (!loc || !loc.is_active) return false;
+  const meta = parseLocationMeta(loc);
+  if (meta.assignmentMode !== 'restricted' || meta.assignedUserIds.length === 0) {
+    return true; // Terbuka untuk semua karyawan
+  }
+  if (!user) return false;
+  const uid = user.id !== undefined && user.id !== null ? String(user.id).trim() : '';
+  const uemail = (user.email || '').trim().toLowerCase();
+
+  return meta.assignedUserIds.some(assignedId => {
+    const aid = String(assignedId).trim();
+    if (aid === uid) return true;
+    if (uemail && aid.toLowerCase() === uemail) return true;
+    return false;
+  });
+}
+
 
 export interface UserAccount {
   id: string;
@@ -212,6 +272,7 @@ export const STATUS_CONFIG: Record<string, { label: string; badge: string; dot: 
 export const GPS_DOT: Record<string, string> = {
   inside: 'bg-emerald-500 shadow-[0_0_6px_#10b981]',
   outside: 'bg-red-500 shadow-[0_0_6px_#ef4444]',
+  restricted: 'bg-amber-500 shadow-[0_0_6px_#f59e0b]',
   checking: 'bg-slate-400 shadow-[0_0_6px_#94a3b8]',
   unknown: 'bg-slate-400 shadow-[0_0_6px_#94a3b8]',
 };
@@ -219,6 +280,7 @@ export const GPS_DOT: Record<string, string> = {
 export const GPS_BG: Record<string, string> = {
   inside: 'bg-emerald-500/10 border border-emerald-500/20',
   outside: 'bg-red-500/10 border border-red-500/20',
+  restricted: 'bg-amber-500/10 border border-amber-500/20',
   checking: 'bg-slate-400/10 border border-slate-400/20',
   unknown: 'bg-slate-400/10 border border-slate-400/20',
 };

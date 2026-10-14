@@ -1,5 +1,5 @@
 import React from 'react';
-import { Construction } from 'lucide-react';
+import { Layers } from 'lucide-react';
 
 interface ModulePlaceholderProps {
   title: string;
@@ -8,19 +8,21 @@ interface ModulePlaceholderProps {
 
 export const ModulePlaceholder: React.FC<ModulePlaceholderProps> = ({
   title,
-  description = 'Modul ini sedang dalam pengembangan dan belum tersedia.',
+  description = 'Modul ini sedang dalam tahap konfigurasi sistem dan akan segera dirilis.',
 }) => {
   return (
-    <div className="flex min-h-[50vh] items-center justify-center p-4">
-      <div className="w-full max-w-md rounded-2xl border border-slate-200/80 dark:border-[#222225] bg-white dark:bg-[#131316] p-8 text-center shadow-xs">
-        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border border-amber-200/50 dark:border-amber-900/40">
-          <Construction className="h-6 w-6" />
+    <div className="flex min-h-[55vh] items-center justify-center p-4 sm:p-6">
+      <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 sm:p-8 text-center shadow-xs">
+        <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-lg bg-muted text-muted-foreground border border-border/80">
+          <Layers className="h-5 w-5" strokeWidth={1.75} />
         </div>
-        <h2 className="mt-4 text-lg font-bold tracking-tight text-slate-900 dark:text-zinc-100">{title}</h2>
-        <p className="mt-1.5 text-xs sm:text-sm leading-relaxed text-slate-500 dark:text-zinc-400">{description}</p>
-        <span className="mt-4 inline-block rounded-full bg-amber-50 dark:bg-amber-950/60 border border-amber-200/60 dark:border-amber-900/40 px-3 py-1 text-[11px] font-semibold text-amber-800 dark:text-amber-300">
-          Segera hadir
-        </span>
+        <h2 className="mt-4 text-base sm:text-lg font-semibold tracking-tight text-foreground">{title}</h2>
+        <p className="mt-1.5 text-xs sm:text-sm leading-relaxed text-muted-foreground">{description}</p>
+        <div className="mt-5 pt-4 border-t border-border/60 flex items-center justify-center">
+          <span className="text-[11px] font-medium text-muted-foreground bg-muted/60 px-2.5 py-1 rounded border border-border/60">
+            Fase Rilis Mendatang
+          </span>
+        </div>
       </div>
     </div>
   );
