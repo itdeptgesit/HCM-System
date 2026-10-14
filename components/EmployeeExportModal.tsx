@@ -184,7 +184,7 @@ export const EmployeeExportModal: React.FC<EmployeeExportModalProps> = ({
             'Departemen': e.department || '-',
             'Jabatan': e.jobTitle || '-',
             'Level': e.jobLevel || '-',
-            'Status Kepegawaian': e.employmentType || '-',
+            'Status Kepegawaian': e.contractType || e.employmentType || 'PKWTT',
             'Status Akun': e.status || 'Active',
             'Tanggal Bergabung': e.joinDate || '-'
           }));

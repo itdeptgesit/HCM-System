@@ -391,19 +391,22 @@ export default function LiveHRDashboard({ currentUser }: LiveHRDashboardProps) {
   }, [filteredEmployees, totalHeadcount]);
 
   // Status Kepegawaian (Donut)
-  const { statusPermanent, statusContract, statusProbation } = useMemo(() => {
+  const { statusPermanent, statusContract, statusProbation, statusIntern } = useMemo(() => {
     let perm = 0;
     let cont = 0;
     let prob = 0;
+    let intern = 0;
 
     filteredEmployees.forEach(emp => {
-      const type = String(emp.employment_type || emp.contract_type || '').toLowerCase();
+      const type = `${emp.contract_type || ''} ${emp.employment_type || ''}`.toLowerCase();
       if (type.includes('probation') || type.includes('percobaan')) prob++;
+      else if (type.includes('magang') || type.includes('intern')) intern++;
       else if (type.includes('pkwtt') || type.includes('tetap') || type.includes('permanent')) perm++;
-      else cont++;
+      else if (type.includes('pkwt') || type.includes('kontrak') || type.includes('contract')) cont++;
+      else perm++;
     });
 
-    return { statusPermanent: perm, statusContract: cont, statusProbation: prob };
+    return { statusPermanent: perm, statusContract: cont, statusProbation: prob, statusIntern: intern };
   }, [filteredEmployees]);
 
   // Department Distribution
@@ -1205,7 +1208,7 @@ export default function LiveHRDashboard({ currentUser }: LiveHRDashboardProps) {
               <div className="space-y-2 text-xs">
                 <div className="flex items-center gap-2">
                   <span className="h-2.5 w-2.5 rounded-full bg-[#1E3A8A] dark:bg-blue-500 shrink-0" />
-                  <span className="text-slate-600 dark:text-slate-300">Tetap</span>
+                  <span className="text-slate-600 dark:text-slate-300">PKWTT</span>
                   <strong className="font-bold text-slate-900 dark:text-white ml-2">{statusPermanent}</strong>
                   <span className="text-[10px] text-slate-400 font-normal">
                     {totalHeadcount > 0 ? ((statusPermanent / totalHeadcount) * 100).toFixed(1) : 0}%
@@ -1213,7 +1216,7 @@ export default function LiveHRDashboard({ currentUser }: LiveHRDashboardProps) {
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="h-2.5 w-2.5 rounded-full bg-[#3B82F6] dark:bg-blue-400 shrink-0" />
-                  <span className="text-slate-600 dark:text-slate-300">Kontrak</span>
+                  <span className="text-slate-600 dark:text-slate-300">PKWT</span>
                   <strong className="font-bold text-slate-900 dark:text-white ml-2">{statusContract}</strong>
                   <span className="text-[10px] text-slate-400 font-normal">
                     {totalHeadcount > 0 ? ((statusContract / totalHeadcount) * 100).toFixed(1) : 0}%
@@ -1227,6 +1230,16 @@ export default function LiveHRDashboard({ currentUser }: LiveHRDashboardProps) {
                     {totalHeadcount > 0 ? ((statusProbation / totalHeadcount) * 100).toFixed(1) : 0}%
                   </span>
                 </div>
+                {statusIntern > 0 && (
+                  <div className="flex items-center gap-2">
+                    <span className="h-2.5 w-2.5 rounded-full bg-cyan-500 shrink-0" />
+                    <span className="text-slate-600 dark:text-slate-300">Magang</span>
+                    <strong className="font-bold text-slate-900 dark:text-white ml-2">{statusIntern}</strong>
+                    <span className="text-[10px] text-slate-400 font-normal">
+                      {totalHeadcount > 0 ? ((statusIntern / totalHeadcount) * 100).toFixed(1) : 0}%
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           </div>

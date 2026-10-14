@@ -257,16 +257,20 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
   }, []);
 
   // Compute contract status / days remaining
+  // Compute contract status / days remaining
   const getContractMeta = (emp: UserAccount) => {
-    const isPKWT = `${emp.employmentType || ''} ${emp.contractType || ''}`.toLowerCase().includes('pkwt') ||
-      (emp.employmentType || '').toLowerCase() === 'contract';
+    const raw = `${emp.contractType || ''} ${emp.employmentType || ''}`.toLowerCase();
+    const isTetap = raw.includes('tetap') || raw.includes('pkwtt') || raw.includes('permanent');
 
-    if (!isPKWT && (emp.employmentType || '').toLowerCase() === 'permanent') {
+    if (isTetap) {
       return { status: 'permanent', label: 'Tetap (PKWTT)', daysLeft: null, isExpiring: false, isExpired: false };
     }
 
     if (!emp.contractEndDate) {
-      return { status: 'nodate', label: 'Tanpa Tanggal Akhir', daysLeft: null, isExpiring: false, isExpired: false };
+      if (raw.includes('probation') || raw.includes('percobaan')) {
+        return { status: 'probation', label: 'Probation (3 Bulan)', daysLeft: null, isExpiring: false, isExpired: false };
+      }
+      return { status: 'permanent', label: 'Tetap (PKWTT)', daysLeft: null, isExpiring: false, isExpired: false };
     }
 
     const end = new Date(`${emp.contractEndDate}T00:00:00`);
@@ -289,13 +293,12 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
     const total = employees.length;
     const activeEmployees = employees.filter(e => (e.employmentStatus || e.status || 'Active').toLowerCase() === 'active');
     const pkwtList = employees.filter(e => {
-      const type = (e.employmentType || '').toLowerCase();
-      const cType = (e.contractType || '').toLowerCase();
-      return type.includes('pkwt') || type.includes('contract') || cType.includes('pkwt');
+      const t = `${e.contractType || ''} ${e.employmentType || ''}`.toLowerCase();
+      return (t.includes('pkwt') || t.includes('contract')) && !t.includes('pkwtt');
     });
     const pkwttList = employees.filter(e => {
-      const type = (e.employmentType || '').toLowerCase();
-      return type.includes('permanent') || type.includes('tetap') || type.includes('pkwtt');
+      const t = `${e.contractType || ''} ${e.employmentType || ''}`.toLowerCase();
+      return t.includes('tetap') || t.includes('pkwtt') || t.includes('permanent');
     });
 
     let expiringCount = 0;
@@ -320,7 +323,7 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
   // Unique dropdown options
   const companies = useMemo(() => [...new Set(employees.map(e => e.company).filter(Boolean))].sort(), [employees]);
   const departments = useMemo(() => [...new Set(employees.map(e => e.department).filter(Boolean))].sort(), [employees]);
-  const employmentTypes = useMemo(() => [...new Set(employees.map(e => e.employmentType).filter(Boolean))].sort(), [employees]);
+  const employmentTypes = ['PKWTT', 'PKWT', 'Probation', 'Magang'];
 
   // Filtered employees
   const filteredEmployees = useMemo(() => {
@@ -343,7 +346,22 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
       // Filters
       const matchesCompany = companyFilter ? emp.company === companyFilter : true;
       const matchesDept = departmentFilter ? emp.department === departmentFilter : true;
-      const matchesEmployment = employmentFilter ? emp.employmentType === employmentFilter : true;
+      
+      let matchesEmployment = true;
+      if (employmentFilter) {
+        const t = `${emp.contractType || ''} ${emp.employmentType || ''}`.toLowerCase();
+        if (employmentFilter === 'PKWTT') {
+          matchesEmployment = t.includes('pkwtt') || t.includes('tetap') || t.includes('permanent');
+        } else if (employmentFilter === 'PKWT') {
+          matchesEmployment = (t.includes('pkwt') || t.includes('kontrak')) && !t.includes('pkwtt');
+        } else if (employmentFilter === 'Probation') {
+          matchesEmployment = t.includes('probation') || t.includes('percobaan');
+        } else if (employmentFilter === 'Magang') {
+          matchesEmployment = t.includes('magang') || t.includes('intern');
+        } else {
+          matchesEmployment = emp.contractType === employmentFilter || emp.employmentType === employmentFilter;
+        }
+      }
 
       const currentStatus = (emp.employmentStatus || emp.status || 'Active');
       const matchesStatus = statusFilter === 'all' ? true : currentStatus.toLowerCase() === statusFilter.toLowerCase();
@@ -426,7 +444,7 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
         'Departemen': e.department || '-',
         'Jabatan': e.jobTitle || '-',
         'Level': e.jobLevel || '-',
-        'Status Kepegawaian': e.employmentType || '-',
+        'Status Kepegawaian': e.contractType || e.employmentType || 'PKWTT',
         'Status Akun': e.status || 'Active',
         'Tanggal Bergabung': e.joinDate || '-'
       }));
@@ -1221,18 +1239,35 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
                             <div className="text-[11px] text-muted-foreground">{emp.jobLevel || 'Staff'} {emp.gradeClass ? `(${emp.gradeClass})` : ''}</div>
                           </TableCell>
                           <TableCell className="px-6 py-3.5">
-                            <Badge
-                              variant="outline"
-                              className={`text-xs font-semibold ${
-                                (emp.employmentType || '').toLowerCase().includes('permanent')
-                                  ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                                  : (emp.employmentType || '').toLowerCase().includes('contract') || (emp.employmentType || '').toLowerCase().includes('pkwt')
-                                  ? 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400'
-                                  : 'border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-400'
-                              }`}
-                            >
-                              {emp.employmentType || 'Belum ditentukan'}
-                            </Badge>
+                            {(() => {
+                              const s = `${emp.contractType || ''} ${emp.employmentType || ''}`.toLowerCase();
+                              if (s.includes('probation') || s.includes('percobaan')) {
+                                return (
+                                  <Badge variant="outline" className="text-xs font-semibold border-purple-500/30 bg-purple-500/10 text-purple-700 dark:text-purple-400">
+                                    Probation
+                                  </Badge>
+                                );
+                              }
+                              if (s.includes('magang') || s.includes('intern')) {
+                                return (
+                                  <Badge variant="outline" className="text-xs font-semibold border-cyan-500/30 bg-cyan-500/10 text-cyan-700 dark:text-cyan-400">
+                                    Magang
+                                  </Badge>
+                                );
+                              }
+                              if (s.includes('pkwtt') || s.includes('tetap') || s.includes('permanent')) {
+                                return (
+                                  <Badge variant="outline" className="text-xs font-semibold border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400">
+                                    PKWTT
+                                  </Badge>
+                                );
+                              }
+                              return (
+                                <Badge variant="outline" className="text-xs font-semibold border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400">
+                                  PKWT
+                                </Badge>
+                              );
+                            })()}
                           </TableCell>
                           <TableCell className="px-6 py-3.5">
                             <div className="text-xs text-foreground flex items-center gap-1">
@@ -1274,8 +1309,14 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
                             </span>
                           </TableCell>
                           <TableCell className="px-6 py-3.5">
-                            <Badge variant="outline" className="text-xs">
-                              {emp.contractType || emp.employmentType || 'PKWT'}
+                            <Badge variant="outline" className="text-xs font-semibold">
+                              {(() => {
+                                const s = `${emp.contractType || ''} ${emp.employmentType || ''}`.toLowerCase();
+                                if (s.includes('probation') || s.includes('percobaan')) return 'Probation';
+                                if (s.includes('magang') || s.includes('intern')) return 'Magang';
+                                if (s.includes('pkwtt') || s.includes('tetap') || s.includes('permanent')) return 'PKWTT';
+                                return 'PKWT';
+                              })()}
                             </Badge>
                           </TableCell>
                           <TableCell className="px-6 py-3.5">
@@ -2239,35 +2280,35 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
                   {[
                     {
                       id: 'PKWTT',
-                      title: 'PKWTT (Karyawan Tetap)',
-                      desc: 'Pengangkatan permanen tanpa batas masa berlaku',
+                      title: 'PKWTT',
+                      desc: 'Perjanjian Kerja Waktu Tidak Tertentu (Tetap)',
                       badge: 'Permanen',
                       icon: Award,
                       color: 'border-emerald-500 text-emerald-600'
                     },
                     {
-                      id: 'PKWT 1',
-                      title: 'PKWT 1 (Kontrak 1)',
-                      desc: 'Kontrak kerja berjangka periode pertama',
-                      badge: 'Berjangka',
+                      id: 'PKWT',
+                      title: 'PKWT',
+                      desc: 'Perjanjian Kerja Waktu Tertentu (Kontrak)',
+                      badge: 'Kontrak',
                       icon: FileText,
-                      color: 'border-blue-500 text-blue-600'
-                    },
-                    {
-                      id: 'PKWT 2',
-                      title: 'PKWT 2 (Kontrak 2)',
-                      desc: 'Perpanjangan masa kontrak kerja berjangka',
-                      badge: 'Perpanjangan',
-                      icon: RefreshCcw,
-                      color: 'border-indigo-500 text-indigo-600'
+                      color: 'border-amber-500 text-amber-600'
                     },
                     {
                       id: 'Probation',
-                      title: 'Probation (Masa Percobaan)',
-                      desc: 'Masa evaluasi kerja 3 bulan pertama',
+                      title: 'Probation',
+                      desc: 'Masa Evaluasi Percobaan (3 Bulan)',
                       badge: 'Evaluasi',
                       icon: Clock,
-                      color: 'border-amber-500 text-amber-600'
+                      color: 'border-purple-500 text-purple-600'
+                    },
+                    {
+                      id: 'Magang',
+                      title: 'Magang',
+                      desc: 'Program Praktik / Magang Kerja (Internship)',
+                      badge: 'Internship',
+                      icon: RefreshCcw,
+                      color: 'border-cyan-500 text-cyan-600'
                     }
                   ].map((opt) => {
                     const isSelected = transitionForm.contractType === opt.id;
