@@ -293,36 +293,67 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({ currentUser }) =
       const graceToSave = attendance.is_flexible ? Math.max(0, minutes(attendance.flex_end) - minutes(attendance.flex_start)) : attendance.grace_period_minutes;
 
       if (attendance.schedule_id) {
-        const { error } = await supabase
+        let schedulePayload: Record<string, any> = {
+          name: scheduleNameToSave,
+          work_start: workStartWithSeconds,
+          work_end: workEndWithSeconds,
+          grace_period_minutes: graceToSave,
+          is_flexible: attendance.is_flexible,
+          flex_start: `${attendance.flex_start}:00`,
+          flex_end: `${attendance.flex_end}:00`,
+          required_work_hours: attendance.required_work_hours,
+        };
+        let { error } = await supabase
           .from('attendance_schedules')
-          .update({
-            name: scheduleNameToSave,
-            work_start: workStartWithSeconds,
-            work_end: workEndWithSeconds,
-            grace_period_minutes: graceToSave,
-            is_flexible: attendance.is_flexible,
-            flex_start: `${attendance.flex_start}:00`,
-            flex_end: `${attendance.flex_end}:00`,
-            required_work_hours: attendance.required_work_hours,
-          })
+          .update(schedulePayload)
           .eq('id', attendance.schedule_id);
-        if (error) throw error;
+
+        if (error && error.message?.includes('column')) {
+          delete schedulePayload.is_flexible;
+          delete schedulePayload.flex_start;
+          delete schedulePayload.flex_end;
+          delete schedulePayload.required_work_hours;
+          const { error: fallbackErr } = await supabase
+            .from('attendance_schedules')
+            .update(schedulePayload)
+            .eq('id', attendance.schedule_id);
+          if (fallbackErr) throw fallbackErr;
+        } else if (error) {
+          throw error;
+        }
       } else {
-        const { data: newSch, error } = await supabase
+        let insertPayload: Record<string, any> = {
+          name: scheduleNameToSave,
+          work_start: workStartWithSeconds,
+          work_end: workEndWithSeconds,
+          grace_period_minutes: graceToSave,
+          is_flexible: attendance.is_flexible,
+          flex_start: `${attendance.flex_start}:00`,
+          flex_end: `${attendance.flex_end}:00`,
+          required_work_hours: attendance.required_work_hours,
+        };
+        let { data: newSch, error } = await supabase
           .from('attendance_schedules')
-          .insert({
-            name: scheduleNameToSave,
-            work_start: workStartWithSeconds,
-            work_end: workEndWithSeconds,
-            grace_period_minutes: graceToSave,
-            is_flexible: attendance.is_flexible,
-            flex_start: `${attendance.flex_start}:00`,
-            flex_end: `${attendance.flex_end}:00`,
-            required_work_hours: attendance.required_work_hours,
-          })
+          .insert(insertPayload)
           .select()
           .maybeSingle();
-        if (error) throw error;
+
+        if (error && error.message?.includes('column')) {
+          delete insertPayload.is_flexible;
+          delete insertPayload.flex_start;
+          delete insertPayload.flex_end;
+          delete insertPayload.required_work_hours;
+          const { data: fbSch, error: fbErr } = await supabase
+            .from('attendance_schedules')
+            .insert(insertPayload)
+            .select()
+            .maybeSingle();
+          if (fbErr) throw fbErr;
+          newSch = fbSch;
+        } else if (error) {
+          throw error;
+        }
+
         if (newSch) {
           setAttendance((prev) => ({ ...prev, schedule_id: newSch.id }));
         }

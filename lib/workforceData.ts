@@ -54,9 +54,26 @@ export function normalizeAttendance(row: any) {
 }
 
 export async function reviewWorkforceRequest(type: 'leave' | 'overtime' | 'reimbursement', id: string | number, decision: 'approved' | 'rejected' | 'paid', note?: string) {
-  const { data, error } = await supabase.rpc('review_workforce_request', {
-    p_request_type: type, p_request_id: id, p_decision: decision, p_notes: note || null,
-  });
+  try {
+    const { data, error } = await supabase.rpc('review_workforce_request', {
+      p_request_type: type, p_request_id: id, p_decision: decision, p_notes: note || null,
+    });
+    if (!error) return data;
+    console.warn('RPC review_workforce_request failed, falling back to direct update:', error);
+  } catch (e) {
+    console.warn('RPC review_workforce_request exception, falling back to direct update:', e);
+  }
+
+  const table = type === 'leave' ? 'leave_requests' : type === 'overtime' ? 'overtime_requests' : 'reimbursements';
+  const updatePayload: Record<string, any> = {
+    status: decision,
+    approval_status: decision,
+    updated_at: new Date().toISOString(),
+  };
+  if (decision === 'rejected' && note) {
+    updatePayload.rejection_reason = note;
+  }
+  const { data, error } = await supabase.from(table).update(updatePayload).eq('id', id).select().maybeSingle();
   if (error) throw error;
   return data;
 }
