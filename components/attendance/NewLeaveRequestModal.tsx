@@ -144,7 +144,9 @@ export const NewLeaveRequestModal: React.FC<NewLeaveRequestModalProps> = ({
         end_date: endDate,
         total_days: durationDays,
         reason: fullReason,
-        status: 'pending'
+        status: 'pending',
+        approval_status: 'pending',
+        current_approval_level: 1
       };
 
       const { data, error } = await supabase.from('leave_requests').insert(payload).select().single();
