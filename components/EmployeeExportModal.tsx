@@ -2,17 +2,13 @@
 
 import React, { useState } from 'react';
 import {
-  FileSpreadsheet, Download, CheckCircle2, Layers,
-  SlidersHorizontal, Check, RefreshCw, Users, ShieldCheck,
-  Building2, Briefcase, GraduationCap, CreditCard, ShieldAlert,
-  Calendar, FileText, ChevronRight, Sparkles
+  FileSpreadsheet, Download, Layers, SlidersHorizontal,
+  Check, RefreshCw, CheckCircle2, User, Building,
+  FileCheck, FileText, GraduationCap, CreditCard, ShieldCheck
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent } from '@/components/ui/card';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
 import { UserAccount } from '../types';
@@ -34,6 +30,9 @@ interface EmployeeExportModalProps {
   getContractMeta?: (emp: UserAccount) => { label: string; isExpiring: boolean; isExpired: boolean; daysRemaining: number | null };
 }
 
+type ExportMode = 'full' | 'multisheet' | 'activetab' | 'custom';
+type DataScope = 'filtered' | 'all';
+
 export const EmployeeExportModal: React.FC<EmployeeExportModalProps> = ({
   isOpen,
   onClose,
@@ -44,12 +43,11 @@ export const EmployeeExportModal: React.FC<EmployeeExportModalProps> = ({
 }) => {
   const { showToast } = useToast();
 
-  // Export Settings State
-  const [dataScope, setDataScope] = useState<'filtered' | 'all'>('filtered');
-  const [exportMode, setExportMode] = useState<'full' | 'multisheet' | 'activetab' | 'custom'>('full');
+  const [dataScope, setDataScope] = useState<DataScope>('filtered');
+  const [exportMode, setExportMode] = useState<ExportMode>('full');
   const [isExporting, setIsExporting] = useState(false);
 
-  // Dynamic Column Groups Selection
+  // Column Groups Selection
   const [columnGroups, setColumnGroups] = useState<DynamicColumnGroups>({
     identity: true,
     org: true,
@@ -60,15 +58,12 @@ export const EmployeeExportModal: React.FC<EmployeeExportModalProps> = ({
     tax: true
   });
 
-  // Calculate target employees based on scope
   const targetEmployees = dataScope === 'filtered' ? filteredEmployees : allEmployees;
 
-  // Toggle a single column group
   const toggleGroup = (key: keyof DynamicColumnGroups) => {
     setColumnGroups(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
-  // Select all or reset groups
   const setAllGroups = (val: boolean) => {
     setColumnGroups({
       identity: val,
@@ -81,7 +76,6 @@ export const EmployeeExportModal: React.FC<EmployeeExportModalProps> = ({
     });
   };
 
-  // Tab label helper
   const getTabLabel = () => {
     switch (activeTab) {
       case 'contracts': return 'Monitoring Kontrak & PKWT';
@@ -91,7 +85,26 @@ export const EmployeeExportModal: React.FC<EmployeeExportModalProps> = ({
     }
   };
 
-  // Execution Handler
+  const getEstimatedColumns = () => {
+    if (exportMode === 'full') return 46;
+    if (exportMode === 'multisheet') return '4 Sheet (12-46 Kolom)';
+    if (exportMode === 'activetab') {
+      if (activeTab === 'contracts') return 12;
+      if (activeTab === 'payroll') return 13;
+      return 13;
+    }
+    // Custom
+    let count = 0;
+    if (columnGroups.identity) count += 7;
+    if (columnGroups.org) count += 8;
+    if (columnGroups.contract) count += 5;
+    if (columnGroups.personal) count += 12;
+    if (columnGroups.education) count += 7;
+    if (columnGroups.payroll) count += 4;
+    if (columnGroups.tax) count += 4;
+    return count || 6;
+  };
+
   const handleExecuteExport = () => {
     if (targetEmployees.length === 0) {
       showToast('Tidak ada data karyawan yang dipilih untuk diekspor.', 'error');
@@ -105,17 +118,16 @@ export const EmployeeExportModal: React.FC<EmployeeExportModalProps> = ({
       if (exportMode === 'full') {
         exportComprehensiveEmployeesExcel(
           targetEmployees,
-          `GESIT-DATA-KARYAWAN-FULL-LENGKAP-${dataScope === 'all' ? 'SEMUA' : 'TERFILTER'}`
+          `GESIT-DATA-KARYAWAN-FULL-${dataScope === 'all' ? 'SEMUA' : 'TERFILTER'}`
         );
-        showToast(`Berhasil mengekspor Master Data Lengkap (${targetEmployees.length} karyawan)!`, 'success');
+        showToast(`Master Data Lengkap (${targetEmployees.length} karyawan) berhasil diunduh.`, 'success');
       } else if (exportMode === 'multisheet') {
         exportMultiSheetEmployeesExcel(
           targetEmployees,
           `GESIT-BUKU-DATA-KARYAWAN-${dataScope === 'all' ? 'SEMUA' : 'TERFILTER'}`
         );
-        showToast(`Berhasil mengekspor Buku Kerja 4-Sheet (${targetEmployees.length} karyawan)!`, 'success');
+        showToast(`Buku Kerja 4-Sheet (${targetEmployees.length} karyawan) berhasil diunduh.`, 'success');
       } else if (exportMode === 'activetab') {
-        // Export matching current active table tab
         if (activeTab === 'contracts') {
           const data = targetEmployees.map(e => {
             const meta = getContractMeta ? getContractMeta(e) : { label: 'PKWTT', isExpiring: false, isExpired: false, daysRemaining: null };
@@ -170,14 +182,14 @@ export const EmployeeExportModal: React.FC<EmployeeExportModalProps> = ({
           }));
           exportToExcel(data, `GESIT-DIREKTORI-KARYAWAN-${todayStr}`);
         }
-        showToast(`Berhasil mengekspor format Tab ${getTabLabel()} (${targetEmployees.length} data)!`, 'success');
+        showToast(`Format tabel ${getTabLabel()} (${targetEmployees.length} baris) berhasil diunduh.`, 'success');
       } else if (exportMode === 'custom') {
         exportDynamicEmployeesExcel(
           targetEmployees,
           columnGroups,
-          `GESIT-DATA-DINAMIS-${dataScope === 'all' ? 'SEMUA' : 'TERFILTER'}`
+          `GESIT-DATA-KARYAWAN-KUSTOM-${dataScope === 'all' ? 'SEMUA' : 'TERFILTER'}`
         );
-        showToast(`Berhasil mengekspor Kolom Pilihan (${targetEmployees.length} karyawan)!`, 'success');
+        showToast(`Data karyawan pilihan (${targetEmployees.length} karyawan) berhasil diunduh.`, 'success');
       }
 
       onClose();
@@ -188,259 +200,247 @@ export const EmployeeExportModal: React.FC<EmployeeExportModalProps> = ({
     }
   };
 
-  // Quick 1-Click Handlers
-  const handleQuickFull = () => {
-    try {
-      exportComprehensiveEmployeesExcel(allEmployees, 'GESIT-DATA-KARYAWAN-FULL-LENGKAP');
-      showToast(`Master Data Lengkap (${allEmployees.length} karyawan) berhasil diunduh!`, 'success');
-      onClose();
-    } catch (err: any) {
-      showToast(err.message || 'Gagal mengekspor file Excel', 'error');
-    }
-  };
-
-  const handleQuickMultiSheet = () => {
-    try {
-      exportMultiSheetEmployeesExcel(allEmployees, 'GESIT-BUKU-DATA-KARYAWAN-4-SHEET');
-      showToast(`Buku Kerja 4-Sheet (${allEmployees.length} karyawan) berhasil diunduh!`, 'success');
-      onClose();
-    } catch (err: any) {
-      showToast(err.message || 'Gagal mengekspor file Excel', 'error');
-    }
-  };
-
   return (
     <Dialog open={isOpen} onOpenChange={open => { if (!open) onClose(); }}>
-      <DialogContent className="max-w-2xl max-h-[92vh] overflow-y-auto p-0 border-border/60 shadow-2xl">
+      <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-hidden flex flex-col p-0 border-border/80 shadow-2xl bg-background">
         {/* HEADER */}
-        <div className="p-6 pb-4 border-b border-border/40 bg-gradient-to-r from-emerald-500/10 via-teal-500/5 to-transparent">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold">
-              <FileSpreadsheet size={22} />
+        <div className="px-6 py-5 border-b border-border/60 flex items-center justify-between bg-muted/20 pr-12">
+          <div className="flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/20">
+              <FileSpreadsheet className="w-5 h-5" />
             </div>
             <div>
-              <DialogTitle className="text-lg font-bold tracking-tight flex items-center gap-2">
-                Export Data Karyawan (.xlsx)
-                <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/30 text-[10px] font-semibold">
-                  Excel Full & Dinamis
+              <div className="flex items-center gap-2">
+                <DialogTitle className="text-base font-semibold tracking-tight text-foreground">
+                  Ekspor Direktori Karyawan
+                </DialogTitle>
+                <Badge variant="secondary" className="font-mono text-[10px] px-2 py-0 border border-border text-muted-foreground">
+                  .xlsx
                 </Badge>
-              </DialogTitle>
+              </div>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Unduh direktori karyawan lengkap dengan 46 kolom komprehensif atau sesuaikan kolom secara dinamis.
+                Unduh data kepegawaian ke dalam format lembar kerja Excel resmi
               </p>
             </div>
           </div>
         </div>
 
-        <div className="p-6 space-y-6">
-          {/* QUICK EXPORT PRESETS */}
-          <div className="space-y-2.5">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                <Sparkles size={13} className="text-amber-500" /> Unduh Instan (1-Klik)
+        {/* BODY */}
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+          {/* 1. DATA SCOPE */}
+          <div>
+            <div className="flex items-center justify-between mb-2.5">
+              <span className="text-xs font-semibold text-foreground uppercase tracking-wider">
+                1. Cakupan Karyawan
               </span>
-              <span className="text-[11px] text-muted-foreground">
-                Mencakup seluruh <strong>{allEmployees.length} karyawan</strong>
+              <span className="text-xs text-muted-foreground">
+                Target: <strong className="text-foreground">{targetEmployees.length} Karyawan</strong>
               </span>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              <Button
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <button
                 type="button"
-                variant="outline"
-                onClick={handleQuickFull}
-                className="h-auto p-3 text-left flex items-start gap-3 border-emerald-500/30 hover:border-emerald-500 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 group transition-all"
-              >
-                <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shrink-0 group-hover:scale-105 transition-transform">
-                  <FileSpreadsheet size={18} />
-                </div>
-                <div className="min-w-0">
-                  <div className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                    Master Full Lengkap
-                    <Badge variant="secondary" className="text-[9px] px-1 py-0 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
-                      46 Kolom
-                    </Badge>
-                  </div>
-                  <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
-                    Seluruh profil, identitas, organisasi, kontrak, payroll, bank & pajak dalam 1 sheet.
-                  </p>
-                </div>
-              </Button>
-
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleQuickMultiSheet}
-                className="h-auto p-3 text-left flex items-start gap-3 border-blue-500/30 hover:border-blue-500 hover:bg-blue-50/50 dark:hover:bg-blue-950/20 group transition-all"
-              >
-                <div className="p-2 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 shrink-0 group-hover:scale-105 transition-transform">
-                  <Layers size={18} />
-                </div>
-                <div className="min-w-0">
-                  <div className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                    Buku Kerja 4-Sheet
-                    <Badge variant="secondary" className="text-[9px] px-1 py-0 bg-blue-500/15 text-blue-700 dark:text-blue-300">
-                      Multi-Sheet
-                    </Badge>
-                  </div>
-                  <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
-                    Terbagi rapi: Master, Monitoring PKWT, Data Payroll Bank, dan Pendidikan.
-                  </p>
-                </div>
-              </Button>
-            </div>
-          </div>
-
-          <Separator className="opacity-60" />
-
-          {/* SECTION 1: LINGKUP DATA */}
-          <div className="space-y-3">
-            <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              1. Pilih Lingkup Data
-            </Label>
-            <RadioGroup
-              value={dataScope}
-              onValueChange={v => setDataScope(v as any)}
-              className="grid grid-cols-1 sm:grid-cols-2 gap-2.5"
-            >
-              <label
-                htmlFor="scope-filtered"
-                className={`flex items-start gap-3 p-3 rounded-xl border text-xs cursor-pointer transition-colors ${
+                onClick={() => setDataScope('filtered')}
+                className={`p-3.5 rounded-lg border text-left transition-all flex items-start gap-3 ${
                   dataScope === 'filtered'
-                    ? 'border-emerald-500/80 bg-emerald-500/5 ring-1 ring-emerald-500/30'
-                    : 'border-border/60 hover:bg-muted/40'
+                    ? 'border-emerald-600 bg-emerald-50/50 dark:bg-emerald-950/20 ring-1 ring-emerald-600/30'
+                    : 'border-border/80 hover:bg-muted/30 bg-card'
                 }`}
               >
-                <RadioGroupItem value="filtered" id="scope-filtered" className="mt-0.5" />
-                <div>
-                  <div className="font-semibold text-foreground flex items-center gap-1.5">
-                    Data Terfilter Saat Ini
-                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0 font-bold">
-                      {filteredEmployees.length} Data
-                    </Badge>
+                <div className={`w-4 h-4 rounded-full border mt-0.5 shrink-0 flex items-center justify-center ${
+                  dataScope === 'filtered' ? 'border-emerald-600 bg-emerald-600' : 'border-muted-foreground/40'
+                }`}>
+                  {dataScope === 'filtered' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-medium text-foreground flex items-center justify-between">
+                    <span>Data Sesuai Filter Tabel</span>
+                    <span className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.2 rounded">
+                      {filteredEmployees.length} data
+                    </span>
                   </div>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">
-                    Mengikuti pencarian dan filter departemen/perusahaan yang sedang aktif di tabel.
+                  <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
+                    Hanya karyawan yang memenuhi kriteria pencarian dan filter aktif saat ini.
                   </p>
                 </div>
-              </label>
+              </button>
 
-              <label
-                htmlFor="scope-all"
-                className={`flex items-start gap-3 p-3 rounded-xl border text-xs cursor-pointer transition-colors ${
+              <button
+                type="button"
+                onClick={() => setDataScope('all')}
+                className={`p-3.5 rounded-lg border text-left transition-all flex items-start gap-3 ${
                   dataScope === 'all'
-                    ? 'border-emerald-500/80 bg-emerald-500/5 ring-1 ring-emerald-500/30'
-                    : 'border-border/60 hover:bg-muted/40'
+                    ? 'border-emerald-600 bg-emerald-50/50 dark:bg-emerald-950/20 ring-1 ring-emerald-600/30'
+                    : 'border-border/80 hover:bg-muted/30 bg-card'
                 }`}
               >
-                <RadioGroupItem value="all" id="scope-all" className="mt-0.5" />
-                <div>
-                  <div className="font-semibold text-foreground flex items-center gap-1.5">
-                    Seluruh Karyawan
-                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0 font-bold">
-                      {allEmployees.length} Karyawan
+                <div className={`w-4 h-4 rounded-full border mt-0.5 shrink-0 flex items-center justify-center ${
+                  dataScope === 'all' ? 'border-emerald-600 bg-emerald-600' : 'border-muted-foreground/40'
+                }`}>
+                  {dataScope === 'all' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-medium text-foreground flex items-center justify-between">
+                    <span>Seluruh Karyawan Aktif</span>
+                    <span className="text-[11px] font-semibold text-muted-foreground bg-muted px-1.5 py-0.2 rounded">
+                      {allEmployees.length} total
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
+                    Mengekspor seluruh staf dari 7 unit bisnis Gesit Group tanpa terpotong filter.
+                  </p>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          <Separator className="opacity-50" />
+
+          {/* 2. FORMAT SELECTION */}
+          <div>
+            <div className="flex items-center justify-between mb-2.5">
+              <span className="text-xs font-semibold text-foreground uppercase tracking-wider">
+                2. Struktur & Format Kolom
+              </span>
+            </div>
+
+            <div className="space-y-2.5">
+              {/* Option A: Master Full Lengkap */}
+              <button
+                type="button"
+                onClick={() => setExportMode('full')}
+                className={`w-full p-3.5 rounded-lg border text-left transition-all flex items-start gap-3.5 ${
+                  exportMode === 'full'
+                    ? 'border-emerald-600 bg-emerald-50/50 dark:bg-emerald-950/20 ring-1 ring-emerald-600/30'
+                    : 'border-border/80 hover:bg-muted/30 bg-card'
+                }`}
+              >
+                <div className={`w-4 h-4 rounded-full border mt-0.5 shrink-0 flex items-center justify-center ${
+                  exportMode === 'full' ? 'border-emerald-600 bg-emerald-600' : 'border-muted-foreground/40'
+                }`}>
+                  {exportMode === 'full' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-foreground">
+                      Master Data Lengkap
+                    </span>
+                    <Badge variant="outline" className="text-[10px] border-emerald-500/30 text-emerald-700 dark:text-emerald-400 font-medium">
+                      46 Kolom • Rekomendasi
                     </Badge>
                   </div>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">
-                    Seluruh karyawan yang terdaftar di sistem Gesit Group tanpa terpotong filter.
+                  <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
+                    Satu lembar kerja komprehensif mencakup identitas, organisasi, masa kerja, NIK/NPWP, nomor SK/PKWT, perbankan, BPJS, dan riwayat pendidikan.
                   </p>
                 </div>
-              </label>
-            </RadioGroup>
-          </div>
+              </button>
 
-          {/* SECTION 2: FORMAT EXPORT */}
-          <div className="space-y-3">
-            <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              2. Pilih Format / Struktur Kolom
-            </Label>
-            <RadioGroup
-              value={exportMode}
-              onValueChange={v => setExportMode(v as any)}
-              className="grid grid-cols-1 sm:grid-cols-2 gap-2.5"
-            >
-              <label
-                htmlFor="mode-full"
-                className={`flex items-start gap-3 p-3 rounded-xl border text-xs cursor-pointer transition-colors ${
-                  exportMode === 'full'
-                    ? 'border-emerald-500/80 bg-emerald-500/5 ring-1 ring-emerald-500/30'
-                    : 'border-border/60 hover:bg-muted/40'
-                }`}
-              >
-                <RadioGroupItem value="full" id="mode-full" className="mt-0.5" />
-                <div>
-                  <div className="font-semibold text-foreground">⭐ Master Full Lengkap</div>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">
-                    Semua kolom (46 kolom) lengkap dengan usia & hitungan masa kerja.
-                  </p>
-                </div>
-              </label>
-
-              <label
-                htmlFor="mode-multisheet"
-                className={`flex items-start gap-3 p-3 rounded-xl border text-xs cursor-pointer transition-colors ${
+              {/* Option B: Buku Kerja Multi-Sheet */}
+              <button
+                type="button"
+                onClick={() => setExportMode('multisheet')}
+                className={`w-full p-3.5 rounded-lg border text-left transition-all flex items-start gap-3.5 ${
                   exportMode === 'multisheet'
-                    ? 'border-emerald-500/80 bg-emerald-500/5 ring-1 ring-emerald-500/30'
-                    : 'border-border/60 hover:bg-muted/40'
+                    ? 'border-emerald-600 bg-emerald-50/50 dark:bg-emerald-950/20 ring-1 ring-emerald-600/30'
+                    : 'border-border/80 hover:bg-muted/30 bg-card'
                 }`}
               >
-                <RadioGroupItem value="multisheet" id="mode-multisheet" className="mt-0.5" />
-                <div>
-                  <div className="font-semibold text-foreground">📑 Buku Kerja Multi-Sheet</div>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">
-                    4 Sheet: Master Data, Kontrak PKWT, Payroll Bank, & Pendidikan.
+                <div className={`w-4 h-4 rounded-full border mt-0.5 shrink-0 flex items-center justify-center ${
+                  exportMode === 'multisheet' ? 'border-emerald-600 bg-emerald-600' : 'border-muted-foreground/40'
+                }`}>
+                  {exportMode === 'multisheet' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-foreground">
+                      Buku Kerja Multi-Sheet
+                    </span>
+                    <Badge variant="outline" className="text-[10px] border-blue-500/30 text-blue-700 dark:text-blue-400 font-medium">
+                      4 Lembar Kerja Terpisah
+                    </Badge>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
+                    Diorganisir ke dalam 4 sheet tematik: Master Karyawan, Monitoring PKWT, Payroll & Bank, dan Pendidikan/Profil.
                   </p>
                 </div>
-              </label>
+              </button>
 
-              <label
-                htmlFor="mode-activetab"
-                className={`flex items-start gap-3 p-3 rounded-xl border text-xs cursor-pointer transition-colors ${
+              {/* Option C: Sesuai Tampilan Tab */}
+              <button
+                type="button"
+                onClick={() => setExportMode('activetab')}
+                className={`w-full p-3.5 rounded-lg border text-left transition-all flex items-start gap-3.5 ${
                   exportMode === 'activetab'
-                    ? 'border-emerald-500/80 bg-emerald-500/5 ring-1 ring-emerald-500/30'
-                    : 'border-border/60 hover:bg-muted/40'
+                    ? 'border-emerald-600 bg-emerald-50/50 dark:bg-emerald-950/20 ring-1 ring-emerald-600/30'
+                    : 'border-border/80 hover:bg-muted/30 bg-card'
                 }`}
               >
-                <RadioGroupItem value="activetab" id="mode-activetab" className="mt-0.5" />
-                <div>
-                  <div className="font-semibold text-foreground">🎯 Sesuai Tab Aktif ({getTabLabel()})</div>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">
-                    Hanya kolom-kolom yang relevan dengan tabel yang sedang dibuka.
+                <div className={`w-4 h-4 rounded-full border mt-0.5 shrink-0 flex items-center justify-center ${
+                  exportMode === 'activetab' ? 'border-emerald-600 bg-emerald-600' : 'border-muted-foreground/40'
+                }`}>
+                  {exportMode === 'activetab' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-foreground">
+                      Sesuai Tab Aktif ({getTabLabel()})
+                    </span>
+                    <Badge variant="outline" className="text-[10px] text-muted-foreground font-medium">
+                      Tampilan Tabel
+                    </Badge>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
+                    Hanya kolom-kolom yang sedang ditampilkan pada modul tab aktif saat ini.
                   </p>
                 </div>
-              </label>
+              </button>
 
-              <label
-                htmlFor="mode-custom"
-                className={`flex items-start gap-3 p-3 rounded-xl border text-xs cursor-pointer transition-colors ${
+              {/* Option D: Kustomisasi Dinamis */}
+              <button
+                type="button"
+                onClick={() => setExportMode('custom')}
+                className={`w-full p-3.5 rounded-lg border text-left transition-all flex items-start gap-3.5 ${
                   exportMode === 'custom'
-                    ? 'border-emerald-500/80 bg-emerald-500/5 ring-1 ring-emerald-500/30'
-                    : 'border-border/60 hover:bg-muted/40'
+                    ? 'border-emerald-600 bg-emerald-50/50 dark:bg-emerald-950/20 ring-1 ring-emerald-600/30'
+                    : 'border-border/80 hover:bg-muted/30 bg-card'
                 }`}
               >
-                <RadioGroupItem value="custom" id="mode-custom" className="mt-0.5" />
-                <div>
-                  <div className="font-semibold text-foreground">⚙️ Kustomisasi Dinamis</div>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">
-                    Pilih grup kategori kolom yang diinginkan secara spesifik.
+                <div className={`w-4 h-4 rounded-full border mt-0.5 shrink-0 flex items-center justify-center ${
+                  exportMode === 'custom' ? 'border-emerald-600 bg-emerald-600' : 'border-muted-foreground/40'
+                }`}>
+                  {exportMode === 'custom' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-foreground">
+                      Kustomisasi Kolom Pilihan
+                    </span>
+                    <Badge variant="outline" className="text-[10px] text-muted-foreground font-medium">
+                      Dinamis
+                    </Badge>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
+                    Tentukan sendiri kelompok informasi yang akan disertakan dalam laporan.
                   </p>
                 </div>
-              </label>
-            </RadioGroup>
+              </button>
+            </div>
           </div>
 
-          {/* SECTION 3: KUSTOMISASI KOLOM JIKA MODE = CUSTOM */}
+          {/* DYNAMIC CHECKBOX ACCORDION IF MODE IS CUSTOM */}
           {exportMode === 'custom' && (
-            <div className="p-4 rounded-xl border border-border/80 bg-muted/20 space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
+            <div className="p-4 rounded-lg border border-border bg-muted/20 space-y-3.5 animate-in fade-in duration-200">
               <div className="flex items-center justify-between">
-                <div className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                  <SlidersHorizontal size={14} className="text-emerald-500" />
+                <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                  <SlidersHorizontal className="w-3.5 h-3.5 text-emerald-600" />
                   Centang Kategori Kolom yang Ingin Disertakan:
-                </div>
+                </span>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => setAllGroups(true)}
-                    className="text-[11px] text-emerald-600 hover:underline font-medium"
+                    className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium hover:underline"
                   >
                     Pilih Semua
                   </button>
@@ -455,82 +455,106 @@ export const EmployeeExportModal: React.FC<EmployeeExportModalProps> = ({
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-                <label className="flex items-center gap-2.5 p-2 rounded-lg border border-border/60 bg-background text-xs cursor-pointer hover:bg-muted/30">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <label className="flex items-center gap-2.5 p-2.5 rounded-md border border-border/80 bg-background text-xs cursor-pointer hover:bg-muted/40 transition-colors">
                   <Checkbox checked={columnGroups.identity} onCheckedChange={() => toggleGroup('identity')} />
-                  <span>👤 <strong>Identitas & Akun</strong> (NIP, Nama, Email, Telp, Role, Status)</span>
+                  <div className="min-w-0">
+                    <div className="font-medium text-foreground">Identitas & Akun</div>
+                    <div className="text-[10px] text-muted-foreground truncate">NIP, Nama, Email, Telp, Role, Status</div>
+                  </div>
                 </label>
 
-                <label className="flex items-center gap-2.5 p-2 rounded-lg border border-border/60 bg-background text-xs cursor-pointer hover:bg-muted/30">
+                <label className="flex items-center gap-2.5 p-2.5 rounded-md border border-border/80 bg-background text-xs cursor-pointer hover:bg-muted/40 transition-colors">
                   <Checkbox checked={columnGroups.org} onCheckedChange={() => toggleGroup('org')} />
-                  <span>🏢 <strong>Organisasi & Jabatan</strong> (PT, Cabang, Divisi, Level, Masa Kerja)</span>
+                  <div className="min-w-0">
+                    <div className="font-medium text-foreground">Organisasi & Jabatan</div>
+                    <div className="text-[10px] text-muted-foreground truncate">Perusahaan, Divisi, Level, Masa Kerja</div>
+                  </div>
                 </label>
 
-                <label className="flex items-center gap-2.5 p-2 rounded-lg border border-border/60 bg-background text-xs cursor-pointer hover:bg-muted/30">
+                <label className="flex items-center gap-2.5 p-2.5 rounded-md border border-border/80 bg-background text-xs cursor-pointer hover:bg-muted/40 transition-colors">
                   <Checkbox checked={columnGroups.contract} onCheckedChange={() => toggleGroup('contract')} />
-                  <span>📑 <strong>Kontrak & Legalitas</strong> (Tipe Kontrak, No PKWT, Tgl Mulai & Akhir)</span>
+                  <div className="min-w-0">
+                    <div className="font-medium text-foreground">Kontrak & Legalitas</div>
+                    <div className="text-[10px] text-muted-foreground truncate">Tipe Kontrak, No. PKWT, Tgl Mulai/Akhir</div>
+                  </div>
                 </label>
 
-                <label className="flex items-center gap-2.5 p-2 rounded-lg border border-border/60 bg-background text-xs cursor-pointer hover:bg-muted/30">
+                <label className="flex items-center gap-2.5 p-2.5 rounded-md border border-border/80 bg-background text-xs cursor-pointer hover:bg-muted/40 transition-colors">
                   <Checkbox checked={columnGroups.personal} onCheckedChange={() => toggleGroup('personal')} />
-                  <span>🪪 <strong>Data Pribadi & KTP</strong> (NIK, Usia, Gender, Agama, Alamat)</span>
+                  <div className="min-w-0">
+                    <div className="font-medium text-foreground">Data Pribadi & Kependudukan</div>
+                    <div className="text-[10px] text-muted-foreground truncate">NIK KTP, Usia, Gender, Agama, Alamat</div>
+                  </div>
                 </label>
 
-                <label className="flex items-center gap-2.5 p-2 rounded-lg border border-border/60 bg-background text-xs cursor-pointer hover:bg-muted/30">
+                <label className="flex items-center gap-2.5 p-2.5 rounded-md border border-border/80 bg-background text-xs cursor-pointer hover:bg-muted/40 transition-colors">
                   <Checkbox checked={columnGroups.education} onCheckedChange={() => toggleGroup('education')} />
-                  <span>🎓 <strong>Pendidikan</strong> (Tingkat, Universitas, Jurusan, Lulus, IPK)</span>
+                  <div className="min-w-0">
+                    <div className="font-medium text-foreground">Riwayat Pendidikan</div>
+                    <div className="text-[10px] text-muted-foreground truncate">Jenjang, Universitas, Jurusan, IPK</div>
+                  </div>
                 </label>
 
-                <label className="flex items-center gap-2.5 p-2 rounded-lg border border-border/60 bg-background text-xs cursor-pointer hover:bg-muted/30">
+                <label className="flex items-center gap-2.5 p-2.5 rounded-md border border-border/80 bg-background text-xs cursor-pointer hover:bg-muted/40 transition-colors">
                   <Checkbox checked={columnGroups.payroll} onCheckedChange={() => toggleGroup('payroll')} />
-                  <span>💳 <strong>Payroll & Bank</strong> (Status Payroll, Nama Bank, No Rekening)</span>
+                  <div className="min-w-0">
+                    <div className="font-medium text-foreground">Payroll & Rekening Bank</div>
+                    <div className="text-[10px] text-muted-foreground truncate">Status Payroll, Nama Bank, No. Rekening</div>
+                  </div>
                 </label>
 
-                <label className="flex items-center gap-2.5 p-2 rounded-lg border border-border/60 bg-background text-xs cursor-pointer hover:bg-muted/30">
+                <label className="flex items-center gap-2.5 p-2.5 rounded-md border border-border/80 bg-background text-xs cursor-pointer hover:bg-muted/40 transition-colors sm:col-span-2">
                   <Checkbox checked={columnGroups.tax} onCheckedChange={() => toggleGroup('tax')} />
-                  <span>🛡️ <strong>Pajak & BPJS</strong> (NPWP, PTKP, BPJS TK, BPJS Kesehatan)</span>
+                  <div className="min-w-0">
+                    <div className="font-medium text-foreground">Perpajakan & Jaminan Sosial</div>
+                    <div className="text-[10px] text-muted-foreground truncate">NPWP 16 Digit, Status PTKP, BPJS Ketenagakerjaan, BPJS Kesehatan</div>
+                  </div>
                 </label>
               </div>
             </div>
           )}
-
-          {/* SUMMARY INFO CARD */}
-          <div className="p-3.5 rounded-xl bg-emerald-500/5 border border-emerald-500/20 flex items-center justify-between text-xs">
-            <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300">
-              <CheckCircle2 size={16} className="text-emerald-500 shrink-0" />
-              <span>
-                Siap mengekspor <strong>{targetEmployees.length} baris data karyawan</strong> ke file Excel format <strong>.xlsx</strong>
-              </span>
-            </div>
-            <Badge variant="outline" className="border-emerald-500/30 text-emerald-700 dark:text-emerald-300 font-mono text-[11px]">
-              Ready
-            </Badge>
-          </div>
         </div>
 
-        {/* FOOTER */}
-        <DialogFooter className="p-4 border-t border-border/40 bg-muted/20 flex items-center justify-between gap-2">
-          <Button variant="ghost" onClick={onClose} disabled={isExporting} className="text-xs">
-            Tutup
-          </Button>
-          <Button
-            type="button"
-            onClick={handleExecuteExport}
-            disabled={isExporting || targetEmployees.length === 0}
-            className="text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
-          >
-            {isExporting ? (
-              <>
-                <RefreshCw size={14} className="mr-2 animate-spin" /> Menyiapkan File...
-              </>
-            ) : (
-              <>
-                <Download size={14} className="mr-2" /> Download Excel (.xlsx)
-              </>
-            )}
-          </Button>
-        </DialogFooter>
+        {/* FOOTER STRIP */}
+        <div className="px-6 py-4 border-t border-border/60 bg-muted/20 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>
+              Akan mengunduh <strong>{targetEmployees.length} baris</strong> ({getEstimatedColumns()} kolom data)
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onClose}
+              disabled={isExporting}
+              className="text-xs h-9 px-4"
+            >
+              Batal
+            </Button>
+            <Button
+              type="button"
+              onClick={handleExecuteExport}
+              disabled={isExporting || targetEmployees.length === 0}
+              className="text-xs h-9 px-4 font-medium bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm flex items-center gap-2"
+            >
+              {isExporting ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Menyiapkan Berkas...
+                </>
+              ) : (
+                <>
+                  <Download className="w-3.5 h-3.5" /> Unduh Berkas Excel (.xlsx)
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   );
 };
+export default EmployeeExportModal;
