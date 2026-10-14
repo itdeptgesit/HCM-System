@@ -27,7 +27,14 @@ interface EmployeeExportModalProps {
   allEmployees: UserAccount[];
   filteredEmployees: UserAccount[];
   activeTab: 'directory' | 'contracts' | 'payroll' | 'transfers';
-  getContractMeta?: (emp: UserAccount) => { label: string; isExpiring: boolean; isExpired: boolean; daysRemaining: number | null };
+  getContractMeta?: (emp: UserAccount) => {
+    status?: string;
+    label: string;
+    daysLeft?: number | null;
+    daysRemaining?: number | null;
+    isExpiring: boolean;
+    isExpired: boolean;
+  };
 }
 
 type ExportMode = 'full' | 'multisheet' | 'activetab' | 'custom';
@@ -130,7 +137,8 @@ export const EmployeeExportModal: React.FC<EmployeeExportModalProps> = ({
       } else if (exportMode === 'activetab') {
         if (activeTab === 'contracts') {
           const data = targetEmployees.map(e => {
-            const meta = getContractMeta ? getContractMeta(e) : { label: 'PKWTT', isExpiring: false, isExpired: false, daysRemaining: null };
+            const meta = getContractMeta ? getContractMeta(e) : { label: 'PKWTT', isExpiring: false, isExpired: false, daysLeft: null, daysRemaining: null };
+            const days = meta.daysRemaining ?? meta.daysLeft ?? null;
             return {
               'Employee ID': e.employeeCode || '-',
               'Nama Karyawan': e.fullName,
@@ -143,7 +151,7 @@ export const EmployeeExportModal: React.FC<EmployeeExportModalProps> = ({
               'Tanggal Mulai Kontrak': e.contractStartDate || '-',
               'Tanggal Berakhir Kontrak': e.contractEndDate || '-',
               'Status Masa Kontrak': meta.label,
-              'Sisa Hari': meta.daysRemaining !== null ? `${meta.daysRemaining} hari` : '-'
+              'Sisa Hari': days !== null ? `${days} hari` : '-'
             };
           });
           exportToExcel(data, `GESIT-KONTRAK-PKWT-${todayStr}`);
