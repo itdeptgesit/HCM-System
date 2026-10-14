@@ -17,6 +17,7 @@ import { exportToExcel } from '../lib/excelExport';
 import { trackActivity } from '../lib/auditLogger';
 import { hasPermission } from '../lib/permissions';
 import { isHRAccount } from '../lib/workforce-contract';
+import { formatDateDDMMYYYY, normalizeGender, normalizeReligion } from '../lib/utils';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -175,9 +176,9 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
           taxStatus: u.tax_status,
           dateOfBirth: u.date_of_birth,
           birthPlace: u.birth_place,
-          gender: u.gender,
+          gender: normalizeGender(u.gender),
           maritalStatus: u.marital_status,
-          religion: u.religion,
+          religion: normalizeReligion(u.religion),
           bloodType: u.blood_type,
           nik: u.nik,
           npwp: u.npwp,
@@ -1219,7 +1220,7 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
                               </span>
                               {emp.joinDate && (
                                 <span className="text-[11px] text-muted-foreground">
-                                  · Masuk: {new Date(`${emp.joinDate}T00:00:00`).toLocaleDateString('id-ID', { month: 'short', year: 'numeric' })}
+                                  · Masuk: {formatDateDDMMYYYY(emp.joinDate)}
                                 </span>
                               )}
                             </div>
@@ -1321,9 +1322,9 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
                           </TableCell>
                           <TableCell className="px-6 py-3.5">
                             <div className="text-xs font-medium text-foreground">
-                              {emp.contractStartDate ? new Date(`${emp.contractStartDate}T00:00:00`).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+                              {emp.contractStartDate ? formatDateDDMMYYYY(emp.contractStartDate) : '—'}
                               {' s/d '}
-                              {emp.contractEndDate ? new Date(`${emp.contractEndDate}T00:00:00`).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Tetap'}
+                              {emp.contractEndDate ? formatDateDDMMYYYY(emp.contractEndDate) : 'Tetap'}
                             </div>
                           </TableCell>
                           <TableCell className="px-6 py-3.5">
@@ -1655,12 +1656,12 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
                           <div>
                             <span className="text-muted-foreground font-medium">Tempat / Tanggal Lahir</span>
                             <p className="font-semibold text-foreground mt-0.5">
-                              {viewingEmployee.birthPlace || '—'}, {viewingEmployee.dateOfBirth || '—'}
+                              {viewingEmployee.birthPlace || '—'}, {formatDateDDMMYYYY(viewingEmployee.dateOfBirth)}
                             </p>
                           </div>
                           <div>
                             <span className="text-muted-foreground font-medium">Jenis Kelamin</span>
-                            <p className="font-semibold text-foreground mt-0.5">{viewingEmployee.gender || '—'}</p>
+                            <p className="font-semibold text-foreground mt-0.5">{normalizeGender(viewingEmployee.gender) || '—'}</p>
                           </div>
                           <div>
                             <span className="text-muted-foreground font-medium">Status Pernikahan</span>
@@ -1668,7 +1669,7 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
                           </div>
                           <div>
                             <span className="text-muted-foreground font-medium">Agama</span>
-                            <p className="font-semibold text-foreground mt-0.5">{viewingEmployee.religion || '—'}</p>
+                            <p className="font-semibold text-foreground mt-0.5">{normalizeReligion(viewingEmployee.religion) || '—'}</p>
                           </div>
                           <div>
                             <span className="text-muted-foreground font-medium">Golongan Darah</span>
@@ -1753,17 +1754,17 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
                           </div>
                           <div>
                             <span className="text-muted-foreground font-medium">Mulai Berlaku</span>
-                            <p className="font-semibold text-foreground mt-1">{viewingEmployee.contractStartDate || '—'}</p>
+                            <p className="font-semibold text-foreground mt-1">{formatDateDDMMYYYY(viewingEmployee.contractStartDate)}</p>
                           </div>
                           <div>
                             <span className="text-muted-foreground font-medium">Berakhir Pada</span>
                             <p className="font-semibold text-foreground mt-1">
-                              {viewingEmployee.contractEndDate || 'Permanen (PKWTT)'}
+                              {viewingEmployee.contractEndDate ? formatDateDDMMYYYY(viewingEmployee.contractEndDate) : 'Permanen (PKWTT)'}
                             </p>
                           </div>
                           <div>
                             <span className="text-muted-foreground font-medium">Tanggal Bergabung</span>
-                            <p className="font-semibold text-foreground mt-1">{viewingEmployee.joinDate || '—'}</p>
+                            <p className="font-semibold text-foreground mt-1">{formatDateDDMMYYYY(viewingEmployee.joinDate)}</p>
                           </div>
                         </div>
 
@@ -1831,7 +1832,7 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
                                       )}
                                     </div>
                                     <div className="text-[11px] text-muted-foreground flex items-center gap-3">
-                                      <span>Periode: <b>{hist.contractStartDate}</b> s/d <b>{isTetapHist ? 'Permanen' : (hist.contractEndDate || '—')}</b></span>
+                                      <span>Periode: <b>{formatDateDDMMYYYY(hist.contractStartDate)}</b> s/d <b>{isTetapHist ? 'Permanen' : (formatDateDDMMYYYY(hist.contractEndDate) || '—')}</b></span>
                                       {hist.createdBy && <span>• Dicatat: {hist.createdBy}</span>}
                                     </div>
                                     {hist.notes && (

@@ -20,6 +20,7 @@ import {
   DynamicColumnGroups
 } from '../lib/employeeExcelService';
 import { exportToExcel } from '../lib/excelExport';
+import { formatDateDDMMYYYY } from '../lib/utils';
 
 interface EmployeeExportModalProps {
   isOpen: boolean;
@@ -148,8 +149,8 @@ export const EmployeeExportModal: React.FC<EmployeeExportModalProps> = ({
               'Status Kerja': e.employmentType || '-',
               'Nomor PKWT': e.pkwtNumber || '-',
               'Tipe Kontrak': e.contractType || '-',
-              'Tanggal Mulai Kontrak': e.contractStartDate || '-',
-              'Tanggal Berakhir Kontrak': e.contractEndDate || '-',
+              'Tanggal Mulai Kontrak': formatDateDDMMYYYY(e.contractStartDate),
+              'Tanggal Berakhir Kontrak': formatDateDDMMYYYY(e.contractEndDate),
               'Status Masa Kontrak': meta.label,
               'Sisa Hari': days !== null ? `${days} hari` : '-'
             };
@@ -186,7 +187,7 @@ export const EmployeeExportModal: React.FC<EmployeeExportModalProps> = ({
             'Level': e.jobLevel || '-',
             'Status Kepegawaian': e.contractType || e.employmentType || 'PKWTT',
             'Status Akun': e.status || 'Active',
-            'Tanggal Bergabung': e.joinDate || '-'
+            'Tanggal Bergabung': formatDateDDMMYYYY(e.joinDate)
           }));
           exportToExcel(data, `GESIT-DIREKTORI-KARYAWAN-${todayStr}`);
         }

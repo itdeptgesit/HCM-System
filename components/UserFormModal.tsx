@@ -9,6 +9,7 @@ import { useToast } from './ToastProvider';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { UserAvatar } from './UserAvatar';
+import { normalizeGender, normalizeReligion } from '../lib/utils';
 
 interface UserFormModalProps {
   isOpen: boolean;
@@ -310,6 +311,8 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
         employmentType: type,
         nik: initialData.nik || '',
         avatarUrl: initialData.avatarUrl || '',
+        gender: initialData.gender ? normalizeGender(initialData.gender) : '',
+        religion: initialData.religion ? normalizeReligion(initialData.religion) : '',
       });
     } else {
       setForm({
@@ -634,12 +637,12 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
                   <span className={labelClass}>Jenis Kelamin</span>
                   <select
                     className={inputClass}
-                    value={String(form.gender || '')}
+                    value={normalizeGender(String(form.gender || ''))}
                     onChange={e => setField('gender', e.target.value)}
                   >
                     <option value="">Pilih jenis kelamin</option>
-                    <option value="Perempuan">Perempuan</option>
                     <option value="Laki-laki">Laki-laki</option>
+                    <option value="Perempuan">Perempuan</option>
                   </select>
                 </label>
 
@@ -674,19 +677,20 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
                 </label>
 
                 <label className="block">
-                  <span className={labelClass}>Religion</span>
+                  <span className={labelClass}>Agama</span>
                   <select
                     className={inputClass}
-                    value={String(form.religion || '')}
+                    value={normalizeReligion(String(form.religion || ''))}
                     onChange={e => setField('religion', e.target.value)}
                   >
                     <option value="">Pilih agama</option>
                     <option value="Islam">Islam</option>
-                    <option value="Protestant Christianity">Protestant Christianity</option>
-                    <option value="Catholicism">Catholicism</option>
-                    <option value="Hinduism">Hinduism</option>
-                    <option value="Buddhism">Buddhism</option>
-                    <option value="Confucianism">Confucianism</option>
+                    <option value="Kristen Protestan">Kristen Protestan</option>
+                    <option value="Katolik">Katolik</option>
+                    <option value="Hindu">Hindu</option>
+                    <option value="Buddha">Buddha</option>
+                    <option value="Khonghucu">Khonghucu</option>
+                    <option value="Lainnya">Lainnya</option>
                   </select>
                 </label>
 

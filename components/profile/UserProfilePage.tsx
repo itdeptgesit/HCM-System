@@ -37,6 +37,7 @@ import { toast } from 'sonner';
 import { supabase } from '../../lib/supabaseClient';
 import { uploadFileToGoogleDrive } from '../../lib/googleDriveUpload';
 import { formatAvatarImageUrl } from '../UserAvatar';
+import { normalizeGender, normalizeReligion } from '../../lib/utils';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -104,9 +105,9 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({ currentUser, o
           residentialAddress: data.residential_address || '',
           birthPlace: data.birth_place || '',
           dateOfBirth: data.date_of_birth || '',
-          gender: data.gender || '',
+          gender: normalizeGender(data.gender) || '',
           maritalStatus: data.marital_status || '',
-          religion: data.religion || '',
+          religion: normalizeReligion(data.religion) || '',
           bloodType: data.blood_type || '',
           bankName: data.bank_name || '',
           bankAccountName: data.bank_account_name || '',
@@ -141,9 +142,9 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({ currentUser, o
         residentialAddress: currentUser.residential_address || currentUser.residentialAddress || '',
         birthPlace: currentUser.birth_place || currentUser.birthPlace || '',
         dateOfBirth: currentUser.date_of_birth || currentUser.dateOfBirth || '',
-        gender: currentUser.gender || '',
+        gender: normalizeGender(currentUser.gender) || '',
         maritalStatus: currentUser.marital_status || currentUser.maritalStatus || '',
-        religion: currentUser.religion || '',
+        religion: normalizeReligion(currentUser.religion) || '',
         bloodType: currentUser.blood_type || currentUser.bloodType || '',
         bankName: currentUser.bank_name || currentUser.bankName || '',
         bankAccountName: currentUser.bank_account_name || currentUser.bankAccountName || '',
@@ -724,6 +725,7 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({ currentUser, o
                         <option value="Hindu">Hindu</option>
                         <option value="Buddha">Buddha</option>
                         <option value="Khonghucu">Khonghucu</option>
+                        <option value="Lainnya">Lainnya</option>
                       </select>
                     </div>
 

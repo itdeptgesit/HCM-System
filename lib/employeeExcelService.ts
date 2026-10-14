@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx';
 import { UserAccount } from '../types';
+import { formatDateDDMMYYYY, normalizeGender, normalizeReligion } from './utils';
 
 export interface ParsedEmployeeRow {
   rowNumber: number;
@@ -136,9 +137,9 @@ export function generateEmployeeImportTemplate() {
     'Role Akun (Staff/Admin/Super Admin)',
     'Nomor Handphone',
     'Tempat Lahir',
-    'Tanggal Lahir (YYYY-MM-DD)',
+    'Tanggal Lahir (DD/MM/YYYY)',
     'Jenis Kelamin (Laki-laki/Perempuan)',
-    'Agama',
+    'Agama (Islam/Katolik/Kristen Protestan/Hindu/Buddha/Khonghucu)',
     'Status Pernikahan (Lajang/Menikah/Cerai)',
     'Golongan Darah (A/B/AB/O)',
     'Alamat KTP',
@@ -158,11 +159,11 @@ export function generateEmployeeImportTemplate() {
     'Level Jabatan (Staff/Supervisor/Manager)',
     'Tipe Karyawan (Full-Time/Part-Time/Intern)',
     'Status Akun (Active/Disabled)',
-    'Tanggal Mulai Kerja (YYYY-MM-DD)',
-    'Status Kontrak (Probation/PKWT 1/PKWT 2/Karyawan Tetap)',
+    'Tanggal Mulai Kerja (DD/MM/YYYY)',
+    'Status Kepegawaian (PKWTT/PKWT/Probation/Magang)',
     'Nomor PKWT / SK Karyawan',
-    'Tanggal Mulai Kontrak (YYYY-MM-DD)',
-    'Tanggal Selesai Kontrak (YYYY-MM-DD)',
+    'Tanggal Mulai Kontrak (DD/MM/YYYY)',
+    'Tanggal Selesai Kontrak (DD/MM/YYYY)',
     'Status Payroll (Active/Hold)',
     'Nama Bank (BCA/Mandiri/BNI/BRI/dll)',
     'Nomor Rekening',
@@ -184,9 +185,9 @@ export function generateEmployeeImportTemplate() {
       'Role Akun (Staff/Admin/Super Admin)': 'Staff',
       'Nomor Handphone': '081234567890',
       'Tempat Lahir': 'Jakarta',
-      'Tanggal Lahir (YYYY-MM-DD)': '1995-04-12',
+      'Tanggal Lahir (DD/MM/YYYY)': '12/04/1995',
       'Jenis Kelamin (Laki-laki/Perempuan)': 'Laki-laki',
-      'Agama': 'Islam',
+      'Agama (Islam/Katolik/Kristen Protestan/Hindu/Buddha/Khonghucu)': 'Islam',
       'Status Pernikahan (Lajang/Menikah/Cerai)': 'Menikah',
       'Golongan Darah (A/B/AB/O)': 'O',
       'Alamat KTP': 'Jl. Merdeka No. 10, Jakarta Pusat',
@@ -206,11 +207,11 @@ export function generateEmployeeImportTemplate() {
       'Level Jabatan (Staff/Supervisor/Manager)': 'Staff',
       'Tipe Karyawan (Full-Time/Part-Time/Intern)': 'Full-Time',
       'Status Akun (Active/Disabled)': 'Active',
-      'Tanggal Mulai Kerja (YYYY-MM-DD)': '2026-01-05',
-      'Status Kontrak (Probation/PKWT 1/PKWT 2/Karyawan Tetap)': 'PKWT 1',
+      'Tanggal Mulai Kerja (DD/MM/YYYY)': '05/01/2026',
+      'Status Kepegawaian (PKWTT/PKWT/Probation/Magang)': 'PKWT',
       'Nomor PKWT / SK Karyawan': '001/HRD-PKWT/I/2026',
-      'Tanggal Mulai Kontrak (YYYY-MM-DD)': '2026-01-05',
-      'Tanggal Selesai Kontrak (YYYY-MM-DD)': '2027-01-04',
+      'Tanggal Mulai Kontrak (DD/MM/YYYY)': '05/01/2026',
+      'Tanggal Selesai Kontrak (DD/MM/YYYY)': '04/01/2027',
       'Status Payroll (Active/Hold)': 'Active',
       'Nama Bank (BCA/Mandiri/BNI/BRI/dll)': 'BCA',
       'Nomor Rekening': '1234567890',
@@ -219,7 +220,7 @@ export function generateEmployeeImportTemplate() {
       'Nomor NPWP': '87.123.456.7-012.000',
       'Nomor BPJS Ketenagakerjaan': '000123456789',
       'Nomor BPJS Kesehatan': '000987654321',
-      'Nomor Paspor': ''
+      'Nomor Paspor': '-'
     },
     {
       'Nama Lengkap *': 'Siti Rahmawati',
@@ -229,9 +230,9 @@ export function generateEmployeeImportTemplate() {
       'Role Akun (Staff/Admin/Super Admin)': 'Staff',
       'Nomor Handphone': '085712345678',
       'Tempat Lahir': 'Bandung',
-      'Tanggal Lahir (YYYY-MM-DD)': '1996-08-20',
+      'Tanggal Lahir (DD/MM/YYYY)': '20/08/1996',
       'Jenis Kelamin (Laki-laki/Perempuan)': 'Perempuan',
-      'Agama': 'Islam',
+      'Agama (Islam/Katolik/Kristen Protestan/Hindu/Buddha/Khonghucu)': 'Islam',
       'Status Pernikahan (Lajang/Menikah/Cerai)': 'Lajang',
       'Golongan Darah (A/B/AB/O)': 'A',
       'Alamat KTP': 'Jl. Dago Asri No. 45, Bandung',
@@ -251,11 +252,11 @@ export function generateEmployeeImportTemplate() {
       'Level Jabatan (Staff/Supervisor/Manager)': 'Staff',
       'Tipe Karyawan (Full-Time/Part-Time/Intern)': 'Full-Time',
       'Status Akun (Active/Disabled)': 'Active',
-      'Tanggal Mulai Kerja (YYYY-MM-DD)': '2026-02-01',
-      'Status Kontrak (Probation/PKWT 1/PKWT 2/Karyawan Tetap)': 'Probation',
+      'Tanggal Mulai Kerja (DD/MM/YYYY)': '01/02/2026',
+      'Status Kepegawaian (PKWTT/PKWT/Probation/Magang)': 'Probation',
       'Nomor PKWT / SK Karyawan': '002/HRD-PROB/II/2026',
-      'Tanggal Mulai Kontrak (YYYY-MM-DD)': '2026-02-01',
-      'Tanggal Selesai Kontrak (YYYY-MM-DD)': '2026-04-30',
+      'Tanggal Mulai Kontrak (DD/MM/YYYY)': '01/02/2026',
+      'Tanggal Selesai Kontrak (DD/MM/YYYY)': '30/04/2026',
       'Status Payroll (Active/Hold)': 'Active',
       'Nama Bank (BCA/Mandiri/BNI/BRI/dll)': 'Mandiri',
       'Nomor Rekening': '9876543210123',
@@ -264,7 +265,7 @@ export function generateEmployeeImportTemplate() {
       'Nomor NPWP': '99.456.789.0-023.000',
       'Nomor BPJS Ketenagakerjaan': '000234567890',
       'Nomor BPJS Kesehatan': '000876543210',
-      'Nomor Paspor': ''
+      'Nomor Paspor': '-'
     }
   ];
 
@@ -340,10 +341,10 @@ export function generateEmployeeImportTemplate() {
       'Pilihan Nilai / Contoh': 'Staff, Officer, Specialist, Supervisor, Asst Manager, Manager, General Manager, Director'
     },
     {
-      'Nama Kolom': 'Status Kontrak',
-      'Wajib / Opsional': 'Opsional (Default: PKWT 1)',
-      'Format & Ketentuan': 'Ikatan kerja karyawan',
-      'Pilihan Nilai / Contoh': 'Probation, PKWT 1, PKWT 2, Karyawan Tetap, Magang'
+      'Nama Kolom': 'Status Kepegawaian',
+      'Wajib / Opsional': 'Opsional (Default: PKWTT)',
+      'Format & Ketentuan': 'Ikatan status kepegawaian (4 jenis resmi)',
+      'Pilihan Nilai / Contoh': 'PKWTT, PKWT, Probation, Magang'
     },
     {
       'Nama Kolom': 'Status Akun',
@@ -354,8 +355,8 @@ export function generateEmployeeImportTemplate() {
     {
       'Nama Kolom': 'Format Tanggal',
       'Wajib / Opsional': 'Aturan Umum',
-      'Format & Ketentuan': 'Gunakan format standar YYYY-MM-DD atau format Date Excel',
-      'Pilihan Nilai / Contoh': 'Contoh: 1995-04-12 atau 2026-01-05'
+      'Format & Ketentuan': 'Gunakan format standar DD/MM/YYYY atau format Date Excel',
+      'Pilihan Nilai / Contoh': 'Contoh: 12/04/1995 atau 05/01/2026'
     }
   ];
 
@@ -787,26 +788,26 @@ export function exportDynamicEmployeesExcel(
       row['Jabatan'] = emp.jobTitle || '-';
       row['Level Jabatan'] = emp.jobLevel || '-';
       row['Golongan'] = emp.gradeClass || '-';
-      row['Tanggal Bergabung'] = emp.joinDate || '-';
+      row['Tanggal Bergabung'] = formatDateDDMMYYYY(emp.joinDate);
       row['Masa Kerja'] = calculateEmployeeTenure(emp.joinDate);
     }
 
     if (columnGroups.contract) {
       row['Tipe Kepegawaian'] = emp.employmentType || '-';
-      row['Status Kontrak'] = emp.contractType || '-';
+      row['Status Kepegawaian'] = emp.contractType || emp.employmentType || 'PKWTT';
       row['Nomor SK / PKWT'] = emp.pkwtNumber || '-';
-      row['Tgl Mulai Kontrak'] = emp.contractStartDate || '-';
-      row['Tgl Selesai Kontrak'] = emp.contractEndDate || '-';
+      row['Tgl Mulai Kontrak'] = formatDateDDMMYYYY(emp.contractStartDate);
+      row['Tgl Selesai Kontrak'] = formatDateDDMMYYYY(emp.contractEndDate);
     }
 
     if (columnGroups.personal) {
       row['NIK KTP'] = emp.nik || '-';
       row['NPWP'] = emp.npwp || '-';
       row['Tempat Lahir'] = emp.birthPlace || '-';
-      row['Tanggal Lahir'] = emp.dateOfBirth || '-';
+      row['Tanggal Lahir'] = formatDateDDMMYYYY(emp.dateOfBirth);
       row['Usia'] = calculateEmployeeAge(emp.dateOfBirth);
-      row['Jenis Kelamin'] = emp.gender || '-';
-      row['Agama'] = emp.religion || '-';
+      row['Jenis Kelamin'] = normalizeGender(emp.gender) || '-';
+      row['Agama'] = normalizeReligion(emp.religion) || '-';
       row['Status Pernikahan'] = emp.maritalStatus || '-';
       row['Golongan Darah'] = emp.bloodType || '-';
       row['Alamat KTP'] = emp.address || '-';
