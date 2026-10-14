@@ -15,8 +15,11 @@ import {
   Settings2,
   Sliders,
   Check,
-  AlertCircle
+  AlertCircle,
+  Upload,
+  FileSpreadsheet
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { supabase } from '../../lib/supabaseClient';
 import { useToast } from '../ToastProvider';
 
@@ -95,6 +98,86 @@ export const ApprovalHierarchy: React.FC = () => {
   const [selectedHR, setSelectedHR] = useState<string>('');
   const [selectedVP, setSelectedVP] = useState<string>('');
   const [saving, setSaving] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  const handleImportExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setImporting(true);
+    try {
+      const buffer = await file.arrayBuffer();
+      const wb = XLSX.read(buffer, { type: 'array' });
+      const firstSheet = wb.Sheets[wb.SheetNames[0]];
+      const rows: any[] = XLSX.utils.sheet_to_json(firstSheet);
+
+      if (!rows || rows.length === 0) {
+        showToast('File Excel kosong atau format tidak sesuai.', 'error');
+        return;
+      }
+
+      // Fetch all users for matching
+      const { data: allUsers, error: userErr } = await supabase
+        .from('user_accounts')
+        .select('id, employee_id, full_name, email');
+
+      if (userErr || !allUsers) {
+        throw new Error(userErr?.message || 'Gagal membaca data akun user');
+      }
+
+      const norm = (s: any) => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+      const nameMap = new Map<string, any>();
+      allUsers.forEach(u => nameMap.set(norm(u.full_name), u));
+      const idMap = new Map<string, any>();
+      allUsers.forEach(u => {
+        if (u.employee_id) idMap.set(norm(u.employee_id), u);
+      });
+
+      let updatedCount = 0;
+      for (const r of rows) {
+        const empId = norm(r['Employee ID'] || r['NIP'] || r['NIK']);
+        const empName = norm(r['Employee Name'] || r['Nama Karyawan'] || r['Nama']);
+        const user = idMap.get(empId) || nameMap.get(empName);
+
+        if (!user) continue;
+
+        const l1Name = norm(r['Approval Line 1 Name'] || r['Line 1'] || r['Supervisor']);
+        const l2Name = norm(r['Approval Line 2 Name'] || r['Line 2'] || r['HR / Manager']);
+
+        const approver1 = nameMap.get(l1Name);
+        const approver2 = nameMap.get(l2Name);
+
+        const updatePayload: any = {
+          updated_at: new Date().toISOString()
+        };
+        if (approver1) {
+          updatePayload.supervisor_id = approver1.id;
+          updatePayload.attendance_supervisor_id = approver1.id;
+        }
+        if (approver2) {
+          updatePayload.attendance_hr_id = approver2.id;
+          updatePayload.manager_id = approver2.id;
+        }
+
+        const { error: updErr } = await supabase
+          .from('user_accounts')
+          .update(updatePayload)
+          .eq('id', user.id);
+
+        if (!updErr) updatedCount++;
+      }
+
+      showToast(`Berhasil menyinkronkan jalur approval untuk ${updatedCount} karyawan dari Excel!`, 'success');
+      await fetchUsers();
+    } catch (err: any) {
+      console.error('Import error:', err);
+      showToast('Gagal memproses file Excel: ' + (err.message || 'Format tidak valid'), 'error');
+    } finally {
+      setImporting(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -192,6 +275,23 @@ export const ApprovalHierarchy: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-3">
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleImportExcel}
+            accept=".xlsx, .xls"
+            className="hidden"
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importing}
+            className="inline-flex items-center gap-2 rounded-xl bg-primary px-3.5 py-2 text-xs font-semibold text-primary-foreground shadow-xs hover:bg-primary/90 transition-colors cursor-pointer disabled:opacity-50"
+            title="Unggah file Approval Line Att n Time Off.xlsx untuk sinkronisasi otomatis"
+          >
+            <Upload className={`h-3.5 w-3.5 ${importing ? 'animate-bounce' : ''}`} />
+            <span>{importing ? 'Memproses Excel...' : 'Impor Approval Line (.xlsx)'}</span>
+          </button>
+
           <button
             onClick={fetchUsers}
             className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-3.5 py-2 text-xs font-semibold text-foreground shadow-2xs hover:bg-muted/60 transition-colors cursor-pointer"
