@@ -31,7 +31,8 @@ import {
   ChevronRight,
   MapPin,
   Megaphone,
-  User
+  User,
+  History
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Toaster, toast } from 'sonner';
@@ -78,6 +79,7 @@ import { MasterDepartment } from './components/admin/MasterDepartment';
 import { PermissionMenu } from './components/admin/PermissionMenu';
 import { AccountManagement } from './components/admin/AccountManagement';
 import { ApprovalHierarchy } from './components/admin/ApprovalHierarchy';
+import { ActivityLogsManager } from './components/admin/ActivityLogsManager';
 import { SystemSettings } from './components/admin/SystemSettings';
 import { LoginPage } from './components/auth/LoginPage';
 import { ModulePlaceholder } from './components/ModulePlaceholder';
@@ -92,6 +94,7 @@ import { supabase } from './lib/supabaseClient';
 import { loadCurrentHRUser } from './lib/workforceData';
 import { isHRAccount } from './lib/workforce-contract';
 import { hasPermission, PERMISSION_CHANGED_EVENT } from './lib/permissions';
+import { trackActivity } from './lib/auditLogger';
 
 export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -112,6 +115,17 @@ export default function App() {
   const location = useLocation();
 
   const handleLogout = async () => {
+    if (currentUser) {
+      trackActivity({
+        userId: currentUser.id,
+        userName: currentUser.fullName || currentUser.name || currentUser.username,
+        userRole: currentUser.role,
+        userEmail: currentUser.email,
+        module: 'Autentikasi',
+        action: 'LOGOUT',
+        details: `User logout dari sistem`,
+      }).catch(() => {});
+    }
     await supabase.auth.signOut();
     localStorage.removeItem('gesit_user');
     sessionStorage.removeItem('gesit_user');
@@ -224,6 +238,7 @@ export default function App() {
     ...(canView('Hierarchy Approval') ? [{ label: 'Hierarchy Approval', path: '/admin/approval-hierarchy', icon: GitMerge }] : []),
     ...(canView('Permission Menu') ? [{ label: 'Permission Menu', path: '/admin/permissions', icon: Lock }] : []),
     ...(canView('Account Management') ? [{ label: 'Account Management', path: '/admin/accounts', icon: UserCheck }] : []),
+    ...(canView('Log Aktivitas') ? [{ label: 'Log Aktivitas', path: '/admin/activity-logs', icon: History }] : []),
     ...(canView('Laporan & Analitik') ? [{ label: 'Laporan & Analitik', path: '/analytics', icon: BarChart3 }] : []),
     ...(canView('Pengaturan Sistem') ? [{ label: 'Pengaturan', path: '/settings', icon: Settings }] : []),
   ];
@@ -244,6 +259,7 @@ export default function App() {
     if (ws2) return ws2.label;
     const adm = navAdmin.find((n) => n.path === location.pathname);
     if (adm) return adm.label;
+    if (location.pathname === '/admin/activity-logs') return 'Log Aktivitas & Audit';
     if (location.pathname === '/admin/settings') return 'Pengaturan';
     return 'Dashboard';
   };
@@ -882,7 +898,7 @@ export default function App() {
               path="/admin/approval-hierarchy"
               element={
                 canView('Hierarchy Approval') ? (
-                  <ApprovalHierarchy />
+                  <ApprovalHierarchy currentUser={currentUser} />
                 ) : (
                   <AccessDenied
                     moduleName="Hierarchy Approval"
@@ -896,7 +912,7 @@ export default function App() {
               path="/admin/permissions"
               element={
                 canView('Permission Menu') ? (
-                  <PermissionMenu />
+                  <PermissionMenu currentUser={currentUser} />
                 ) : (
                   <AccessDenied
                     moduleName="Permission Menu"
@@ -915,6 +931,20 @@ export default function App() {
                   <AccessDenied
                     moduleName="Account Management"
                     requiredAccess="Izin Akses Manajemen Akun"
+                    currentUser={currentUser}
+                  />
+                )
+              }
+            />
+            <Route
+              path="/admin/activity-logs"
+              element={
+                canView('Log Aktivitas') ? (
+                  <ActivityLogsManager currentUser={currentUser} />
+                ) : (
+                  <AccessDenied
+                    moduleName="Log Aktivitas"
+                    requiredAccess="Izin Lihat Log Aktivitas"
                     currentUser={currentUser}
                   />
                 )

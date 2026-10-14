@@ -19,6 +19,7 @@ import { useTheme } from 'next-themes';
 import { Toaster, toast } from 'sonner';
 import { supabase } from '../../lib/supabaseClient';
 import { loadCurrentHRUser } from '../../lib/workforceData';
+import { trackActivity } from '../../lib/auditLogger';
 
 interface LoginPageProps {
   onLoginSuccess: (user: any) => void;
@@ -70,6 +71,21 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
       }
 
       toast.success(`Selamat datang kembali, ${loggedInUser.fullName}!`);
+      trackActivity({
+        userId: loggedInUser.id,
+        userName: loggedInUser.fullName || loggedInUser.name || loggedInUser.username,
+        userRole: loggedInUser.role,
+        userEmail: loggedInUser.email,
+        module: 'Autentikasi',
+        action: 'LOGIN',
+        details: `User berhasil masuk ke sistem dengan peran "${loggedInUser.role}"`,
+        metadata: {
+          email: loggedInUser.email,
+          role: loggedInUser.role,
+          company: loggedInUser.company || '',
+        }
+      }).catch(console.error);
+
       onLoginSuccess(loggedInUser);
       navigate('/attendance/report');
     } catch (err: any) {

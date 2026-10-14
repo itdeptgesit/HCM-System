@@ -27,6 +27,7 @@ export const DEFAULT_PERMISSIONS: Record<string, ModulePermission[]> = {
     { module: 'Permission Menu', category: 'Administration', view: true, create: true, edit: true, approve: true, delete: true },
     { module: 'Account Management', category: 'Administration', view: true, create: true, edit: true, approve: true, delete: true },
     { module: 'Laporan & Analitik', category: 'Administration', view: true, create: true, edit: true, approve: true, delete: true },
+    { module: 'Log Aktivitas', category: 'Administration', view: true, create: false, edit: false, approve: false, delete: false },
     { module: 'Pengaturan Sistem', category: 'Administration', view: true, create: true, edit: true, approve: true, delete: true },
   ],
   'Admin': [
@@ -42,6 +43,7 @@ export const DEFAULT_PERMISSIONS: Record<string, ModulePermission[]> = {
     { module: 'Permission Menu', category: 'Administration', view: true, create: false, edit: false, approve: false, delete: false },
     { module: 'Account Management', category: 'Administration', view: true, create: true, edit: true, approve: true, delete: false },
     { module: 'Laporan & Analitik', category: 'Administration', view: true, create: true, edit: true, approve: true, delete: true },
+    { module: 'Log Aktivitas', category: 'Administration', view: true, create: false, edit: false, approve: false, delete: false },
     { module: 'Pengaturan Sistem', category: 'Administration', view: true, create: true, edit: true, approve: true, delete: false },
   ],
   'HR Manager': [
@@ -57,6 +59,7 @@ export const DEFAULT_PERMISSIONS: Record<string, ModulePermission[]> = {
     { module: 'Permission Menu', category: 'Administration', view: false, create: false, edit: false, approve: false, delete: false },
     { module: 'Account Management', category: 'Administration', view: true, create: true, edit: true, approve: false, delete: false },
     { module: 'Laporan & Analitik', category: 'Administration', view: true, create: true, edit: true, approve: false, delete: false },
+    { module: 'Log Aktivitas', category: 'Administration', view: true, create: false, edit: false, approve: false, delete: false },
     { module: 'Pengaturan Sistem', category: 'Administration', view: true, create: true, edit: true, approve: false, delete: false },
   ],
   'HR Staff': [
@@ -72,6 +75,7 @@ export const DEFAULT_PERMISSIONS: Record<string, ModulePermission[]> = {
     { module: 'Permission Menu', category: 'Administration', view: false, create: false, edit: false, approve: false, delete: false },
     { module: 'Account Management', category: 'Administration', view: false, create: false, edit: false, approve: false, delete: false },
     { module: 'Laporan & Analitik', category: 'Administration', view: true, create: false, edit: false, approve: false, delete: false },
+    { module: 'Log Aktivitas', category: 'Administration', view: false, create: false, edit: false, approve: false, delete: false },
     { module: 'Pengaturan Sistem', category: 'Administration', view: false, create: false, edit: false, approve: false, delete: false },
   ],
   'Employee': [
@@ -87,6 +91,7 @@ export const DEFAULT_PERMISSIONS: Record<string, ModulePermission[]> = {
     { module: 'Permission Menu', category: 'Administration', view: false, create: false, edit: false, approve: false, delete: false },
     { module: 'Account Management', category: 'Administration', view: false, create: false, edit: false, approve: false, delete: false },
     { module: 'Laporan & Analitik', category: 'Administration', view: false, create: false, edit: false, approve: false, delete: false },
+    { module: 'Log Aktivitas', category: 'Administration', view: false, create: false, edit: false, approve: false, delete: false },
     { module: 'Pengaturan Sistem', category: 'Administration', view: false, create: false, edit: false, approve: false, delete: false },
   ]
 };
@@ -102,7 +107,7 @@ export function getAllPermissions(): Record<string, ModulePermission[]> {
       const merged: Record<string, ModulePermission[]> = { ...DEFAULT_PERMISSIONS };
       for (const r of Object.keys(parsed)) {
         if (Array.isArray(parsed[r]) && parsed[r].length > 0) {
-          merged[r] = parsed[r]
+          const cleaned = parsed[r]
             .filter((p: ModulePermission) => p.module !== 'Payroll & Gaji' && p.module !== 'Rekrutmen')
             .map((p: ModulePermission) => {
               if (p.module === 'Dashboard & KPI') {
@@ -110,6 +115,16 @@ export function getAllPermissions(): Record<string, ModulePermission[]> {
               }
               return p;
             });
+
+          // Pastikan modul baru seperti 'Log Aktivitas' tetap muncul meskipun user punya cache lama di localStorage
+          const defaultItems = DEFAULT_PERMISSIONS[r] || [];
+          for (const defItem of defaultItems) {
+            if (!cleaned.some((p: ModulePermission) => p.module.toLowerCase() === defItem.module.toLowerCase())) {
+              cleaned.push({ ...defItem });
+            }
+          }
+
+          merged[r] = cleaned;
         }
       }
       return merged;

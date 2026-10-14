@@ -13,6 +13,7 @@ import {
   GLASSES_POLICY_TIERS, getGlassesPolicyTier, validateGlassesClaim,
   calculateEmployeeAnnualLeave
 } from '../../lib/hrPolicyService';
+import { trackActivity } from '../../lib/auditLogger';
 import { cn } from '@/lib/utils';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -185,6 +186,16 @@ export const AttendanceRequest: React.FC<AttendanceRequestProps> = ({ currentUse
       if (error) throw error;
       const label = nextStatus === 'approved' ? 'disetujui final' : nextStatus === 'pending_line_2' ? 'diteruskan ke HR' : nextStatus === 'pending_senior' ? 'diteruskan ke Manager' : 'diteruskan ke VP';
       toast.success(`Pengajuan cuti ${label}.`);
+      trackActivity({
+        userId: currentUser?.id,
+        userName: approverName,
+        userRole: currentUser?.role || 'User',
+        userEmail: currentUser?.email,
+        module: 'Cuti & Izin',
+        action: 'APPROVE_LEAVE',
+        details: `Menyetujui cuti karyawan (${req.leave_type || 'Cuti'}) -> Status: ${nextStatus}`,
+        metadata: { requestId: req.id, requesterId: req.user_id, nextStatus }
+      }).catch(console.error);
       loadAllData();
     } catch (err: any) {
       toast.error(`Gagal menyetujui cuti: ${err.message}`);
@@ -228,6 +239,16 @@ export const AttendanceRequest: React.FC<AttendanceRequestProps> = ({ currentUse
       if (error) throw error;
       const label = nextStatus === 'approved' ? 'disetujui final' : nextStatus === 'pending_line_2' ? 'diteruskan ke HR' : nextStatus === 'pending_senior' ? 'diteruskan ke Manager' : 'diteruskan ke VP';
       toast.success(`Pengajuan lembur ${label}.`);
+      trackActivity({
+        userId: currentUser?.id,
+        userName: approverName,
+        userRole: currentUser?.role || 'User',
+        userEmail: currentUser?.email,
+        module: 'Cuti & Izin',
+        action: 'APPROVE_OVERTIME',
+        details: `Menyetujui lembur karyawan -> Status: ${nextStatus}`,
+        metadata: { requestId: req.id, requesterId: req.user_id, nextStatus }
+      }).catch(console.error);
       loadAllData();
     } catch (err: any) {
       toast.error(`Gagal menyetujui lembur: ${err.message}`);
@@ -271,6 +292,16 @@ export const AttendanceRequest: React.FC<AttendanceRequestProps> = ({ currentUse
       if (error) throw error;
       const label = nextStatus === 'approved' ? 'disetujui final' : nextStatus === 'pending_line_2' ? 'diteruskan ke HR' : nextStatus === 'pending_senior' ? 'diteruskan ke Manager' : 'diteruskan ke VP';
       toast.success(`Pengajuan reimbursement ${label}.`);
+      trackActivity({
+        userId: currentUser?.id,
+        userName: approverName,
+        userRole: currentUser?.role || 'User',
+        userEmail: currentUser?.email,
+        module: 'Cuti & Izin',
+        action: 'APPROVE_REIMBURSEMENT',
+        details: `Menyetujui reimbursement karyawan (${req.description || req.category || 'Klaim'}) -> Status: ${nextStatus}`,
+        metadata: { requestId: req.id, requesterId: req.user_id, nextStatus }
+      }).catch(console.error);
       loadAllData();
     } catch (err: any) {
       toast.error(`Gagal menyetujui reimbursement: ${err.message}`);
@@ -290,6 +321,16 @@ export const AttendanceRequest: React.FC<AttendanceRequestProps> = ({ currentUse
       });
       if (error) throw error;
       toast.success('Pengajuan ditolak.');
+      trackActivity({
+        userId: currentUser?.id,
+        userName: approverName,
+        userRole: currentUser?.role || 'User',
+        userEmail: currentUser?.email,
+        module: 'Cuti & Izin',
+        action: 'REJECT_REQUEST',
+        details: `Menolak pengajuan di tabel ${table} (ID: ${id})`,
+        metadata: { table, id }
+      }).catch(console.error);
       loadAllData();
     } catch (err: any) {
       toast.error(`Gagal menolak pengajuan: ${err.message}`);
@@ -308,6 +349,16 @@ export const AttendanceRequest: React.FC<AttendanceRequestProps> = ({ currentUse
       });
       if (error) throw error;
       toast.success('Reimbursement ditandai sudah dibayar.');
+      trackActivity({
+        userId: currentUser?.id,
+        userName: approverName,
+        userRole: currentUser?.role || 'User',
+        userEmail: currentUser?.email,
+        module: 'Cuti & Izin',
+        action: 'PAY_REIMBURSEMENT',
+        details: `Menandai pencairan pembayaran reimbursement (ID: ${id})`,
+        metadata: { id }
+      }).catch(console.error);
       loadAllData();
     } catch (err: any) {
       toast.error(`Gagal update status: ${err.message}`);

@@ -23,8 +23,9 @@ import {
   saveAllPermissions,
   resetRolePermissions
 } from '../../lib/permissions';
+import { trackActivity } from '../../lib/auditLogger';
 
-export const PermissionMenu: React.FC = () => {
+export const PermissionMenu: React.FC<{ currentUser?: any }> = ({ currentUser }) => {
   const { showToast } = useToast();
   const [selectedRole, setSelectedRole] = useState<string>('Super Admin');
   const [permissions, setPermissions] = useState<Record<string, ModulePermission[]>>(() => getAllPermissions());
@@ -55,6 +56,20 @@ export const PermissionMenu: React.FC = () => {
     saveAllPermissions(permissions);
     setHasChanges(false);
     showToast(`Matriks hak akses untuk peran "${selectedRole}" berhasil disimpan & langsung aktif di aplikasi!`, 'success');
+
+    trackActivity({
+      userId: currentUser?.id,
+      userName: currentUser?.fullName || currentUser?.name || 'Administrator',
+      userRole: currentUser?.role || 'Super Admin',
+      userEmail: currentUser?.email,
+      module: 'Permission Menu',
+      action: 'UPDATE_PERMISSIONS',
+      details: `Memperbarui matriks hak akses modul untuk peran "${selectedRole}"`,
+      metadata: {
+        role: selectedRole,
+        permissionsCount: permissions[selectedRole]?.length
+      }
+    }).catch(console.error);
   };
 
   const handleReset = () => {
@@ -62,6 +77,17 @@ export const PermissionMenu: React.FC = () => {
     setPermissions(updated);
     setHasChanges(false);
     showToast(`Hak akses peran "${selectedRole}" berhasil dikembalikan ke standar awal.`, 'info');
+
+    trackActivity({
+      userId: currentUser?.id,
+      userName: currentUser?.fullName || currentUser?.name || 'Administrator',
+      userRole: currentUser?.role || 'Super Admin',
+      userEmail: currentUser?.email,
+      module: 'Permission Menu',
+      action: 'RESET_PERMISSIONS',
+      details: `Mengembalikan hak akses peran "${selectedRole}" ke pengaturan default pabrik`,
+      metadata: { role: selectedRole }
+    }).catch(console.error);
   };
 
   const currentRoleList = permissions[selectedRole] || DEFAULT_PERMISSIONS[selectedRole] || [];

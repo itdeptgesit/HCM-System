@@ -22,6 +22,7 @@ import {
 import * as XLSX from 'xlsx';
 import { supabase } from '../../lib/supabaseClient';
 import { useToast } from '../ToastProvider';
+import { trackActivity } from '../../lib/auditLogger';
 
 interface UserAccount {
   id: number;
@@ -83,7 +84,7 @@ const DEFAULT_WORKFLOWS: WorkflowRule[] = [
   }
 ];
 
-export const ApprovalHierarchy: React.FC = () => {
+export const ApprovalHierarchy: React.FC<{ currentUser?: any }> = ({ currentUser }) => {
   const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<'mapping' | 'workflows'>('mapping');
   const [users, setUsers] = useState<UserAccount[]>([]);
@@ -169,6 +170,16 @@ export const ApprovalHierarchy: React.FC = () => {
       }
 
       showToast(`Berhasil menyinkronkan jalur approval untuk ${updatedCount} karyawan dari Excel!`, 'success');
+      trackActivity({
+        userId: currentUser?.id,
+        userName: currentUser?.fullName || currentUser?.name || 'Administrator',
+        userRole: currentUser?.role || 'Super Admin',
+        userEmail: currentUser?.email,
+        module: 'Hierarchy Approval',
+        action: 'IMPORT_APPROVAL_HIERARCHY',
+        details: `Impor massal jalur hierarki persetujuan dari Excel (${updatedCount} karyawan diperbarui)`,
+        metadata: { updatedCount }
+      }).catch(console.error);
       await fetchUsers();
     } catch (err: any) {
       console.error('Import error:', err);
@@ -231,6 +242,23 @@ export const ApprovalHierarchy: React.FC = () => {
 
       if (error) throw error;
       showToast(`Jalur hierarki persetujuan untuk ${editingUser.full_name} berhasil disimpan!`, 'success');
+      trackActivity({
+        userId: currentUser?.id,
+        userName: currentUser?.fullName || currentUser?.name || 'Administrator',
+        userRole: currentUser?.role || 'Super Admin',
+        userEmail: currentUser?.email,
+        module: 'Hierarchy Approval',
+        action: 'UPDATE_APPROVAL_HIERARCHY',
+        details: `Mengubah hierarki persetujuan untuk ${editingUser.full_name} (ID: ${editingUser.id})`,
+        metadata: {
+          employeeId: editingUser.id,
+          employeeName: editingUser.full_name,
+          supervisorId: selectedSupervisor,
+          managerId: selectedManager,
+          hrId: selectedHR,
+          vpId: selectedVP
+        }
+      }).catch(console.error);
       setEditingUser(null);
       fetchUsers();
     } catch (err: any) {
