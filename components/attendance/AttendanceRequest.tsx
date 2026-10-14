@@ -174,8 +174,13 @@ export const AttendanceRequest: React.FC<AttendanceRequestProps> = ({ currentUse
     if (processing.current) return { error: new Error('Keputusan lain sedang diproses.') };
     processing.current = true;
     try {
-      await reviewWorkforceRequest(table === 'leave_requests' ? 'leave' : table === 'overtime_requests' ? 'overtime' : 'reimbursement', id,
-        updateData.status === 'rejected' ? 'rejected' : updateData.status === 'paid' ? 'paid' : 'approved', updateData.rejection_reason);
+      await reviewWorkforceRequest(
+        table === 'leave_requests' ? 'leave' : table === 'overtime_requests' ? 'overtime' : 'reimbursement',
+        id,
+        updateData.status === 'rejected' ? 'rejected' : updateData.status === 'paid' ? 'paid' : 'approved',
+        updateData.rejection_reason,
+        updateData
+      );
       return { error: null };
     } catch (error: any) {
       return { error };

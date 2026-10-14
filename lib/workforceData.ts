@@ -53,7 +53,13 @@ export function normalizeAttendance(row: any) {
   };
 }
 
-export async function reviewWorkforceRequest(type: 'leave' | 'overtime' | 'reimbursement', id: string | number, decision: 'approved' | 'rejected' | 'paid', note?: string) {
+export async function reviewWorkforceRequest(
+  type: 'leave' | 'overtime' | 'reimbursement',
+  id: string | number,
+  decision: 'approved' | 'rejected' | 'paid',
+  note?: string,
+  customPayload?: Record<string, any>
+) {
   try {
     const { data, error } = await supabase.rpc('review_workforce_request', {
       p_request_type: type, p_request_id: id, p_decision: decision, p_notes: note || null,
@@ -69,6 +75,7 @@ export async function reviewWorkforceRequest(type: 'leave' | 'overtime' | 'reimb
     status: decision,
     approval_status: decision,
     updated_at: new Date().toISOString(),
+    ...(customPayload || {}),
   };
   if (decision === 'rejected' && note) {
     updatePayload.rejection_reason = note;
