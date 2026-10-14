@@ -19,8 +19,8 @@ export const DEFAULT_PERMISSIONS: Record<string, ModulePermission[]> = {
     { module: 'Data Karyawan', category: 'Workspace', view: true, create: true, edit: true, approve: true, delete: true },
     { module: 'Absensi & Presensi', category: 'Workspace', view: true, create: true, edit: true, approve: true, delete: true },
     { module: 'Cuti & Izin', category: 'Workspace', view: true, create: true, edit: true, approve: true, delete: true },
-    // Payroll & Gaji dinonaktifkan sementara (dikelola Finance, bukan HR)
-    { module: 'Rekrutmen', category: 'Workspace', view: true, create: true, edit: true, approve: true, delete: true },
+    // Payroll & Gaji dinonaktifkan sementara
+    // Rekrutmen dinonaktifkan sementara
     { module: 'Master Company', category: 'Administration', view: true, create: true, edit: true, approve: true, delete: true },
     { module: 'Master Department', category: 'Administration', view: true, create: true, edit: true, approve: true, delete: true },
     { module: 'Hierarchy Approval', category: 'Administration', view: true, create: true, edit: true, approve: true, delete: true },
@@ -35,7 +35,7 @@ export const DEFAULT_PERMISSIONS: Record<string, ModulePermission[]> = {
     { module: 'Absensi & Presensi', category: 'Workspace', view: true, create: true, edit: true, approve: true, delete: true },
     { module: 'Cuti & Izin', category: 'Workspace', view: true, create: true, edit: true, approve: true, delete: true },
     // Payroll & Gaji dinonaktifkan sementara
-    { module: 'Rekrutmen', category: 'Workspace', view: true, create: true, edit: true, approve: true, delete: true },
+    // Rekrutmen dinonaktifkan sementara
     { module: 'Master Company', category: 'Administration', view: true, create: true, edit: true, approve: true, delete: false },
     { module: 'Master Department', category: 'Administration', view: true, create: true, edit: true, approve: true, delete: false },
     { module: 'Hierarchy Approval', category: 'Administration', view: true, create: true, edit: true, approve: true, delete: false },
@@ -50,7 +50,7 @@ export const DEFAULT_PERMISSIONS: Record<string, ModulePermission[]> = {
     { module: 'Absensi & Presensi', category: 'Workspace', view: true, create: true, edit: true, approve: true, delete: false },
     { module: 'Cuti & Izin', category: 'Workspace', view: true, create: true, edit: true, approve: true, delete: false },
     // Payroll & Gaji dinonaktifkan sementara
-    { module: 'Rekrutmen', category: 'Workspace', view: true, create: true, edit: true, approve: true, delete: false },
+    // Rekrutmen dinonaktifkan sementara
     { module: 'Master Company', category: 'Administration', view: true, create: false, edit: false, approve: false, delete: false },
     { module: 'Master Department', category: 'Administration', view: true, create: true, edit: true, approve: false, delete: false },
     { module: 'Hierarchy Approval', category: 'Administration', view: true, create: true, edit: true, approve: false, delete: false },
@@ -65,7 +65,7 @@ export const DEFAULT_PERMISSIONS: Record<string, ModulePermission[]> = {
     { module: 'Absensi & Presensi', category: 'Workspace', view: true, create: true, edit: true, approve: false, delete: false },
     { module: 'Cuti & Izin', category: 'Workspace', view: true, create: true, edit: false, approve: false, delete: false },
     // Payroll & Gaji dinonaktifkan sementara
-    { module: 'Rekrutmen', category: 'Workspace', view: true, create: true, edit: false, approve: false, delete: false },
+    // Rekrutmen dinonaktifkan sementara
     { module: 'Master Company', category: 'Administration', view: true, create: false, edit: false, approve: false, delete: false },
     { module: 'Master Department', category: 'Administration', view: true, create: false, edit: false, approve: false, delete: false },
     { module: 'Hierarchy Approval', category: 'Administration', view: false, create: false, edit: false, approve: false, delete: false },
@@ -80,7 +80,7 @@ export const DEFAULT_PERMISSIONS: Record<string, ModulePermission[]> = {
     { module: 'Absensi & Presensi', category: 'Workspace', view: true, create: true, edit: false, approve: false, delete: false },
     { module: 'Cuti & Izin', category: 'Workspace', view: true, create: true, edit: false, approve: false, delete: false },
     // Payroll & Gaji dinonaktifkan sementara
-    { module: 'Rekrutmen', category: 'Workspace', view: false, create: false, edit: false, approve: false, delete: false },
+    // Rekrutmen dinonaktifkan sementara
     { module: 'Master Company', category: 'Administration', view: false, create: false, edit: false, approve: false, delete: false },
     { module: 'Master Department', category: 'Administration', view: false, create: false, edit: false, approve: false, delete: false },
     { module: 'Hierarchy Approval', category: 'Administration', view: false, create: false, edit: false, approve: false, delete: false },
@@ -102,7 +102,7 @@ export function getAllPermissions(): Record<string, ModulePermission[]> {
       const merged: Record<string, ModulePermission[]> = { ...DEFAULT_PERMISSIONS };
       for (const r of Object.keys(parsed)) {
         if (Array.isArray(parsed[r]) && parsed[r].length > 0) {
-          merged[r] = parsed[r].filter((p: ModulePermission) => p.module !== 'Payroll & Gaji');
+          merged[r] = parsed[r].filter((p: ModulePermission) => p.module !== 'Payroll & Gaji' && p.module !== 'Rekrutmen');
         }
       }
       return merged;

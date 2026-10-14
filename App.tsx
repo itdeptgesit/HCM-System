@@ -85,7 +85,8 @@ import { AccessDenied } from './components/AccessDenied';
 import { UserProfilePage } from './components/profile/UserProfilePage';
 // PayrollManager sementara dinonaktifkan karena penggajian dikelola oleh tim Finance
 // import { PayrollManager } from './components/payroll/PayrollManager';
-import { RecruitmentManager } from './components/recruitment/RecruitmentManager';
+// RecruitmentManager sementara dinonaktifkan
+// import { RecruitmentManager } from './components/recruitment/RecruitmentManager';
 import { AnalyticsDashboard } from './components/analytics/AnalyticsDashboard';
 import { supabase } from './lib/supabaseClient';
 import { loadCurrentHRUser } from './lib/workforceData';
@@ -207,9 +208,10 @@ export default function App() {
     // ...(canView('Payroll & Gaji')
     //   ? [{ label: 'Payroll', path: '/payroll', icon: CreditCard }]
     //   : []),
-    ...(canView('Rekrutmen')
-      ? [{ label: 'Rekrutmen', path: '/recruitment', icon: Briefcase }]
-      : []),
+    // Menu Rekrutmen dinonaktifkan sementara
+    // ...(canView('Rekrutmen')
+    //   ? [{ label: 'Rekrutmen', path: '/recruitment', icon: Briefcase }]
+    //   : []),
     ...(isHR || canView('Dashboard & KPI')
       ? [{ label: 'News & Pengumuman', path: '/news', icon: Megaphone }]
       : []),
@@ -841,19 +843,10 @@ export default function App() {
               path="/payroll"
               element={<Navigate to="/" replace />}
             />
+            {/* Recruitment Module (Dinonaktifkan sementara) */}
             <Route
               path="/recruitment"
-              element={
-                canView('Rekrutmen') ? (
-                  <RecruitmentManager />
-                ) : (
-                  <AccessDenied
-                    moduleName="Rekrutmen"
-                    requiredAccess="Izin Lihat Rekrutmen"
-                    currentUser={currentUser}
-                  />
-                )
-              }
+              element={<Navigate to="/" replace />}
             />
 
             {/* Administration Modules */}
