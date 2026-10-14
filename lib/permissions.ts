@@ -102,7 +102,14 @@ export function getAllPermissions(): Record<string, ModulePermission[]> {
       const merged: Record<string, ModulePermission[]> = { ...DEFAULT_PERMISSIONS };
       for (const r of Object.keys(parsed)) {
         if (Array.isArray(parsed[r]) && parsed[r].length > 0) {
-          merged[r] = parsed[r].filter((p: ModulePermission) => p.module !== 'Payroll & Gaji' && p.module !== 'Rekrutmen');
+          merged[r] = parsed[r]
+            .filter((p: ModulePermission) => p.module !== 'Payroll & Gaji' && p.module !== 'Rekrutmen')
+            .map((p: ModulePermission) => {
+              if (p.module === 'Dashboard & KPI') {
+                return { ...p, module: 'Dashboard' };
+              }
+              return p;
+            });
         }
       }
       return merged;
