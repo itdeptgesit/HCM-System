@@ -121,7 +121,7 @@ export const ApprovalHierarchy: React.FC<{ currentUser?: any }> = ({ currentUser
       // Fetch all users for matching
       const { data: allUsers, error: userErr } = await supabase
         .from('user_accounts')
-        .select('id, employee_id, full_name, email');
+        .select('id, employee_id, employee_code, full_name, email');
 
       if (userErr || !allUsers) {
         throw new Error(userErr?.message || 'Gagal membaca data akun user');
@@ -132,6 +132,7 @@ export const ApprovalHierarchy: React.FC<{ currentUser?: any }> = ({ currentUser
       allUsers.forEach(u => nameMap.set(norm(u.full_name), u));
       const idMap = new Map<string, any>();
       allUsers.forEach(u => {
+        if (u.employee_code) idMap.set(norm(u.employee_code), u);
         if (u.employee_id) idMap.set(norm(u.employee_id), u);
       });
 
@@ -145,9 +146,11 @@ export const ApprovalHierarchy: React.FC<{ currentUser?: any }> = ({ currentUser
 
         const l1Name = norm(r['Approval Line 1 Name'] || r['Line 1'] || r['Supervisor']);
         const l2Name = norm(r['Approval Line 2 Name'] || r['Line 2'] || r['HR / Manager']);
+        const l3Name = norm(r['Approval Line 3 Name'] || r['Line 3'] || r['VP / Direktur']);
 
         const approver1 = nameMap.get(l1Name);
         const approver2 = nameMap.get(l2Name);
+        const approver3 = nameMap.get(l3Name);
 
         const updatePayload: any = {
           updated_at: new Date().toISOString()
@@ -159,6 +162,11 @@ export const ApprovalHierarchy: React.FC<{ currentUser?: any }> = ({ currentUser
         if (approver2) {
           updatePayload.attendance_hr_id = approver2.id;
           updatePayload.manager_id = approver2.id;
+        }
+        if (approver3) {
+          updatePayload.vp_id = approver3.id;
+          updatePayload.attendance_manager_id = approver3.id;
+          updatePayload.attendance_vp_id = approver3.id;
         }
 
         const { error: updErr } = await supabase
@@ -195,7 +203,7 @@ export const ApprovalHierarchy: React.FC<{ currentUser?: any }> = ({ currentUser
     try {
       const { data, error } = await supabase
         .from('user_accounts')
-        .select('id, full_name, email, department, job_title, role, supervisor_id, manager_id, attendance_hr_id, vp_id, attendance_supervisor_id, attendance_manager_id, attendance_vp_id')
+        .select('id, full_name, email, department, job_title, role, employee_code, supervisor_id, manager_id, attendance_hr_id, vp_id, attendance_supervisor_id, attendance_manager_id, attendance_vp_id')
         .order('full_name', { ascending: true });
 
       if (error) throw error;

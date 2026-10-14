@@ -15,8 +15,24 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 export const supabaseAdmin = supabase;
 
 /**
+ * Isolated Supabase client strictly for user provisioning/management by Admin.
+ * Uses persistSession: false so it NEVER touches, pollutes, or replaces
+ * the currently logged-in administrator's browser session!
+ */
+export const getIsolatedAuthClient = () => {
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+      storageKey: 'gesit_isolated_provisioning_client'
+    }
+  });
+};
+
+/**
  * Ensures a user account exists in Supabase Auth with the specified password.
- * Handles both new user creation and updating password for existing auth users.
+ * NEVER alters or hijacks the current administrator's browser session.
  */
 export const ensureAuthUserWithPassword = async (
   email: string,
@@ -29,7 +45,7 @@ export const ensureAuthUserWithPassword = async (
   const passwordTrim = password.trim();
   const nameTrim = (fullName || emailTrim.split('@')[0]).trim();
 
-  // 1. Coba Edge Function jika terpasang
+  // 1. Coba Edge Function jika terpasang (menggunakan session admin aktif)
   try {
     const { data: fnData, error: fnErr } = await supabase.functions.invoke('manage-user', {
       body: { email: emailTrim, password: passwordTrim, fullName: nameTrim, existingId: existingId?.toString() }
@@ -41,7 +57,7 @@ export const ensureAuthUserWithPassword = async (
     // Edge function tidak tersedia, lanjutkan ke fallback
   }
 
-  // 1.5. Coba PostgreSQL RPC admin_set_user_password jika terpasang di database
+  // 2. Coba PostgreSQL RPC admin_set_user_password jika terpasang di database
   try {
     const { data: rpcSuccess } = await supabase.rpc('admin_set_user_password', {
       target_email: emailTrim,
@@ -52,9 +68,11 @@ export const ensureAuthUserWithPassword = async (
     }
   } catch (_) {}
 
-  // 2. Fallback: Supabase Auth signUp langsung (membuat akun auth baru jika belum ada)
+  // 3. Fallback: Supabase Auth signUp menggunakan ISOLATED client (persistSession: false)
+  // Ini krusial: signUp di sini TIDAK AKAN PERNAH menimpa session browser admin!
   try {
-    const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({
+    const isolatedClient = getIsolatedAuthClient();
+    const { data: signUpData, error: signUpErr } = await isolatedClient.auth.signUp({
       email: emailTrim,
       password: passwordTrim,
       options: {
@@ -65,19 +83,8 @@ export const ensureAuthUserWithPassword = async (
     if (!signUpErr && signUpData?.user?.id) {
       return signUpData.user.id;
     }
-
-    // 3. Jika akun sudah ada di Auth, periksa apakah password baru cocok dengan sign in
-    if (signUpErr) {
-      const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({
-        email: emailTrim,
-        password: passwordTrim
-      });
-      if (!signInErr && signInData?.user?.id) {
-        return signInData.user.id;
-      }
-    }
   } catch (authEx) {
-    console.warn('Auth fallback exception:', authEx);
+    console.warn('Isolated auth signUp exception:', authEx);
   }
 
   // 4. Periksa apakah sudah ada auth_id di user_accounts
