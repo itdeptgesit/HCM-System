@@ -58,7 +58,7 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
   const [companyFilter, setCompanyFilter] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('');
   const [employmentFilter, setEmploymentFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'Active' | 'Inactive' | 'Resigned'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'Active' | 'Disabled' | 'Inactive' | 'Resigned'>('all');
   const [contractAlertFilter, setContractAlertFilter] = useState<'all' | 'expiring' | 'expired'>('all');
 
   // Pagination state
@@ -365,7 +365,20 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
       }
 
       const currentStatus = (emp.employmentStatus || emp.status || 'Active');
-      const matchesStatus = statusFilter === 'all' ? true : currentStatus.toLowerCase() === statusFilter.toLowerCase();
+      let matchesStatus = true;
+      if (statusFilter !== 'all') {
+        const curLower = currentStatus.toLowerCase();
+        const filterLower = statusFilter.toLowerCase();
+        if (filterLower === 'resigned') {
+          matchesStatus = curLower === 'resigned';
+        } else if (filterLower === 'disabled') {
+          matchesStatus = curLower === 'disabled' || curLower === 'inactive' || curLower === 'resigned';
+        } else if (filterLower === 'active') {
+          matchesStatus = curLower === 'active';
+        } else {
+          matchesStatus = curLower === filterLower;
+        }
+      }
 
       // Contract alert filter
       let matchesContractAlert = true;
@@ -1092,6 +1105,18 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
               {employmentTypes.map((et) => (
                 <option key={et} value={et}>{et}</option>
               ))}
+            </select>
+
+            {/* Filter Status Akun (Aktif / Resign / Non-Aktif) */}
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as any)}
+              className="h-9 rounded-lg border border-border bg-background px-3 text-xs font-medium text-foreground outline-none transition focus:border-primary focus:ring-1 focus:ring-primary/20"
+            >
+              <option value="all">Semua Status Akun</option>
+              <option value="Active">🟢 Karyawan Aktif</option>
+              <option value="Resigned">⚪ Karyawan Resign</option>
+              <option value="Disabled">🔴 Karyawan Non-Aktif</option>
             </select>
 
             {/* Filter Contract Alert (Visible in contracts tab) */}

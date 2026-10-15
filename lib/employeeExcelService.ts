@@ -514,7 +514,7 @@ export async function parseEmployeeImportExcel(file: File): Promise<ParseResult>
       jobTitle: getValue('jabatan', 'jobtitle', 'posisi') ? String(getValue('jabatan', 'jobtitle', 'posisi')).trim() : undefined,
       jobLevel: getValue('leveljabatan', 'joblevel', 'level') ? String(getValue('leveljabatan', 'joblevel', 'level')).trim() : 'Staff',
       employmentType: getValue('tipekaryawan', 'employmenttype', 'tipe') ? String(getValue('tipekaryawan', 'employmenttype', 'tipe')).trim() : 'Full-Time',
-      status: (String(getValue('statusakun', 'status', 'statuskaryawan') || 'Active').toLowerCase() === 'disabled') ? 'Disabled' : 'Active',
+      status: (String(getValue('statusakun', 'status', 'statuskaryawan', 'disabled') || 'Active').toLowerCase() === 'disabled') ? 'Disabled' : 'Active',
       joinDate: normalizeExcelDate(getValue('tanggalmulaikerja', 'joindate', 'tglmasuk', 'tglbergabung')),
 
       // Kontrak & PKWT

@@ -156,6 +156,7 @@ export const EmployeeImportModal: React.FC<EmployeeImportModalProps> = ({
           nik: row.nik,
           role: row.role || 'Staff',
           status: row.status || 'Active',
+          employment_status: row.status || 'Active',
           groups: ['HCM', row.role || 'Staff'],
           phone: row.phone || null,
           birth_place: row.birthPlace || null,
@@ -423,12 +424,13 @@ export const EmployeeImportModal: React.FC<EmployeeImportModalProps> = ({
                             <TableHead>NIK KTP</TableHead>
                             <TableHead>Departemen / Jabatan</TableHead>
                             <TableHead>Status Kontrak</TableHead>
+                            <TableHead>Status Akun</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {parseResult.validRows.length === 0 ? (
                             <TableRow>
-                              <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
+                              <TableCell colSpan={7} className="text-center py-6 text-muted-foreground">
                                 Tidak ada data valid untuk diimport
                               </TableCell>
                             </TableRow>
@@ -454,6 +456,18 @@ export const EmployeeImportModal: React.FC<EmployeeImportModalProps> = ({
                                 <TableCell>
                                   <Badge variant="outline" className="text-[10px] font-normal">
                                     {row.contractType || 'PKWT 1'}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell>
+                                  <Badge
+                                    variant="outline"
+                                    className={`text-[10px] font-medium ${
+                                      row.status === 'Disabled'
+                                        ? 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/50 dark:bg-rose-950/30 dark:text-rose-400'
+                                        : 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-400'
+                                    }`}
+                                  >
+                                    {row.status === 'Disabled' ? 'Non-Aktif' : 'Aktif'}
                                   </Badge>
                                 </TableCell>
                               </TableRow>
