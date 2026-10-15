@@ -9,7 +9,7 @@ import {
 import { toast } from 'sonner';
 import { supabase } from '../../lib/supabaseClient';
 import { fetchAllRows, loadWorkforceAccounts, normalizeRequest, reviewWorkforceRequest } from '../../lib/workforceData';
-import { approvalChain, canReviewRequest, isHRAccount, requestApprovalLevel } from '../../lib/workforce-contract';
+import { approvalChain, canReviewRequest, isHRAccount, requestApprovalLevel, requestDisplayStatus } from '../../lib/workforce-contract';
 import {
   GLASSES_POLICY_TIERS, getGlassesPolicyTier, validateGlassesClaim,
   calculateEmployeeAnnualLeave
@@ -61,8 +61,18 @@ export const AttendanceRequest: React.FC<AttendanceRequestProps> = ({ currentUse
   const processing = useRef(false);
   const [requestTab, setRequestTab] = useState<'leave' | 'overtime' | 'reimbursement' | 'attendance_correction'>(() => {
     const type = new URLSearchParams(window.location.search).get('type');
+    if (typeof window !== 'undefined' && (window.location.pathname.includes('/attendance/requests') || type === 'attendance_correction')) {
+      return 'attendance_correction';
+    }
     return type === 'overtime' || type === 'reimbursement' || type === 'attendance_correction' ? type : 'leave';
   });
+
+  useEffect(() => {
+    const type = new URLSearchParams(window.location.search).get('type');
+    if (window.location.pathname.includes('/attendance/requests') || type === 'attendance_correction') {
+      setRequestTab('attendance_correction');
+    }
+  }, []);
   const [requestFilter, setRequestFilter] = useState<'all' | 'pending' | 'pending_line_1' | 'pending_line_2' | 'pending_senior' | 'pending_office' | 'approved' | 'rejected'>('all');
   const [reimbFilter, setReimbFilter] = useState<'all' | 'pending' | 'approved' | 'rejected' | 'paid'>('all');
   const [reimbCategory, setReimbCategory] = useState<string>('all');
@@ -456,6 +466,22 @@ export const AttendanceRequest: React.FC<AttendanceRequestProps> = ({ currentUse
   const canRejectRequest = useCallback((reqUserId: string, status: string): boolean => {
     return canApproveRequest(reqUserId, status);
   }, [canApproveRequest]);
+
+  // Check if current user can review attendance corrections (HR/Admin or direct supervisor/manager)
+  const canApproveCorrection = useCallback((reqUserId: string): boolean => {
+    if (isManager) return true;
+    if (isRequester(reqUserId)) return false;
+    const myId = String(currentUser?.id || '');
+    if (!myId) return false;
+    const requester = allUsers.find(u => String(u.id) === String(reqUserId));
+    if (!requester) return false;
+    return (
+      String(requester.attendance_supervisor_id || requester.supervisor_id || '') === myId ||
+      String(requester.attendance_manager_id || requester.manager_id || '') === myId ||
+      String(requester.attendance_vp_id || requester.vp_id || '') === myId ||
+      String(requester.attendance_hr_id || '') === myId
+    );
+  }, [isManager, isRequester, allUsers, currentUser]);
 
   // Get approver display name from hierarchy
   const getApproverName = useCallback((reqUserId: string, status: string): string => {
@@ -1182,114 +1208,159 @@ export const AttendanceRequest: React.FC<AttendanceRequestProps> = ({ currentUse
     );
   };
 
-  const handleAttendanceCorrectionDecision = async (request: any, status: 'approved' | 'rejected') => {
+  const handleAttendanceCorrectionDecision = async (request: any, decision: 'approved' | 'rejected') => {
     if (processing.current) return;
     processing.current = true;
     try {
-      const rpcName = request.request_kind === 'outside' ? 'review_outside_radius_attendance' : 'review_attendance_correction_request';
-      const { error } = await supabase.rpc(rpcName, {
-        p_request_id: request.id,
-        p_status: status,
-        p_reviewer_note: null,
-      });
+      const requester = allUsers.find(u => String(u.id) === String(request.user_id));
+      const approverName = currentUser?.fullName || currentUser?.name || currentUser?.username || 'Approver';
+      const approverId = String(currentUser?.id || 'admin');
+      const nowIso = new Date().toISOString();
+      const table = request.request_kind === 'outside' ? 'attendance_requests' : 'attendance_correction_requests';
 
-      if (error) {
-        console.warn(`RPC ${rpcName} gagal, menjalankan fallback update langsung:`, error);
-        const approverId = currentUser?.id || 'admin';
-        const nowIso = new Date().toISOString();
+      if (decision === 'rejected') {
+        const { error: rejErr } = await supabase.from(table).update({
+          status: 'rejected',
+          approval_status: 'rejected',
+          reviewer_id: approverId,
+          reviewed_at: nowIso,
+          approved_by: approverName,
+          approved_at: nowIso,
+        }).eq('id', request.id);
+        if (rejErr) throw rejErr;
+        toast.info('Permohonan presensi telah ditolak.');
+        await loadAllData();
+        return;
+      }
 
+      // Hitung tahap persetujuan berikutnya sesuai Hierarchy Approval
+      const nextStatus = getNextStatus(request.status, requester);
+      if (!nextStatus) return;
+
+      const updateData: Record<string, any> = {
+        status: nextStatus,
+        reviewer_id: approverId,
+        reviewed_at: nowIso,
+      };
+
+      if (nextStatus === 'pending_line_2') {
+        updateData.line1_approved_by = approverName;
+        updateData.line1_approved_at = nowIso;
+        updateData.approval_status = 'pending_level_2';
+        updateData.current_approval_level = 2;
+      } else if (nextStatus === 'pending_senior') {
+        updateData.line2_approved_by = approverName;
+        updateData.line2_approved_at = nowIso;
+        updateData.approval_status = 'pending_level_3';
+        updateData.current_approval_level = 3;
+      } else if (nextStatus === 'pending_office') {
+        updateData.senior_approved_by = approverName;
+        updateData.senior_approved_at = nowIso;
+        updateData.approval_status = 'pending_level_4';
+        updateData.current_approval_level = 4;
+      } else if (nextStatus === 'approved') {
+        updateData.approved_by = approverName;
+        updateData.approved_at = nowIso;
+        updateData.approval_status = 'approved';
+      }
+
+      const { error: updErr } = await supabase.from(table).update(updateData).eq('id', request.id);
+      if (updErr) {
+        console.warn(`Gagal update berjenjang pada ${table}, mencoba update status dasar:`, updErr);
+        await supabase.from(table).update({
+          status: nextStatus,
+          reviewer_id: approverId,
+          reviewed_at: nowIso
+        }).eq('id', request.id);
+      }
+
+      // Hanya bila sudah mencapai status final 'approved' maka presensi di-commit ke attendance_records!
+      if (nextStatus === 'approved') {
         if (request.request_kind === 'outside') {
-          if (status === 'approved') {
-            const { data: exist } = await supabase
-              .from('attendance_records')
-              .select('*')
-              .eq('user_id', request.user_id)
-              .eq('date', request.attendance_date || request.request_date)
-              .maybeSingle();
+          const { data: exist } = await supabase
+            .from('attendance_records')
+            .select('*')
+            .eq('user_id', request.user_id)
+            .eq('date', request.attendance_date || request.request_date)
+            .maybeSingle();
 
-            if (exist) {
-              await supabase.from('attendance_records').update({
-                clock_in: exist.clock_in || request.requested_at,
-                clock_in_lat: exist.clock_in_lat || request.latitude,
-                clock_in_lng: exist.clock_in_lng || request.longitude,
-                photo_url: request.photo_url || exist.photo_url,
-                work_mode: 'dinas',
-                status: 'present',
-                notes: `${exist.notes || ''} [Dinas Luar Disetujui: ${request.reason || ''}]`.trim(),
-                approved_by: approverId,
-                approved_at: nowIso,
-              }).eq('id', exist.id);
-            } else {
-              await supabase.from('attendance_records').insert({
-                user_id: request.user_id,
-                date: request.attendance_date || request.request_date,
-                clock_in: request.requested_at,
-                clock_in_lat: request.latitude,
-                clock_in_lng: request.longitude,
-                photo_url: request.photo_url,
-                work_mode: 'dinas',
-                status: 'present',
-                notes: `Dinas Luar Disetujui: ${request.reason || ''}`,
-                approved_by: approverId,
-                approved_at: nowIso,
-              });
-            }
+          if (exist) {
+            await supabase.from('attendance_records').update({
+              clock_in: exist.clock_in || request.requested_at,
+              clock_in_lat: exist.clock_in_lat || request.latitude,
+              clock_in_lng: exist.clock_in_lng || request.longitude,
+              photo_url: request.photo_url || exist.photo_url,
+              work_mode: 'dinas',
+              status: 'present',
+              notes: `${exist.notes || ''} [Dinas Luar Disetujui: ${request.reason || ''}]`.trim(),
+              approved_by: approverName,
+              approved_at: nowIso,
+            }).eq('id', exist.id);
+          } else {
+            await supabase.from('attendance_records').insert({
+              user_id: request.user_id,
+              date: request.attendance_date || request.request_date,
+              clock_in: request.requested_at,
+              clock_in_lat: request.latitude,
+              clock_in_lng: request.longitude,
+              photo_url: request.photo_url,
+              work_mode: 'dinas',
+              status: 'present',
+              notes: `Dinas Luar Disetujui: ${request.reason || ''}`,
+              approved_by: approverName,
+              approved_at: nowIso,
+            });
           }
-          await supabase.from('attendance_requests').update({
-            status,
-            reviewer_id: approverId,
-            reviewed_at: nowIso,
-          }).eq('id', request.id);
         } else {
-          if (status === 'approved') {
-            const { data: exist } = await supabase
-              .from('attendance_records')
-              .select('*')
-              .eq('user_id', request.user_id)
-              .eq('date', request.attendance_date)
-              .maybeSingle();
+          const { data: exist } = await supabase
+            .from('attendance_records')
+            .select('*')
+            .eq('user_id', request.user_id)
+            .eq('date', request.attendance_date || request.date)
+            .maybeSingle();
 
-            const finalIn = request.clock_in_time || exist?.clock_in || null;
-            const finalOut = request.clock_out_time || exist?.clock_out || null;
-            let workMinutes = 0;
-            if (finalIn && finalOut) {
-              workMinutes = Math.max(0, Math.round((new Date(finalOut).getTime() - new Date(finalIn).getTime()) / 60000));
-            }
-
-            if (exist) {
-              await supabase.from('attendance_records').update({
-                clock_in: finalIn,
-                clock_out: finalOut,
-                status: 'present',
-                total_work_minutes: workMinutes || exist.total_work_minutes || 0,
-                notes: `${exist.notes || ''} [Koreksi Disetujui: ${request.reason || ''}]`.trim(),
-                approved_by: approverId,
-                approved_at: nowIso,
-              }).eq('id', exist.id);
-            } else {
-              await supabase.from('attendance_records').insert({
-                user_id: request.user_id,
-                date: request.attendance_date,
-                clock_in: finalIn,
-                clock_out: finalOut,
-                status: 'present',
-                total_work_minutes: workMinutes,
-                notes: `Koreksi Presensi Disetujui: ${request.reason || ''}`,
-                approved_by: approverId,
-                approved_at: nowIso,
-              });
-            }
+          const finalIn = request.clock_in_time || request.requested_check_in || exist?.clock_in || null;
+          const finalOut = request.clock_out_time || request.requested_check_out || exist?.clock_out || null;
+          let workMinutes = 0;
+          if (finalIn && finalOut) {
+            workMinutes = Math.max(0, Math.round((new Date(finalOut).getTime() - new Date(finalIn).getTime()) / 60000));
           }
-          await supabase.from('attendance_correction_requests').update({
-            status,
-            reviewer_id: approverId,
-            reviewed_at: nowIso,
-          }).eq('id', request.id);
+
+          if (exist) {
+            await supabase.from('attendance_records').update({
+              clock_in: finalIn,
+              clock_out: finalOut,
+              status: 'present',
+              total_work_minutes: workMinutes || exist.total_work_minutes || 0,
+              notes: `${exist.notes || ''} [Koreksi Disetujui: ${request.reason || ''}]`.trim(),
+              approved_by: approverName,
+              approved_at: nowIso,
+            }).eq('id', exist.id);
+          } else {
+            await supabase.from('attendance_records').insert({
+              user_id: request.user_id,
+              date: request.attendance_date || request.date,
+              clock_in: finalIn,
+              clock_out: finalOut,
+              status: 'present',
+              total_work_minutes: workMinutes,
+              notes: `Koreksi Presensi Disetujui: ${request.reason || ''}`,
+              approved_by: approverName,
+              approved_at: nowIso,
+            });
+          }
         }
       }
 
       await loadAllData();
-      toast.success(status === 'approved' ? 'Pengajuan disetujui & presensi berhasil dicatat.' : 'Pengajuan telah ditolak.');
+      const label = nextStatus === 'approved' 
+        ? 'disetujui final & presensi berhasil dicatat.' 
+        : nextStatus === 'pending_line_2' 
+          ? 'disetujui Supervisor & diteruskan ke HR.' 
+          : nextStatus === 'pending_senior' 
+            ? 'disetujui HR & diteruskan ke Manager.' 
+            : 'diteruskan ke tahapan berikutnya.';
+      toast.success(`Pengajuan presensi ${label}`);
     } catch (error: any) {
       toast.error(`Gagal memproses keputusan: ${error.message}`);
     } finally {
@@ -1305,9 +1376,35 @@ export const AttendanceRequest: React.FC<AttendanceRequestProps> = ({ currentUse
       return true;
     });
 
-    const pendingCount = scopedCorrections.filter(row => row.status === 'pending').length;
+    const pendingCount = scopedCorrections.filter(row => isPendingApprovalStatus(row.status)).length;
     const outsideCount = scopedCorrections.filter(row => row.request_kind === 'outside').length;
     const correctionCount = scopedCorrections.filter(row => row.request_kind === 'correction').length;
+
+    const renderAttendanceApprovalHistory = (req: any) => {
+      const steps: { label: string; by: string | null | undefined; at: string | null | undefined }[] = [];
+      if (req.line1_approved_by) steps.push({ label: 'Supervisor', by: req.line1_approved_by, at: req.line1_approved_at });
+      if (req.line2_approved_by) steps.push({ label: 'HR', by: req.line2_approved_by, at: req.line2_approved_at });
+      if (req.senior_approved_by) steps.push({ label: 'Manager', by: req.senior_approved_by, at: req.senior_approved_at });
+      if (req.office_approved_by) steps.push({ label: 'VP', by: req.office_approved_by, at: req.office_approved_at });
+      if (steps.length === 0 && (req.approved_by || req.reviewer_id)) {
+        steps.push({
+          label: req.status === 'rejected' ? 'Ditolak' : 'Approver',
+          by: req.approved_by || req.reviewer_id,
+          at: req.approved_at || req.reviewed_at
+        });
+      }
+      if (steps.length === 0) return null;
+      return (
+        <div className="mt-1 space-y-0.5">
+          {steps.map((st, i) => (
+            <div key={i} className="text-[10px] text-muted-foreground flex items-center gap-1">
+              <CheckCircle2 size={10} className="text-emerald-500 shrink-0" />
+              <span className="font-semibold text-foreground/80">{st.label}:</span> {st.by}
+            </div>
+          ))}
+        </div>
+      );
+    };
 
     return (
       <Card className="border-border/60 shadow-sm overflow-hidden">
@@ -1380,7 +1477,7 @@ export const AttendanceRequest: React.FC<AttendanceRequestProps> = ({ currentUse
                     <TableHead>Waktu Diajukan</TableHead>
                     <TableHead className="min-w-[220px]">Alasan & Bukti</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead className="text-right pr-4">Aksi HR</TableHead>
+                    <TableHead className="text-right pr-4">Aksi / Approval</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1500,11 +1597,12 @@ export const AttendanceRequest: React.FC<AttendanceRequestProps> = ({ currentUse
                         {/* Status */}
                         <TableCell>
                           {renderStatusBadge(row.status)}
+                          {renderAttendanceApprovalHistory(row)}
                         </TableCell>
 
-                        {/* Aksi HR */}
+                        {/* Aksi / Approval */}
                         <TableCell className="text-right pr-4">
-                          {row.status === 'pending' && isManager && !isRequester(row.user_id) ? (
+                          {isPendingApprovalStatus(row.status) && (canApproveRequest(row.user_id, row.status) || isManager) && !isRequester(row.user_id) ? (
                             <div className="flex items-center justify-end gap-1.5">
                               <Button
                                 size="sm"
@@ -1523,7 +1621,14 @@ export const AttendanceRequest: React.FC<AttendanceRequestProps> = ({ currentUse
                               </Button>
                             </div>
                           ) : (
-                            <span className="text-xs font-bold uppercase text-muted-foreground">{row.status}</span>
+                            <div className="text-right">
+                              <span className="text-xs font-bold uppercase text-muted-foreground">{requestDisplayStatus(row)}</span>
+                              {isPendingApprovalStatus(row.status) && (
+                                <div className="text-[10px] text-muted-foreground mt-0.5">
+                                  Menunggu: <span className="font-semibold text-foreground/80">{getApproverName(row.user_id, row.status)}</span>
+                                </div>
+                              )}
+                            </div>
                           )}
                         </TableCell>
                       </TableRow>
@@ -1538,12 +1643,12 @@ export const AttendanceRequest: React.FC<AttendanceRequestProps> = ({ currentUse
     );
   };
 
-  // ── Request (combined: Leave, OT, Reimb) ───────────────────────────
+  // ── Request (combined: Leave, OT, Reimb, Attendance Correction) ───────────────────────────
 
   const renderRequest = () => {
     const scopedCorrections = attendanceCorrections.filter(row => matchesRequestScope(row.user_id));
     const tabs = [
-      { id: 'attendance_correction' as const, label: 'Request Absen', icon: <Clock size={14} />, count: attendanceCorrections.filter(r => r.status === 'pending' && matchesRequestScope(r.user_id)).length },
+      { id: 'attendance_correction' as const, label: 'Request Absen', icon: <Clock size={14} />, count: attendanceCorrections.filter(r => isPendingApprovalStatus(r.status) && matchesRequestScope(r.user_id)).length },
       { id: 'leave' as const, label: 'Cuti / Izin', icon: <Calendar size={14} />, count: scopedLeave.filter(l => isPendingApprovalStatus(l.status)).length },
       { id: 'overtime' as const, label: 'Lembur', icon: <Timer size={14} />, count: scopedOvertime.filter(o => isPendingApprovalStatus(o.status)).length },
       { id: 'reimbursement' as const, label: 'Reimbursement', icon: <Wallet size={14} />, count: scopedReimb.filter(r => isPendingApprovalStatus(r.status)).length },
@@ -1560,7 +1665,7 @@ export const AttendanceRequest: React.FC<AttendanceRequestProps> = ({ currentUse
       if (requestTab === 'attendance_correction') {
         return [
           { label: 'Total Request', value: scopedCorrections.length, sub: 'koreksi / di luar radius' },
-          { label: 'Menunggu', value: scopedCorrections.filter(x => x.status === 'pending').length, sub: 'perlu approval' },
+          { label: 'Menunggu', value: scopedCorrections.filter(x => isPendingApprovalStatus(x.status)).length, sub: 'perlu approval' },
           { label: 'Disetujui', value: scopedCorrections.filter(x => x.status === 'approved').length, sub: 'request approved' },
           { label: 'Ditolak', value: scopedCorrections.filter(x => x.status === 'rejected').length, sub: 'request rejected' },
         ];

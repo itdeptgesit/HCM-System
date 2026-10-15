@@ -29,17 +29,31 @@ export function isAdminAccount(account?: ApprovalAccount | null): boolean {
 }
 
 export function approvalChain(account?: ApprovalAccount | null) {
-  const detailed = !!(account?.attendance_hr_id || account?.attendance_manager_id || account?.attendance_vp_id);
-  return (detailed ? [
+  const raw = [
     { level: 1, id: account?.attendance_supervisor_id || account?.supervisor_id },
     { level: 2, id: account?.attendance_hr_id },
     { level: 3, id: account?.attendance_manager_id || account?.manager_id },
-    { level: 4, id: account?.attendance_vp_id || account?.vp_id },
-  ] : [
-    { level: 1, id: account?.attendance_supervisor_id || account?.supervisor_id },
-    { level: 2, id: account?.manager_id },
-    { level: 3, id: account?.vp_id },
-  ]).filter(slot => slot.id != null && String(slot.id) !== '');
+  ];
+  if (account?.attendance_vp_id || account?.vp_id) {
+    const vp = account?.attendance_vp_id || account?.vp_id;
+    if (String(vp) !== String(raw[2].id)) {
+      raw.push({ level: 4, id: vp });
+    }
+  }
+
+  // Deduplikasi: seorang approver tidak boleh muncul lebih dari 1 kali dalam rantai hierarki
+  const seen = new Set<string>();
+  const filtered: { level: number; id: string | number }[] = [];
+  for (const slot of raw) {
+    if (slot.id != null && String(slot.id).trim() !== '') {
+      const sId = String(slot.id);
+      if (!seen.has(sId)) {
+        seen.add(sId);
+        filtered.push({ level: filtered.length + 1, id: slot.id });
+      }
+    }
+  }
+  return filtered;
 }
 
 export function resolveApprovalStatus(request: ApprovalRequest): string {

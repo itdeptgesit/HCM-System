@@ -142,7 +142,16 @@ end; $$;
 create or replace function public.clock_in_attendance(p_date date,p_lat double precision,p_lng double precision,
   p_status text default 'present',p_notes text default null,p_photo_url text default null,p_work_mode text default 'wfo')
 returns public.attendance_records language plpgsql security definer set search_path=public as $$
-declare v_user text := public.current_account_id(); v_office public.office_locations; v_row public.attendance_records; v_distance double precision; v_schedule public.attendance_schedules; v_status text;
+declare 
+  v_user text := public.current_account_id(); 
+  v_office public.office_locations; 
+  v_row public.attendance_records; 
+  v_distance double precision; 
+  v_schedule record; 
+  v_sch_json jsonb;
+  v_status text := 'present';
+  v_is_flex boolean;
+  v_cutoff time;
 begin
   perform public.validate_attendance_date(p_date);
   if v_user is null then raise exception 'USER_ACCOUNT_NOT_FOUND'; end if;
@@ -156,9 +165,26 @@ begin
     if v_office.id is null then raise exception 'NO_ACTIVE_OFFICE'; end if;
     if v_distance>v_office.radius_meters then raise exception 'OUTSIDE_OFFICE_RADIUS'; end if;
   elsif nullif(trim(p_notes),'') is null then raise exception 'WORK_MODE_NOTE_REQUIRED'; end if;
+  
   select * into v_schedule from public.attendance_schedules where is_active order by created_at limit 1;
-  v_status := case when v_schedule.id is not null and (now() at time zone 'Asia/Jakarta')::time>
-    (case when v_schedule.is_flexible then v_schedule.flex_end else (v_schedule.work_start+make_interval(mins=>v_schedule.grace_period_minutes))::time end) then 'late' else 'present' end;
+  if v_schedule is not null then
+    v_sch_json := to_jsonb(v_schedule);
+    v_is_flex := coalesce((v_sch_json->>'is_flexible')::boolean, true);
+    if v_is_flex then
+      v_cutoff := coalesce((v_sch_json->>'flex_end')::time, '10:00:00'::time);
+    else
+      v_cutoff := (coalesce((v_sch_json->>'work_start')::time, '08:00:00'::time) + 
+                   make_interval(mins => coalesce((v_sch_json->>'grace_period_minutes')::integer, 15)))::time;
+    end if;
+    if (now() at time zone 'Asia/Jakarta')::time > v_cutoff then
+      v_status := 'late';
+    else
+      v_status := 'present';
+    end if;
+  else
+    v_status := 'present';
+  end if;
+
   insert into public.attendance_records(user_id,date,clock_in,clock_in_lat,clock_in_lng,status,notes,photo_url,work_mode,clock_in_office_id,clock_in_office_name,clock_in_distance_meters)
     values(v_user,p_date,now(),p_lat,p_lng,v_status,p_notes,p_photo_url,p_work_mode,v_office.id,v_office.name,v_distance) returning * into v_row;
   return v_row;

@@ -27,10 +27,25 @@ CREATE OR REPLACE FUNCTION public.submit_outside_radius_attendance(
 ) RETURNS public.attendance_requests
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
-  v_user text := public.current_account_id();
+  v_user_text text := public.current_account_id();
+  v_user_id bigint;
   v_row public.attendance_requests;
 BEGIN
-  IF v_user IS NULL THEN 
+  SELECT id INTO v_user_id 
+  FROM public.user_accounts 
+  WHERE id::text = v_user_text 
+     OR lower(email) = lower(auth.jwt()->>'email')
+  LIMIT 1;
+
+  IF v_user_id IS NULL THEN
+    BEGIN
+      v_user_id := v_user_text::bigint;
+    EXCEPTION WHEN OTHERS THEN
+      v_user_id := NULL;
+    END;
+  END IF;
+
+  IF v_user_id IS NULL THEN 
     RAISE EXCEPTION 'USER_ACCOUNT_NOT_FOUND: Akun pengguna tidak ditemukan.'; 
   END IF;
   
@@ -42,7 +57,7 @@ BEGIN
     user_id, request_date, latitude, longitude, photo_url, reason, status, requested_at,
     reviewer_id, reviewed_at, reviewer_note
   ) VALUES (
-    v_user, p_date, p_lat, p_lng, p_photo_url, TRIM(COALESCE(p_reason, 'Dinas Luar / Luar Radius')), 'pending', now(),
+    v_user_id, p_date, p_lat, p_lng, p_photo_url, TRIM(COALESCE(p_reason, 'Dinas Luar / Luar Radius')), 'pending', now(),
     NULL, NULL, NULL
   )
   ON CONFLICT (user_id, request_date) DO UPDATE
@@ -174,10 +189,25 @@ CREATE OR REPLACE FUNCTION public.submit_attendance_correction_request(
 ) RETURNS public.attendance_correction_requests
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
-  v_user text := public.current_account_id();
+  v_user_text text := public.current_account_id();
+  v_user_id bigint;
   v_row public.attendance_correction_requests;
 BEGIN
-  IF v_user IS NULL THEN 
+  SELECT id INTO v_user_id 
+  FROM public.user_accounts 
+  WHERE id::text = v_user_text 
+     OR lower(email) = lower(auth.jwt()->>'email')
+  LIMIT 1;
+
+  IF v_user_id IS NULL THEN
+    BEGIN
+      v_user_id := v_user_text::bigint;
+    EXCEPTION WHEN OTHERS THEN
+      v_user_id := NULL;
+    END;
+  END IF;
+
+  IF v_user_id IS NULL THEN 
     RAISE EXCEPTION 'USER_ACCOUNT_NOT_FOUND: Akun pengguna tidak ditemukan.'; 
   END IF;
 
@@ -197,7 +227,7 @@ BEGIN
     user_id, attendance_date, clock_in_time, clock_out_time, reason, status, requested_at,
     reviewer_id, reviewed_at, reviewer_note
   ) VALUES (
-    v_user, p_attendance_date, p_clock_in, p_clock_out, TRIM(p_reason), 'pending', now(),
+    v_user_id, p_attendance_date, p_clock_in, p_clock_out, TRIM(p_reason), 'pending', now(),
     NULL, NULL, NULL
   )
   ON CONFLICT (user_id, attendance_date) DO UPDATE

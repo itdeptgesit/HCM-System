@@ -10,7 +10,7 @@ export interface ModulePermission {
 
 export type PermissionAction = 'view' | 'create' | 'edit' | 'approve' | 'delete';
 
-export const ALL_ROLES = ['Super Admin', 'Admin', 'HR Manager', 'HR Staff', 'Employee'] as const;
+export const ALL_ROLES = ['Super Admin', 'Admin', 'HR Manager', 'HR Staff', 'Supervisor', 'VP', 'Employee'] as const;
 export type UserRole = typeof ALL_ROLES[number];
 
 export const DEFAULT_PERMISSIONS: Record<string, ModulePermission[]> = {
@@ -35,8 +35,6 @@ export const DEFAULT_PERMISSIONS: Record<string, ModulePermission[]> = {
     { module: 'Data Karyawan', category: 'Workspace', view: true, create: true, edit: true, approve: true, delete: true },
     { module: 'Absensi & Presensi', category: 'Workspace', view: true, create: true, edit: true, approve: true, delete: true },
     { module: 'Cuti & Izin', category: 'Workspace', view: true, create: true, edit: true, approve: true, delete: true },
-    // Payroll & Gaji dinonaktifkan sementara
-    // Rekrutmen dinonaktifkan sementara
     { module: 'Master Company', category: 'Administration', view: true, create: true, edit: true, approve: true, delete: false },
     { module: 'Master Department', category: 'Administration', view: true, create: true, edit: true, approve: true, delete: false },
     { module: 'Hierarchy Approval', category: 'Administration', view: true, create: true, edit: true, approve: true, delete: false },
@@ -51,8 +49,6 @@ export const DEFAULT_PERMISSIONS: Record<string, ModulePermission[]> = {
     { module: 'Data Karyawan', category: 'Workspace', view: true, create: true, edit: true, approve: true, delete: false },
     { module: 'Absensi & Presensi', category: 'Workspace', view: true, create: true, edit: true, approve: true, delete: false },
     { module: 'Cuti & Izin', category: 'Workspace', view: true, create: true, edit: true, approve: true, delete: false },
-    // Payroll & Gaji dinonaktifkan sementara
-    // Rekrutmen dinonaktifkan sementara
     { module: 'Master Company', category: 'Administration', view: true, create: false, edit: false, approve: false, delete: false },
     { module: 'Master Department', category: 'Administration', view: true, create: true, edit: true, approve: false, delete: false },
     { module: 'Hierarchy Approval', category: 'Administration', view: true, create: true, edit: true, approve: false, delete: false },
@@ -67,10 +63,36 @@ export const DEFAULT_PERMISSIONS: Record<string, ModulePermission[]> = {
     { module: 'Data Karyawan', category: 'Workspace', view: true, create: true, edit: true, approve: false, delete: false },
     { module: 'Absensi & Presensi', category: 'Workspace', view: true, create: true, edit: true, approve: false, delete: false },
     { module: 'Cuti & Izin', category: 'Workspace', view: true, create: true, edit: false, approve: false, delete: false },
-    // Payroll & Gaji dinonaktifkan sementara
-    // Rekrutmen dinonaktifkan sementara
     { module: 'Master Company', category: 'Administration', view: true, create: false, edit: false, approve: false, delete: false },
     { module: 'Master Department', category: 'Administration', view: true, create: false, edit: false, approve: false, delete: false },
+    { module: 'Hierarchy Approval', category: 'Administration', view: false, create: false, edit: false, approve: false, delete: false },
+    { module: 'Permission Menu', category: 'Administration', view: false, create: false, edit: false, approve: false, delete: false },
+    { module: 'Account Management', category: 'Administration', view: false, create: false, edit: false, approve: false, delete: false },
+    { module: 'Laporan & Analitik', category: 'Administration', view: true, create: false, edit: false, approve: false, delete: false },
+    { module: 'Log Aktivitas', category: 'Administration', view: false, create: false, edit: false, approve: false, delete: false },
+    { module: 'Pengaturan Sistem', category: 'Administration', view: false, create: false, edit: false, approve: false, delete: false },
+  ],
+  'Supervisor': [
+    { module: 'Dashboard', category: 'Workspace', view: true, create: false, edit: false, approve: false, delete: false },
+    { module: 'Data Karyawan', category: 'Workspace', view: true, create: false, edit: false, approve: false, delete: false },
+    { module: 'Absensi & Presensi', category: 'Workspace', view: true, create: true, edit: false, approve: true, delete: false },
+    { module: 'Cuti & Izin', category: 'Workspace', view: true, create: true, edit: false, approve: true, delete: false },
+    { module: 'Master Company', category: 'Administration', view: false, create: false, edit: false, approve: false, delete: false },
+    { module: 'Master Department', category: 'Administration', view: false, create: false, edit: false, approve: false, delete: false },
+    { module: 'Hierarchy Approval', category: 'Administration', view: false, create: false, edit: false, approve: false, delete: false },
+    { module: 'Permission Menu', category: 'Administration', view: false, create: false, edit: false, approve: false, delete: false },
+    { module: 'Account Management', category: 'Administration', view: false, create: false, edit: false, approve: false, delete: false },
+    { module: 'Laporan & Analitik', category: 'Administration', view: true, create: false, edit: false, approve: false, delete: false },
+    { module: 'Log Aktivitas', category: 'Administration', view: false, create: false, edit: false, approve: false, delete: false },
+    { module: 'Pengaturan Sistem', category: 'Administration', view: false, create: false, edit: false, approve: false, delete: false },
+  ],
+  'VP': [
+    { module: 'Dashboard', category: 'Workspace', view: true, create: false, edit: false, approve: false, delete: false },
+    { module: 'Data Karyawan', category: 'Workspace', view: true, create: false, edit: false, approve: false, delete: false },
+    { module: 'Absensi & Presensi', category: 'Workspace', view: true, create: true, edit: false, approve: true, delete: false },
+    { module: 'Cuti & Izin', category: 'Workspace', view: true, create: true, edit: false, approve: true, delete: false },
+    { module: 'Master Company', category: 'Administration', view: false, create: false, edit: false, approve: false, delete: false },
+    { module: 'Master Department', category: 'Administration', view: false, create: false, edit: false, approve: false, delete: false },
     { module: 'Hierarchy Approval', category: 'Administration', view: false, create: false, edit: false, approve: false, delete: false },
     { module: 'Permission Menu', category: 'Administration', view: false, create: false, edit: false, approve: false, delete: false },
     { module: 'Account Management', category: 'Administration', view: false, create: false, edit: false, approve: false, delete: false },
@@ -83,8 +105,6 @@ export const DEFAULT_PERMISSIONS: Record<string, ModulePermission[]> = {
     { module: 'Data Karyawan', category: 'Workspace', view: false, create: false, edit: false, approve: false, delete: false },
     { module: 'Absensi & Presensi', category: 'Workspace', view: true, create: true, edit: false, approve: false, delete: false },
     { module: 'Cuti & Izin', category: 'Workspace', view: true, create: true, edit: false, approve: false, delete: false },
-    // Payroll & Gaji dinonaktifkan sementara
-    // Rekrutmen dinonaktifkan sementara
     { module: 'Master Company', category: 'Administration', view: false, create: false, edit: false, approve: false, delete: false },
     { module: 'Master Department', category: 'Administration', view: false, create: false, edit: false, approve: false, delete: false },
     { module: 'Hierarchy Approval', category: 'Administration', view: false, create: false, edit: false, approve: false, delete: false },
@@ -161,18 +181,35 @@ export function hasPermission(
   action: PermissionAction = 'view'
 ): boolean {
   const normalizedRole = (role || 'Employee').trim();
+  const lowerRole = normalizedRole.toLowerCase();
 
   // Super Admin selalu memiliki akses penuh ke seluruh modul
-  if (normalizedRole.toLowerCase() === 'super admin') {
+  if (lowerRole === 'super admin' || lowerRole === 'superadmin') {
     return true;
   }
 
   const allPerms = getAllPermissions();
   // Lookup case-insensitive
-  const targetKey = Object.keys(allPerms).find(
-    k => k.toLowerCase() === normalizedRole.toLowerCase()
+  let targetKey = Object.keys(allPerms).find(
+    k => k.toLowerCase() === lowerRole
   );
-  const roleList = targetKey ? allPerms[targetKey] : [];
+
+  // Jika role belum terdaftar persis, cari mapping cerdas
+  if (!targetKey) {
+    if (lowerRole.includes('supervisor') || lowerRole.includes('spv') || lowerRole.includes('lead')) {
+      targetKey = 'Supervisor';
+    } else if (lowerRole.includes('vp') || lowerRole.includes('president') || lowerRole.includes('director')) {
+      targetKey = 'VP';
+    } else if (lowerRole.includes('manager') || lowerRole.includes('head')) {
+      targetKey = 'HR Manager';
+    } else if (lowerRole.includes('admin')) {
+      targetKey = 'Admin';
+    } else {
+      targetKey = 'Employee';
+    }
+  }
+
+  const roleList = targetKey && allPerms[targetKey] ? allPerms[targetKey] : (DEFAULT_PERMISSIONS[targetKey] || DEFAULT_PERMISSIONS['Employee'] || []);
 
   const item = roleList.find(
     p => p.module.toLowerCase() === moduleName.toLowerCase() ||
@@ -185,7 +222,11 @@ export function hasPermission(
   }
 
   // Fallback defaults jika modul baru
-  if (normalizedRole.toLowerCase() === 'admin') return true;
-  if (normalizedRole.toLowerCase() === 'hr manager') return action !== 'delete';
-  return false;
+  if (lowerRole === 'admin') return true;
+  if (lowerRole === 'hr manager') return action !== 'delete';
+  if (lowerRole.includes('supervisor') || lowerRole.includes('manager') || lowerRole.includes('vp')) {
+    return ['Dashboard', 'Absensi & Presensi', 'Cuti & Izin', 'Data Karyawan'].some(m => moduleName.toLowerCase().includes(m.toLowerCase()));
+  }
+  // Karyawan biasa default bisa melihat dashboard dan absensi
+  return ['Dashboard', 'Absensi & Presensi', 'Cuti & Izin'].some(m => moduleName.toLowerCase().includes(m.toLowerCase())) && action === 'view';
 }

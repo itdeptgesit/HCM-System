@@ -13,6 +13,13 @@ ADD COLUMN IF NOT EXISTS assigned_user_ids text[] DEFAULT '{}';
 
 CREATE INDEX IF NOT EXISTS idx_office_locations_assignment_mode ON public.office_locations(assignment_mode);
 
+-- Pastikan tabel attendance_schedules memiliki kolom pendukung jam kerja fleksibel
+ALTER TABLE public.attendance_schedules 
+ADD COLUMN IF NOT EXISTS is_flexible boolean NOT NULL DEFAULT true,
+ADD COLUMN IF NOT EXISTS flex_start time NOT NULL DEFAULT '07:00:00',
+ADD COLUMN IF NOT EXISTS flex_end time NOT NULL DEFAULT '10:00:00',
+ADD COLUMN IF NOT EXISTS required_work_hours numeric NOT NULL DEFAULT 9;
+
 -- 2. Update Fungsi clock_in_attendance untuk Memvalidasi Penugasan Akun
 CREATE OR REPLACE FUNCTION public.clock_in_attendance(
   p_date date,
@@ -25,15 +32,39 @@ CREATE OR REPLACE FUNCTION public.clock_in_attendance(
 )
 RETURNS public.attendance_records LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
 DECLARE
-  v_user text := public.current_account_id();
+  v_user_text text := public.current_account_id();
+  v_user_id bigint;
   v_office public.office_locations;
   v_row public.attendance_records;
   v_distance double precision;
-  v_schedule public.attendance_schedules;
-  v_status text;
+  v_schedule record;
+  v_sch_json jsonb;
+  v_status text := 'present';
+  v_is_flex boolean;
+  v_cutoff time;
 BEGIN
   PERFORM public.validate_attendance_date(p_date);
-  IF v_user IS NULL THEN RAISE EXCEPTION 'USER_ACCOUNT_NOT_FOUND'; END IF;
+
+  SELECT id INTO v_user_id 
+  FROM public.user_accounts 
+  WHERE id::text = v_user_text 
+     OR lower(email) = lower(auth.jwt()->>'email')
+  LIMIT 1;
+
+  IF v_user_id IS NULL THEN
+    BEGIN
+      v_user_id := v_user_text::bigint;
+    EXCEPTION WHEN OTHERS THEN
+      v_user_id := NULL;
+    END;
+  END IF;
+
+  IF v_user_id IS NULL THEN 
+    RAISE EXCEPTION 'USER_ACCOUNT_NOT_FOUND: Akun pengguna tidak ditemukan.'; 
+  END IF;
+
+  v_user_text := v_user_id::text;
+
   IF p_lat IS NULL OR p_lng IS NULL OR p_lat NOT BETWEEN -90 AND 90 OR p_lng NOT BETWEEN -180 AND 180 THEN 
     RAISE EXCEPTION 'INVALID_COORDINATES'; 
   END IF;
@@ -52,8 +83,8 @@ BEGIN
   WHERE is_active 
     AND (
       assignment_mode = 'all' 
-      OR v_user = ANY(assigned_user_ids)
-      OR (address LIKE '%[RESTRICTED_USERS:%' AND address LIKE '%' || v_user || '%')
+      OR v_user_text = ANY(assigned_user_ids)
+      OR (address LIKE '%[RESTRICTED_USERS:%' AND address LIKE '%' || v_user_text || '%')
     )
   ORDER BY public.distance_meters(p_lat, p_lng, latitude, longitude) 
   LIMIT 1;
@@ -80,20 +111,34 @@ BEGIN
     RAISE EXCEPTION 'WORK_MODE_NOTE_REQUIRED'; 
   END IF;
 
+  -- Evaluasi jadwal kerja secara aman
   SELECT * INTO v_schedule FROM public.attendance_schedules WHERE is_active ORDER BY created_at LIMIT 1;
-  v_status := CASE 
-    WHEN v_schedule.id IS NOT NULL AND (now() AT TIME ZONE 'Asia/Jakarta')::time >
-      (CASE WHEN v_schedule.is_flexible THEN v_schedule.flex_end ELSE (v_schedule.work_start + make_interval(mins=>v_schedule.grace_period_minutes))::time END) 
-    THEN 'late' 
-    ELSE 'present' 
-  END;
+  IF v_schedule IS NOT NULL THEN
+    v_sch_json := to_jsonb(v_schedule);
+    v_is_flex := COALESCE((v_sch_json->>'is_flexible')::boolean, true);
+    
+    IF v_is_flex THEN
+      v_cutoff := COALESCE((v_sch_json->>'flex_end')::time, '10:00:00'::time);
+    ELSE
+      v_cutoff := (COALESCE((v_sch_json->>'work_start')::time, '08:00:00'::time) + 
+                   make_interval(mins => COALESCE((v_sch_json->>'grace_period_minutes')::integer, 15)))::time;
+    END IF;
+
+    IF (now() AT TIME ZONE 'Asia/Jakarta')::time > v_cutoff THEN
+      v_status := 'late';
+    ELSE
+      v_status := 'present';
+    END IF;
+  ELSE
+    v_status := 'present';
+  END IF;
 
   INSERT INTO public.attendance_records(
     user_id, date, clock_in, clock_in_lat, clock_in_lng, status, notes, photo_url, work_mode, 
     clock_in_office_id, clock_in_office_name, clock_in_distance_meters
   )
   VALUES (
-    v_user, p_date, now(), p_lat, p_lng, v_status, p_notes, p_photo_url, p_work_mode, 
+    v_user_id, p_date, now(), p_lat, p_lng, v_status, p_notes, p_photo_url, p_work_mode, 
     v_office.id, v_office.name, v_distance
   ) 
   RETURNING * INTO v_row;
@@ -112,18 +157,43 @@ CREATE OR REPLACE FUNCTION public.clock_out_attendance(
 )
 RETURNS public.attendance_records LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
 DECLARE
-  v_user text := public.current_account_id();
+  v_user_text text := public.current_account_id();
+  v_user_id bigint;
   v_office public.office_locations;
   v_row public.attendance_records;
   v_distance double precision;
 BEGIN
   PERFORM public.validate_attendance_date(p_date);
-  IF v_user IS NULL THEN RAISE EXCEPTION 'USER_ACCOUNT_NOT_FOUND'; END IF;
+
+  SELECT id INTO v_user_id 
+  FROM public.user_accounts 
+  WHERE id::text = v_user_text 
+     OR lower(email) = lower(auth.jwt()->>'email')
+  LIMIT 1;
+
+  IF v_user_id IS NULL THEN
+    BEGIN
+      v_user_id := v_user_text::bigint;
+    EXCEPTION WHEN OTHERS THEN
+      v_user_id := NULL;
+    END;
+  END IF;
+
+  IF v_user_id IS NULL THEN 
+    RAISE EXCEPTION 'USER_ACCOUNT_NOT_FOUND: Akun pengguna tidak ditemukan.'; 
+  END IF;
+
+  v_user_text := v_user_id::text;
+
   IF p_lat IS NULL OR p_lng IS NULL OR p_lat NOT BETWEEN -90 AND 90 OR p_lng NOT BETWEEN -180 AND 180 THEN 
     RAISE EXCEPTION 'INVALID_COORDINATES'; 
   END IF;
 
-  SELECT * INTO v_row FROM public.attendance_records WHERE user_id = v_user AND date = p_date FOR UPDATE;
+  SELECT * INTO v_row 
+  FROM public.attendance_records 
+  WHERE user_id = v_user_id AND date = p_date 
+  FOR UPDATE;
+
   IF v_row.id IS NULL OR v_row.clock_in IS NULL OR v_row.clock_out IS NOT NULL THEN 
     RAISE EXCEPTION 'CLOCK_IN_NOT_FOUND_OR_ALREADY_OUT'; 
   END IF;
@@ -133,8 +203,8 @@ BEGIN
   WHERE is_active 
     AND (
       assignment_mode = 'all' 
-      OR v_user = ANY(assigned_user_ids)
-      OR (address LIKE '%[RESTRICTED_USERS:%' AND address LIKE '%' || v_user || '%')
+      OR v_user_text = ANY(assigned_user_ids)
+      OR (address LIKE '%[RESTRICTED_USERS:%' AND address LIKE '%' || v_user_text || '%')
     )
   ORDER BY public.distance_meters(p_lat, p_lng, latitude, longitude) 
   LIMIT 1;

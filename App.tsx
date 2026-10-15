@@ -185,7 +185,11 @@ export default function App() {
       <LoginPage
         onLoginSuccess={(user) => {
           setCurrentUser(user);
-          navigate('/attendance/report');
+          if (isHRAccount(user)) {
+            navigate('/attendance/report');
+          } else {
+            navigate('/requests');
+          }
         }}
       />
     );
@@ -201,38 +205,34 @@ export default function App() {
   const isAttendanceActive =
     location.pathname.startsWith('/attendance') || location.pathname === '/calendar';
 
-  const attendanceSubMenu = [
+  // Jika BUKAN grup HR / Admin, menu selain Request tidak ditampilkan sama sekali
+  const attendanceSubMenu = isHR ? [
     { label: 'Report', path: '/attendance/report', icon: FileText },
+    { label: 'Request Absen', path: '/attendance/requests', icon: Clock },
     { label: 'Calendar', path: '/attendance/calendar', icon: Calendar },
     ...(canView('Master Company') || canView('Master Department') || isHR
       ? [{ label: 'Radius Office', path: '/attendance/locations', icon: MapPin }]
       : []),
-  ];
+  ] : [];
 
-  const navWorkspacePrimary = [
+  const navWorkspacePrimary = isHR ? [
     ...(canView('Dashboard') ? [{ label: 'Dashboard', path: '/', icon: LayoutDashboard }] : []),
     ...(canView('Data Karyawan') ? [{ label: 'Data Karyawan', path: '/employees', icon: Users }] : []),
-  ];
+  ] : [];
 
-  const navWorkspaceSecondary: { label: string; path: string; icon: typeof LayoutDashboard; badge?: string }[] = [
+  const navWorkspaceSecondary: { label: string; path: string; icon: typeof LayoutDashboard; badge?: string }[] = isHR ? [
     ...(canView('Cuti & Izin')
       ? [{ label: 'Pengajuan & Approval', path: '/requests', icon: CheckCircle2 }]
       : []),
-    // Menu Payroll dinonaktifkan sementara (dikelola Finance, bukan HR)
-    // ...(canView('Payroll & Gaji')
-    //   ? [{ label: 'Payroll', path: '/payroll', icon: CreditCard }]
-    //   : []),
-    // Menu Rekrutmen dinonaktifkan sementara
-    // ...(canView('Rekrutmen')
-    //   ? [{ label: 'Rekrutmen', path: '/recruitment', icon: Briefcase }]
-    //   : []),
     ...(isHR || canView('Dashboard')
       ? [{ label: 'News & Pengumuman', path: '/news', icon: Megaphone }]
       : []),
+  ] : [
+    { label: 'Request & Approval', path: '/requests', icon: CheckCircle2 }
   ];
 
-  // Menu Administrasi: Hanya tampil jika modul diizinkan di matriks hak akses
-  const navAdmin = [
+  // Menu Administrasi: Hanya tampil jika user adalah tim HR / Admin
+  const navAdmin = isHR ? [
     ...(canView('Master Company') ? [{ label: 'Master Company', path: '/admin/companies', icon: Building2 }] : []),
     ...(canView('Master Department') ? [{ label: 'Master Department', path: '/admin/departments', icon: FolderTree }] : []),
     ...(canView('Hierarchy Approval') ? [{ label: 'Hierarchy Approval', path: '/admin/approval-hierarchy', icon: GitMerge }] : []),
@@ -241,13 +241,14 @@ export default function App() {
     ...(canView('Log Aktivitas') ? [{ label: 'Log Aktivitas', path: '/admin/activity-logs', icon: History }] : []),
     ...(canView('Laporan & Analitik') ? [{ label: 'Laporan & Analitik', path: '/analytics', icon: BarChart3 }] : []),
     ...(canView('Pengaturan Sistem') ? [{ label: 'Pengaturan', path: '/settings', icon: Settings }] : []),
-  ];
+  ] : [];
 
   // Breadcrumb label helper
   const getBreadcrumbLabel = () => {
     if (location.pathname === '/profile') return 'Profil Saya';
     if (location.pathname === '/news') return 'News & Pengumuman Karyawan';
     if (location.pathname === '/attendance' || location.pathname === '/attendance/report') return 'Absensi / Report';
+    if (location.pathname === '/attendance/requests') return 'Absensi / Request Absen';
     if (location.pathname === '/attendance/calendar' || location.pathname === '/calendar')
       return 'Absensi / Calendar';
     if (location.pathname === '/attendance/locations') return 'Absensi / Radius Office';
@@ -331,78 +332,80 @@ export default function App() {
                 );
               })}
 
-              {/* Absensi / Attendance with Expandable Sub-Menus */}
-              <div className="space-y-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAttendanceExpanded(!attendanceExpanded);
-                    if (!isAttendanceActive) {
-                      navigate('/attendance/report');
-                    }
-                  }}
-                  className={`w-full flex items-center justify-between rounded-xl px-3.5 py-2.5 text-sm font-medium transition-all ${
-                    isAttendanceActive
-                      ? attendanceExpanded
-                        ? 'bg-blue-50/80 text-[#12346a] font-semibold dark:bg-blue-950/40 dark:text-blue-300'
-                        : 'bg-[#12346a] text-white shadow-xs dark:bg-blue-600 dark:text-white'
-                      : 'text-slate-600 hover:bg-slate-100/80 hover:text-slate-900 dark:text-zinc-400 dark:hover:bg-[#18181c] dark:hover:text-zinc-100'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <Clock
-                      className={`h-4 w-4 shrink-0 ${
-                        isAttendanceActive && attendanceExpanded ? 'text-[#12346a] dark:text-blue-300' : ''
-                      }`}
-                    />
-                    <span>Absensi</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    {attendanceExpanded ? (
-                      <ChevronDown
+              {/* Absensi / Attendance with Expandable Sub-Menus (Hanya untuk Tim HR) */}
+              {isHR && (
+                <div className="space-y-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAttendanceExpanded(!attendanceExpanded);
+                      if (!isAttendanceActive) {
+                        navigate('/attendance/report');
+                      }
+                    }}
+                    className={`w-full flex items-center justify-between rounded-xl px-3.5 py-2.5 text-sm font-medium transition-all ${
+                      isAttendanceActive
+                        ? attendanceExpanded
+                          ? 'bg-blue-50/80 text-[#12346a] font-semibold dark:bg-blue-950/40 dark:text-blue-300'
+                          : 'bg-[#12346a] text-white shadow-xs dark:bg-blue-600 dark:text-white'
+                        : 'text-slate-600 hover:bg-slate-100/80 hover:text-slate-900 dark:text-zinc-400 dark:hover:bg-[#18181c] dark:hover:text-zinc-100'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <Clock
                         className={`h-4 w-4 shrink-0 ${
-                          isAttendanceActive && attendanceExpanded ? 'text-[#12346a] dark:text-blue-300' : 'opacity-75'
+                          isAttendanceActive && attendanceExpanded ? 'text-[#12346a] dark:text-blue-300' : ''
                         }`}
                       />
-                    ) : (
-                      <ChevronRight className="h-4 w-4 shrink-0 opacity-75" />
-                    )}
-                  </div>
-                </button>
-
-                {/* Sub Menu List: Report, Calendar, Radius Office */}
-                {attendanceExpanded && (
-                  <div className="ml-5 pl-3 border-l border-slate-200 dark:border-[#222225] space-y-1 py-1 transition-all">
-                    {attendanceSubMenu.map((sub) => {
-                      const SubIcon = sub.icon;
-                      const currentPath = location.pathname.replace(/\/$/, '');
-                      const isSubActive =
-                        currentPath === sub.path ||
-                        (sub.path === '/attendance/report' && currentPath === '/attendance') ||
-                        (sub.path === '/attendance/calendar' && currentPath === '/calendar');
-                      return (
-                        <NavLink
-                          key={sub.path}
-                          to={sub.path}
-                          onClick={() => setSidebarOpen(false)}
-                          className={`group flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-medium transition-all ${
-                            isSubActive
-                              ? 'bg-[#12346a] text-white shadow-xs font-semibold dark:bg-blue-600 dark:text-white'
-                              : 'text-slate-500 hover:bg-slate-100/70 hover:text-slate-900 dark:text-zinc-400 dark:hover:bg-[#18181c] dark:hover:text-zinc-200'
+                      <span>Absensi</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      {attendanceExpanded ? (
+                        <ChevronDown
+                          className={`h-4 w-4 shrink-0 ${
+                            isAttendanceActive && attendanceExpanded ? 'text-[#12346a] dark:text-blue-300' : 'opacity-75'
                           }`}
-                        >
-                          <SubIcon
-                            className={`h-3.5 w-3.5 shrink-0 transition-colors ${
-                              isSubActive ? 'text-white' : 'text-slate-400 dark:text-zinc-500 group-hover:text-[#12346a] dark:group-hover:text-blue-300'
+                        />
+                      ) : (
+                        <ChevronRight className="h-4 w-4 shrink-0 opacity-75" />
+                      )}
+                    </div>
+                  </button>
+
+                  {/* Sub Menu List: Report, Calendar, Radius Office */}
+                  {attendanceExpanded && (
+                    <div className="ml-5 pl-3 border-l border-slate-200 dark:border-[#222225] space-y-1 py-1 transition-all">
+                      {attendanceSubMenu.map((sub) => {
+                        const SubIcon = sub.icon;
+                        const currentPath = location.pathname.replace(/\/$/, '');
+                        const isSubActive =
+                          currentPath === sub.path ||
+                          (sub.path === '/attendance/report' && currentPath === '/attendance') ||
+                          (sub.path === '/attendance/calendar' && currentPath === '/calendar');
+                        return (
+                          <NavLink
+                            key={sub.path}
+                            to={sub.path}
+                            onClick={() => setSidebarOpen(false)}
+                            className={`group flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-medium transition-all ${
+                              isSubActive
+                                ? 'bg-[#12346a] text-white shadow-xs font-semibold dark:bg-blue-600 dark:text-white'
+                                : 'text-slate-500 hover:bg-slate-100/70 hover:text-slate-900 dark:text-zinc-400 dark:hover:bg-[#18181c] dark:hover:text-zinc-200'
                             }`}
-                          />
-                          <span>{sub.label}</span>
-                        </NavLink>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
+                          >
+                            <SubIcon
+                              className={`h-3.5 w-3.5 shrink-0 transition-colors ${
+                                isSubActive ? 'text-white' : 'text-slate-400 dark:text-zinc-500 group-hover:text-[#12346a] dark:group-hover:text-blue-300'
+                              }`}
+                            />
+                            <span>{sub.label}</span>
+                          </NavLink>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Secondary workspace items */}
               {navWorkspaceSecondary.map((item) => {
@@ -725,7 +728,9 @@ export default function App() {
             <Route
               path="/"
               element={
-                canView('Dashboard') ? (
+                !isHR ? (
+                  <Navigate to="/requests" replace />
+                ) : canView('Dashboard') ? (
                   <HRDashboard currentUser={currentUser} />
                 ) : (
                   <AccessDenied
@@ -739,7 +744,9 @@ export default function App() {
             <Route
               path="/employees"
               element={
-                canView('Data Karyawan') ? (
+                !isHR ? (
+                  <Navigate to="/requests" replace />
+                ) : canView('Data Karyawan') ? (
                   <EmployeeDataManager currentUser={currentUser} />
                 ) : (
                   <AccessDenied
@@ -755,7 +762,9 @@ export default function App() {
             <Route
               path="/attendance"
               element={
-                canView('Absensi & Presensi') ? (
+                !isHR ? (
+                  <Navigate to="/requests" replace />
+                ) : canView('Absensi & Presensi') ? (
                   <AttendanceReport currentUser={currentUser} />
                 ) : (
                   <AccessDenied
@@ -769,7 +778,9 @@ export default function App() {
             <Route
               path="/attendance/report"
               element={
-                canView('Absensi & Presensi') ? (
+                !isHR ? (
+                  <Navigate to="/requests" replace />
+                ) : canView('Absensi & Presensi') ? (
                   <AttendanceReport currentUser={currentUser} />
                 ) : (
                   <AccessDenied
@@ -783,7 +794,9 @@ export default function App() {
             <Route
               path="/attendance/clock"
               element={
-                canView('Absensi & Presensi') ? (
+                !isHR ? (
+                  <Navigate to="/requests" replace />
+                ) : canView('Absensi & Presensi') ? (
                   <AttendanceDashboard currentUser={currentUser} />
                 ) : (
                   <AccessDenied
@@ -797,7 +810,9 @@ export default function App() {
             <Route
               path="/attendance/calendar"
               element={
-                canView('Absensi & Presensi') ? (
+                !isHR ? (
+                  <Navigate to="/requests" replace />
+                ) : canView('Absensi & Presensi') ? (
                   <AttendanceCalendar />
                 ) : (
                   <AccessDenied
@@ -809,9 +824,15 @@ export default function App() {
               }
             />
             <Route
+              path="/attendance/requests"
+              element={<AttendanceRequest currentUser={currentUser} />}
+            />
+            <Route
               path="/attendance/locations"
               element={
-                canView('Master Company') || canView('Master Department') || isHR ? (
+                !isHR ? (
+                  <Navigate to="/requests" replace />
+                ) : canView('Master Company') || canView('Master Department') || isHR ? (
                   <AttendanceRadius />
                 ) : (
                   <AccessDenied
@@ -822,37 +843,23 @@ export default function App() {
                 )
               }
             />
-            <Route path="/calendar" element={<AttendanceCalendar />} />
-            <Route path="/news" element={<CompanyNewsManager currentUser={currentUser} />} />
+            <Route
+              path="/calendar"
+              element={!isHR ? <Navigate to="/requests" replace /> : <AttendanceCalendar />}
+            />
+            <Route
+              path="/news"
+              element={!isHR ? <Navigate to="/requests" replace /> : <CompanyNewsManager currentUser={currentUser} />}
+            />
 
             {/* Other Workspace Modules */}
             <Route
               path="/requests"
-              element={
-                canView('Cuti & Izin') ? (
-                  <AttendanceRequest currentUser={currentUser} />
-                ) : (
-                  <AccessDenied
-                    moduleName="Pengajuan & Approval"
-                    requiredAccess="Izin Pengajuan Cuti & Izin"
-                    currentUser={currentUser}
-                  />
-                )
-              }
+              element={<AttendanceRequest currentUser={currentUser} />}
             />
             <Route
               path="/approvals"
-              element={
-                canView('Cuti & Izin') ? (
-                  <AttendanceRequest currentUser={currentUser} />
-                ) : (
-                  <AccessDenied
-                    moduleName="Persetujuan Cuti & Izin"
-                    requiredAccess="Izin Approval Cuti & Izin"
-                    currentUser={currentUser}
-                  />
-                )
-              }
+              element={<AttendanceRequest currentUser={currentUser} />}
             />
             {/* Payroll Module (Dinonaktifkan sementara - diurus oleh Finance) */}
             <Route
@@ -869,7 +876,9 @@ export default function App() {
             <Route
               path="/admin/companies"
               element={
-                canView('Master Company') ? (
+                !isHR ? (
+                  <Navigate to="/requests" replace />
+                ) : canView('Master Company') ? (
                   <MasterCompany />
                 ) : (
                   <AccessDenied
@@ -883,7 +892,9 @@ export default function App() {
             <Route
               path="/admin/departments"
               element={
-                canView('Master Department') ? (
+                !isHR ? (
+                  <Navigate to="/requests" replace />
+                ) : canView('Master Department') ? (
                   <MasterDepartment />
                 ) : (
                   <AccessDenied
@@ -897,7 +908,9 @@ export default function App() {
             <Route
               path="/admin/approval-hierarchy"
               element={
-                canView('Hierarchy Approval') ? (
+                !isHR ? (
+                  <Navigate to="/requests" replace />
+                ) : canView('Hierarchy Approval') ? (
                   <ApprovalHierarchy currentUser={currentUser} />
                 ) : (
                   <AccessDenied
@@ -911,7 +924,9 @@ export default function App() {
             <Route
               path="/admin/permissions"
               element={
-                canView('Permission Menu') ? (
+                !isHR ? (
+                  <Navigate to="/requests" replace />
+                ) : canView('Permission Menu') ? (
                   <PermissionMenu currentUser={currentUser} />
                 ) : (
                   <AccessDenied
@@ -925,7 +940,9 @@ export default function App() {
             <Route
               path="/admin/accounts"
               element={
-                canView('Account Management') ? (
+                !isHR ? (
+                  <Navigate to="/requests" replace />
+                ) : canView('Account Management') ? (
                   <AccountManagement />
                 ) : (
                   <AccessDenied
@@ -939,7 +956,9 @@ export default function App() {
             <Route
               path="/admin/activity-logs"
               element={
-                canView('Log Aktivitas') ? (
+                !isHR ? (
+                  <Navigate to="/requests" replace />
+                ) : canView('Log Aktivitas') ? (
                   <ActivityLogsManager currentUser={currentUser} />
                 ) : (
                   <AccessDenied
@@ -953,7 +972,9 @@ export default function App() {
             <Route
               path="/analytics"
               element={
-                canView('Laporan & Analitik') ? (
+                !isHR ? (
+                  <Navigate to="/requests" replace />
+                ) : canView('Laporan & Analitik') ? (
                   <AnalyticsDashboard />
                 ) : (
                   <AccessDenied
@@ -967,7 +988,9 @@ export default function App() {
             <Route
               path="/settings"
               element={
-                canView('Pengaturan Sistem') ? (
+                !isHR ? (
+                  <Navigate to="/requests" replace />
+                ) : canView('Pengaturan Sistem') ? (
                   <SystemSettings currentUser={currentUser} />
                 ) : (
                   <AccessDenied

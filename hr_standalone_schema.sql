@@ -262,13 +262,23 @@ CREATE TABLE IF NOT EXISTS public.attendance_offices (
 -- ==============================================================================
 CREATE TABLE IF NOT EXISTS public.attendance_schedules (
     id BIGSERIAL PRIMARY KEY,
-    name TEXT NOT NULL DEFAULT 'Jam Kerja Reguler',
-    work_start TIME DEFAULT '08:30:00',
-    work_end TIME DEFAULT '17:30:00',
-    grace_period_minutes INTEGER DEFAULT 15,
+    name TEXT NOT NULL DEFAULT 'Jam Kerja Fleksibel',
+    work_start TIME DEFAULT '07:00:00',
+    work_end TIME DEFAULT '10:00:00',
+    grace_period_minutes INTEGER DEFAULT 180,
+    is_flexible BOOLEAN NOT NULL DEFAULT true,
+    flex_start TIME DEFAULT '07:00:00',
+    flex_end TIME DEFAULT '10:00:00',
+    required_work_hours NUMERIC DEFAULT 9,
     is_active BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+ALTER TABLE public.attendance_schedules 
+    ADD COLUMN IF NOT EXISTS is_flexible BOOLEAN NOT NULL DEFAULT true,
+    ADD COLUMN IF NOT EXISTS flex_start TIME NOT NULL DEFAULT '07:00:00',
+    ADD COLUMN IF NOT EXISTS flex_end TIME NOT NULL DEFAULT '10:00:00',
+    ADD COLUMN IF NOT EXISTS required_work_hours NUMERIC NOT NULL DEFAULT 9;
 
 CREATE TABLE IF NOT EXISTS public.attendance_settings (
     id BIGSERIAL PRIMARY KEY,
@@ -358,15 +368,32 @@ CREATE TABLE IF NOT EXISTS public.overtime_requests (
 CREATE TABLE IF NOT EXISTS public.attendance_correction_requests (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT REFERENCES public.user_accounts(id) ON DELETE CASCADE,
-    date DATE NOT NULL,
+    attendance_date DATE,
+    date DATE,
+    clock_in_time TIMESTAMPTZ,
+    clock_out_time TIMESTAMPTZ,
     requested_check_in TIMESTAMPTZ,
     requested_check_out TIMESTAMPTZ,
     reason TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'pending',
+    reviewer_id TEXT,
+    reviewer_note TEXT,
     approved_by TEXT,
     requested_at TIMESTAMPTZ DEFAULT NOW(),
+    reviewed_at TIMESTAMPTZ,
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+ALTER TABLE public.attendance_correction_requests
+    ADD COLUMN IF NOT EXISTS attendance_date DATE,
+    ADD COLUMN IF NOT EXISTS clock_in_time TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS clock_out_time TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS requested_check_in TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS requested_check_out TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS reviewer_id TEXT,
+    ADD COLUMN IF NOT EXISTS reviewer_note TEXT,
+    ADD COLUMN IF NOT EXISTS requested_at TIMESTAMPTZ DEFAULT NOW(),
+    ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMPTZ;
 
 CREATE TABLE IF NOT EXISTS public.reimbursements (
     id BIGSERIAL PRIMARY KEY,
@@ -383,14 +410,45 @@ CREATE TABLE IF NOT EXISTS public.reimbursements (
 CREATE TABLE IF NOT EXISTS public.attendance_requests (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT REFERENCES public.user_accounts(id) ON DELETE CASCADE,
-    type TEXT NOT NULL,
-    start_date DATE NOT NULL,
-    end_date DATE NOT NULL,
+    request_date DATE,
+    type TEXT DEFAULT 'dinas',
+    start_date DATE,
+    end_date DATE,
     total_days NUMERIC(4,1) DEFAULT 1,
+    latitude DOUBLE PRECISION,
+    longitude DOUBLE PRECISION,
+    photo_url TEXT,
     reason TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'pending',
+    reviewer_id TEXT,
+    reviewer_note TEXT,
+    requested_at TIMESTAMPTZ DEFAULT NOW(),
+    reviewed_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+ALTER TABLE public.attendance_requests
+    ADD COLUMN IF NOT EXISTS request_date DATE,
+    ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION,
+    ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION,
+    ADD COLUMN IF NOT EXISTS photo_url TEXT,
+    ADD COLUMN IF NOT EXISTS reviewer_id TEXT,
+    ADD COLUMN IF NOT EXISTS reviewer_note TEXT,
+    ADD COLUMN IF NOT EXISTS requested_at TIMESTAMPTZ DEFAULT NOW(),
+    ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMPTZ;
+
+CREATE TABLE IF NOT EXISTS public.attendance_request_settings (
+    id BOOLEAN PRIMARY KEY DEFAULT true CHECK(id),
+    period_type TEXT NOT NULL DEFAULT 'weekly',
+    period_days INTEGER NOT NULL DEFAULT 7,
+    enabled BOOLEAN NOT NULL DEFAULT true,
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_by TEXT
+);
+
+INSERT INTO public.attendance_request_settings (id, period_type, period_days, enabled)
+VALUES (true, 'weekly', 7, true)
+ON CONFLICT (id) DO NOTHING;
 
 -- ==============================================================================
 -- 10. AUDIT LOGS & COMPATIBILITY TABLES

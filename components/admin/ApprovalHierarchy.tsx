@@ -161,13 +161,13 @@ export const ApprovalHierarchy: React.FC<{ currentUser?: any }> = ({ currentUser
         }
         if (approver2) {
           updatePayload.attendance_hr_id = approver2.id;
-          updatePayload.manager_id = approver2.id;
         }
         if (approver3) {
-          updatePayload.vp_id = approver3.id;
+          updatePayload.manager_id = approver3.id;
           updatePayload.attendance_manager_id = approver3.id;
-          updatePayload.attendance_vp_id = approver3.id;
         }
+        updatePayload.vp_id = null;
+        updatePayload.attendance_vp_id = null;
 
         const { error: updErr } = await supabase
           .from('user_accounts')
@@ -406,22 +406,21 @@ export const ApprovalHierarchy: React.FC<{ currentUser?: any }> = ({ currentUser
                   <th className="pb-3 font-semibold">Karyawan (Pemohon)</th>
                   <th className="pb-3 font-semibold">Departemen & Jabatan</th>
                   <th className="pb-3 font-semibold">Level 1: Supervisor</th>
-                  <th className="pb-3 font-semibold">Manager</th>
-                  <th className="pb-3 font-semibold">HR</th>
-                  <th className="pb-3 font-semibold">VP</th>
+                  <th className="pb-3 font-semibold">Level 2: HR</th>
+                  <th className="pb-3 font-semibold">Level 3: Manager</th>
                   <th className="pb-3 font-semibold text-right">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/60">
                 {loading ? (
                   <tr>
-                    <td colSpan={7} className="py-8 text-center text-muted-foreground">
+                    <td colSpan={6} className="py-8 text-center text-muted-foreground">
                       Memuat data hierarki persetujuan...
                     </td>
                   </tr>
                 ) : filteredUsers.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-8 text-center text-muted-foreground">
+                    <td colSpan={6} className="py-8 text-center text-muted-foreground">
                       Tidak ada karyawan yang sesuai filter.
                     </td>
                   </tr>
@@ -450,7 +449,7 @@ export const ApprovalHierarchy: React.FC<{ currentUser?: any }> = ({ currentUser
                       {/* Level 1: Supervisor */}
                       <td className="py-3.5">
                         <span className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-medium ${
-                          u.supervisor_id 
+                          (u.attendance_supervisor_id || u.supervisor_id) 
                             ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200/60 dark:border-blue-900/60'
                             : 'bg-muted/60 text-muted-foreground border border-border/50'
                         }`}>
@@ -458,18 +457,7 @@ export const ApprovalHierarchy: React.FC<{ currentUser?: any }> = ({ currentUser
                         </span>
                       </td>
 
-                      {/* Level 2: Manager */}
-                      <td className="py-3.5">
-                        <span className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-medium ${
-                          u.manager_id 
-                            ? 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200/60 dark:border-purple-900/60'
-                            : 'bg-muted/60 text-muted-foreground border border-border/50'
-                        }`}>
-                          <span>{getApproverName(u.attendance_manager_id || u.manager_id)}</span>
-                        </span>
-                      </td>
-
-                      {/* Level 3: HR */}
+                      {/* Level 2: HR */}
                       <td className="py-3.5">
                         <span className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-medium ${
                           u.attendance_hr_id 
@@ -480,7 +468,17 @@ export const ApprovalHierarchy: React.FC<{ currentUser?: any }> = ({ currentUser
                         </span>
                       </td>
 
-                      <td className="py-3.5 text-foreground/80">{getApproverName(u.attendance_vp_id || u.vp_id)}</td>
+                      {/* Level 3: Manager */}
+                      <td className="py-3.5">
+                        <span className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-medium ${
+                          (u.attendance_manager_id || u.manager_id) 
+                            ? 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200/60 dark:border-purple-900/60'
+                            : 'bg-muted/60 text-muted-foreground border border-border/50'
+                        }`}>
+                          <span>{getApproverName(u.attendance_manager_id || u.manager_id)}</span>
+                        </span>
+                      </td>
+
                       {/* Aksi */}
                       <td className="py-3.5 text-right">
                         <button

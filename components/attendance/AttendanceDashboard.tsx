@@ -173,13 +173,26 @@ const ClockPanel: React.FC<{
       if (type === 'in') {
         const { error: upsertError } = await supabase.rpc('clock_in_attendance', { p_date: jakartaDate(now), p_lat: pos.lat, p_lng: pos.lng, p_status: isLate ? 'late' : 'present', p_work_mode: 'wfo' });
         if (upsertError) {
-          if (upsertError.message?.includes('current_account_id') && currentUser?.id) {
+          const errMsg = upsertError.message || '';
+          const isBusinessRuleError = errMsg.includes('OUTSIDE_OFFICE_RADIUS') || 
+                                     errMsg.includes('LOCATION_RESTRICTED') || 
+                                     errMsg.includes('NO_ACTIVE_OFFICE') || 
+                                     errMsg.includes('ATTENDANCE_ALREADY_EXISTS') ||
+                                     errMsg.includes('WFH_DISABLED') ||
+                                     errMsg.includes('INVALID_COORDINATES');
+
+          if (!isBusinessRuleError && currentUser?.id) {
+            console.warn('RPC clock_in_attendance fallback engaged due to DB error:', upsertError);
+            const userId = !isNaN(Number(currentUser.id)) ? Number(currentUser.id) : currentUser.id;
             const { error: fbErr } = await supabase.from('attendance_records').insert({
-              user_id: currentUser.id,
+              user_id: userId,
               date: jakartaDate(now),
               clock_in: now.toISOString(),
               clock_in_lat: pos.lat,
               clock_in_lng: pos.lng,
+              clock_in_office_id: (nearestLocation as any)?.id || null,
+              clock_in_office_name: nearestLocation?.name || null,
+              clock_in_distance_meters: nearestLocation?.distance ?? null,
               status: isLate ? 'late' : 'present',
               work_mode: 'wfo',
               notes: '[Kantor (WFO)]'
@@ -192,12 +205,19 @@ const ClockPanel: React.FC<{
       } else {
         const { error: updateError } = await supabase.rpc('clock_out_attendance', { p_date: jakartaDate(now), p_lat: pos.lat, p_lng: pos.lng });
         if (updateError) {
-          if (updateError.message?.includes('current_account_id') && currentUser?.id) {
+          const errMsg = updateError.message || '';
+          const isBusinessRuleError = errMsg.includes('OUTSIDE_OFFICE_RADIUS') || 
+                                     errMsg.includes('CLOCK_IN_NOT_FOUND_OR_ALREADY_OUT') ||
+                                     errMsg.includes('INVALID_COORDINATES');
+
+          if (!isBusinessRuleError && currentUser?.id) {
+            console.warn('RPC clock_out_attendance fallback engaged due to DB error:', updateError);
             const todayStr = jakartaDate(now);
+            const userId = !isNaN(Number(currentUser.id)) ? Number(currentUser.id) : currentUser.id;
             const { data: rec } = await supabase
               .from('attendance_records')
               .select('id, clock_in')
-              .eq('user_id', currentUser.id)
+              .eq('user_id', userId)
               .eq('date', todayStr)
               .is('clock_out', null)
               .maybeSingle();
@@ -210,6 +230,9 @@ const ClockPanel: React.FC<{
                 clock_out: now.toISOString(),
                 clock_out_lat: pos.lat,
                 clock_out_lng: pos.lng,
+                clock_out_office_id: (nearestLocation as any)?.id || null,
+                clock_out_office_name: nearestLocation?.name || null,
+                clock_out_distance_meters: nearestLocation?.distance ?? null,
                 total_work_minutes: mins,
                 work_duration_minutes: mins,
                 total_overtime_minutes: ovt,

@@ -109,8 +109,47 @@ const SKB_COLLECTIVE_LEAVE_DAYS: Record<number, number> = {
   2027: 8,
 };
 
+export const SKB_COLLECTIVE_LEAVE_DATES: Record<number, string[]> = {
+  2025: ['01-28', '03-03', '03-04', '03-07', '03-28', '04-01', '04-02', '05-13', '05-30', '12-26'],
+  2026: ['02-16', '03-18', '03-20', '03-23', '03-24', '05-15', '05-28', '12-24'],
+  2027: ['02-05', '03-09', '03-12', '03-15', '03-25', '05-18', '05-19', '12-24'],
+};
+
 export function collectiveLeaveDaysForYear(year: number): number {
   return SKB_COLLECTIVE_LEAVE_DAYS[year] ?? DEFAULT_COLLECTIVE_LEAVE_DAYS;
+}
+
+/**
+ * Menghitung jumlah hari cuti bersama resmi yang jatuh SETELAH tanggal genap 1 tahun (anniversary).
+ * Karyawan yang baru berhak cuti di tahun berjalan tidak dipotong cuti bersama yang sudah lewat sebelum anniversary.
+ */
+export function getCollectiveLeaveDaysAfterDate(year: number, joinMonth: number, joinDateStr?: string | null): number {
+  if (!joinDateStr) {
+    const total = collectiveLeaveDaysForYear(year);
+    const remainingMonths = Math.max(0, 12 - joinMonth);
+    return Math.max(0, Math.round((remainingMonths / 12) * total));
+  }
+  const joinDate = new Date(joinDateStr);
+  if (isNaN(joinDate.getTime())) return 0;
+
+  const anniversary = new Date(year, joinDate.getMonth(), joinDate.getDate());
+  const dates = SKB_COLLECTIVE_LEAVE_DATES[year];
+  if (!dates) {
+    const total = collectiveLeaveDaysForYear(year);
+    const remainingMonths = Math.max(0, 12 - (joinDate.getMonth() + 1));
+    return Math.max(0, Math.round((remainingMonths / 12) * total));
+  }
+
+  let count = 0;
+  for (const dateSuffix of dates) {
+    const [m, d] = dateSuffix.split('-').map(Number);
+    const cDate = new Date(year, m - 1, d);
+    const dow = cDate.getDay();
+    if (cDate >= anniversary && dow !== 0 && dow !== 6) {
+      count++;
+    }
+  }
+  return count;
 }
 
 /**
@@ -384,10 +423,17 @@ export function calculateEmployeeLeaveQuota(
     eligibilityNote = 'Jenis kontrak tidak dikenali. Minta HR memperbaiki data kepegawaian.';
   }
 
+  // Prorata Cuti Bersama: Untuk PKWTT tahun pertama (baru genap 1 tahun di tahun berjalan),
+  // cuti bersama yang sudah lewat sebelum tanggal anniversary TIDAK memotong hak cuti karyawan.
+  let actualCollectiveDeduction = collectiveLeaveDeduction;
+  if (contractType === 'PKWTT' && (joinYear + 1) === year) {
+    actualCollectiveDeduction = getCollectiveLeaveDaysAfterDate(year, joinMonth, joinDateStr);
+  }
+
   // Hitung total sisa saldo cuti
   const validCarryForward = carryForwardExpired ? 0 : carryForwardQuota;
   const grossQuota = baseQuota + validCarryForward + totalAdjustmentDays;
-  const deductions = collectiveLeaveDeduction + leaveTakenDays;
+  const deductions = actualCollectiveDeduction + leaveTakenDays;
   const remainingBalance = Math.max(0, grossQuota - deductions);
 
   return {
@@ -406,7 +452,7 @@ export function calculateEmployeeLeaveQuota(
     proratedQuota,
     carryForwardQuota,
     carryForwardExpired,
-    collectiveLeaveDeduction,
+    collectiveLeaveDeduction: actualCollectiveDeduction,
     leaveTakenDays,
     totalAdjustmentDays,
     remainingBalance,
