@@ -28,7 +28,15 @@ import {
   Paperclip,
   Check,
   X,
-  Database
+  Database,
+  ChevronDown,
+  UserCheck,
+  Briefcase,
+  Scale,
+  FileCheck2,
+  BadgeCheck,
+  ArrowRight,
+  HelpCircle
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../../lib/supabaseClient';
@@ -72,6 +80,51 @@ interface EmployeeAccount {
   status?: string;
 }
 
+export const VIOLATION_PRESETS = [
+  {
+    title: 'Mangkir Kerja 3+ Hari',
+    category: 'Kedisiplinan & Presensi' as WarningViolationCategory,
+    defaultLevel: 'SP 1' as WarningLetterLevel,
+    chronologyTemplate: 'Karyawan tidak hadir bekerja tanpa keterangan yang sah (mangkir / alpha) selama 3 (tiga) hari berturut-turut pada tanggal [isi tanggal], serta tidak dapat dihubungi oleh atasan langsung maupun pihak HRD, melanggar ketentuan Pasal 24 Peraturan Perusahaan.',
+    consequencesTemplate: '1. Pemotongan tunjangan kehadiran secara proporsional sesuai jumlah hari mangkir.\n2. Wajib melapor dan mengikuti pembinaan berkala bersama Atasan Langsung setiap minggu.\n3. Apabila mengulangi pelanggaran serupa dalam kurun 6 bulan, sanksi akan ditingkatkan ke SP 2.'
+  },
+  {
+    title: 'Keterlambatan Kronis (>5x)',
+    category: 'Kedisiplinan & Presensi' as WarningViolationCategory,
+    defaultLevel: 'Surat Teguran' as WarningLetterLevel,
+    chronologyTemplate: 'Karyawan tercatat melakukan keterlambatan jam masuk kerja lebih dari 5 (lima) kali dalam periode 1 (satu) bulan berjalan tanpa persetujuan tertulis dari atasan langsung, melanggar ketentuan jam operasional kantor.',
+    consequencesTemplate: '1. Diberikan catatan teguran tertulis dalam berkas personalia karyawan.\n2. Evaluasi jam kehadiran harian bersama Section Head selama 30 hari ke depan.'
+  },
+  {
+    title: 'Pelanggaran K3 & APD',
+    category: 'Pelanggaran SOP & Tata Tertib' as WarningViolationCategory,
+    defaultLevel: 'SP 1' as WarningLetterLevel,
+    chronologyTemplate: 'Karyawan tidak menggunakan Alat Pelindung Diri (APD) standar keselamatan kerja (Safety Helmet & Safety Shoes) saat bertugas di area muat material berat, yang berpotensi membahayakan keselamatan diri dan rekan kerja.',
+    consequencesTemplate: '1. Kewajiban mengikuti kembali sesi induksi K3 internal selama 1 sesi penuh.\n2. Peringatan keras dan penugasan dalam pengawasan ketat petugas K3 lapangan.'
+  },
+  {
+    title: 'Pengabaian Instruksi Kerja',
+    category: 'Pelanggaran SOP & Tata Tertib' as WarningViolationCategory,
+    defaultLevel: 'SP 2' as WarningLetterLevel,
+    chronologyTemplate: 'Karyawan dengan sengaja tidak menjalankan prosedur operasional baku (SOP) pekerjaan yang telah diinstruksikan secara tertulis oleh atasan langsung, sehingga menyebabkan kendala pada deliverable operasional.',
+    consequencesTemplate: '1. Penundaan evaluasi berkala kenaikan golongan kerja.\n2. Pengawasan langsung lembar kerja harian (daily log sheet) oleh Manager Departemen.'
+  },
+  {
+    title: 'Pelanggaran Kode Etik',
+    category: 'Kode Etik & Integritas' as WarningViolationCategory,
+    defaultLevel: 'SP 3' as WarningLetterLevel,
+    chronologyTemplate: 'Karyawan terbukti melakukan tindakan pertikaian fisik / perkataan tidak pantas yang mengganggu ketertiban di lingkungan kerja, melanggar Kode Etik Integritas Perusahaan dan Peraturan Perusahaan Tingkat Berat.',
+    consequencesTemplate: '1. Skorsing sementara selama proses investigasi manajemen berlangsung.\n2. Merupakan peringatan terakhir sebelum sanksi Pemutusan Hubungan Kerja (PHK) apabila terjadi pelanggaran disiplin kembali.'
+  },
+  {
+    title: 'Kelalaian Fasilitas / Aset',
+    category: 'Kelalaian Fasilitas / Finansial' as WarningViolationCategory,
+    defaultLevel: 'SP 1' as WarningLetterLevel,
+    chronologyTemplate: 'Karyawan lalai dalam memelihara dan mengamankan aset operasional kantor yang dipercayakan kepadanya, mengakibatkan kerusakan unit peralatan yang menimbulkan hambatan kerja.',
+    consequencesTemplate: '1. Tanggung jawab pemulihan aset sesuai prosedur internal perusahaan.\n2. Evaluasi pemakaian fasilitas perusahaan selama 3 bulan.'
+  }
+];
+
 export const EmployeeWarningManager: React.FC<EmployeeWarningManagerProps> = ({ currentUser }) => {
   const [records, setRecords] = useState<WarningLetterRecord[]>([]);
   const [employees, setEmployees] = useState<EmployeeAccount[]>([]);
@@ -96,6 +149,10 @@ export const EmployeeWarningManager: React.FC<EmployeeWarningManagerProps> = ({ 
   const [selectedRecord, setSelectedRecord] = useState<WarningLetterRecord | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [revokeReason, setRevokeReason] = useState('');
+
+  // Searchable Employee Combobox State
+  const [empSearchInput, setEmpSearchInput] = useState('');
+  const [empDropdownOpen, setEmpDropdownOpen] = useState(false);
 
   // Form State
   const [formData, setFormData] = useState<{
@@ -255,6 +312,8 @@ export const EmployeeWarningManager: React.FC<EmployeeWarningManagerProps> = ({ 
     const newNumber = generateLetterNumber(initialLevel, records);
     setIsEditing(false);
     setSelectedRecord(null);
+    setEmpSearchInput('');
+    setEmpDropdownOpen(false);
     setFormData({
       letterNumber: newNumber,
       employeeId: '',
@@ -270,7 +329,7 @@ export const EmployeeWarningManager: React.FC<EmployeeWarningManagerProps> = ({ 
       validFrom: today,
       validUntil: calculateValidUntil(today),
       chronology: '',
-      consequences: '1. Pemotongan tunjangan terkait sesuai kebijakan perusahaan.\n2. Pembinaan intensif dan evaluasi berkala oleh atasan langsung.\n3. Apabila melakukan pelanggaran disiplin kembali, akan dikenakan sanksi tingkat berikutnya.',
+      consequences: '1. Pemotongan tunjangan kehadiran secara proporsional sesuai hari pelanggaran.\n2. Pembinaan intensif dan evaluasi mingguan bersama atasan langsung.\n3. Apabila terjadi pelanggaran kembali dalam kurun waktu 6 bulan, sanksi ditingkatkan ke tingkat berikutnya.',
       issuerName: currentUser?.fullName || currentUser?.name || 'HR Manager',
       issuerTitle: currentUser?.jobTitle || 'HR Manager',
       witnessName: '',
@@ -284,6 +343,8 @@ export const EmployeeWarningManager: React.FC<EmployeeWarningManagerProps> = ({ 
   const handleOpenEdit = (rec: WarningLetterRecord) => {
     setIsEditing(true);
     setSelectedRecord(rec);
+    setEmpSearchInput('');
+    setEmpDropdownOpen(false);
     setFormData({
       id: rec.id,
       letterNumber: rec.letterNumber,
@@ -310,8 +371,34 @@ export const EmployeeWarningManager: React.FC<EmployeeWarningManagerProps> = ({ 
     setCreateModalOpen(true);
   };
 
-  // Handle Employee Dropdown Change
-  const handleSelectEmployee = (empId: string) => {
+  // Filtered employee suggestions for combobox
+  const filteredEmpList = useMemo(() => {
+    if (!empSearchInput.trim()) return employees.slice(0, 10);
+    const q = empSearchInput.toLowerCase().trim();
+    return employees.filter(e =>
+      (e.full_name && e.full_name.toLowerCase().includes(q)) ||
+      (e.employee_code && e.employee_code.toLowerCase().includes(q)) ||
+      (e.department && e.department.toLowerCase().includes(q)) ||
+      (e.company && e.company.toLowerCase().includes(q))
+    ).slice(0, 10);
+  }, [employees, empSearchInput]);
+
+  // Apply Violation Preset
+  const handleApplyPreset = (preset: typeof VIOLATION_PRESETS[0]) => {
+    const today = formData.incidentDate || formData.issuedDate || new Date().toISOString().split('T')[0];
+    const chronology = preset.chronologyTemplate.replace('[isi tanggal]', formatDateIndo(today));
+    setFormData(prev => ({
+      ...prev,
+      violationCategory: preset.category,
+      spLevel: prev.spLevel || preset.defaultLevel,
+      chronology: chronology,
+      consequences: preset.consequencesTemplate
+    }));
+    toast.info(`Template kasus "${preset.title}" diterapkan ke formulir.`);
+  };
+
+  // Handle Employee Selection
+  const handleSelectEmployee = (empId: string | number) => {
     const emp = employees.find(e => String(e.id) === String(empId));
     if (!emp) return;
 
@@ -324,6 +411,8 @@ export const EmployeeWarningManager: React.FC<EmployeeWarningManagerProps> = ({ 
       department: emp.department || '',
       jobTitle: emp.job_title || ''
     }));
+    setEmpDropdownOpen(false);
+    setEmpSearchInput('');
   };
 
   // Handle Form Submit
@@ -1070,291 +1159,694 @@ export const EmployeeWarningManager: React.FC<EmployeeWarningManagerProps> = ({ 
       {/* MODAL 1: CREATE / EDIT WARNING LETTER */}
       {/* ========================================================================= */}
       <Dialog open={createModalOpen} onOpenChange={setCreateModalOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-0">
-          <div className="sticky top-0 z-20 bg-white dark:bg-[#0c0c0e] px-6 py-4 border-b border-slate-200 dark:border-[#222225] flex items-center justify-between">
-            <div>
-              <DialogTitle className="text-base font-bold text-slate-900 dark:text-zinc-100 flex items-center gap-2">
-                <FileWarning className="h-5 w-5 text-[#12346a] dark:text-blue-400" />
-                <span>{isEditing ? 'Perbarui Catatan SP Karyawan' : 'Terbitkan Surat Peringatan (SP) Baru'}</span>
-              </DialogTitle>
-              <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
-                Formulir resmi pendataan sanksi disipliner dan pembinaan karyawan The Gesit Companies.
-              </DialogDescription>
+        <DialogContent
+          showCloseButton={false}
+          className="sm:max-w-5xl md:max-w-5xl lg:max-w-5xl w-full max-h-[92vh] overflow-hidden p-0 border-slate-200/80 dark:border-[#222225] shadow-2xl rounded-2xl flex flex-col"
+        >
+          {/* Header */}
+          <div className="sticky top-0 z-30 bg-white/95 dark:bg-[#0c0c0e]/95 backdrop-blur-md px-6 py-4 border-b border-slate-200/80 dark:border-[#222225] flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-[#12346a] text-white flex items-center justify-center shadow-xs">
+                <Scale className="h-5 w-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-base font-bold text-slate-900 dark:text-zinc-100 flex items-center gap-2.5">
+                  <span>{isEditing ? 'Perbarui Catatan Surat Peringatan' : 'Penerbitan Surat Peringatan (SP)'}</span>
+                  <Badge className="bg-[#12346a]/10 text-[#12346a] dark:bg-blue-900/30 dark:text-blue-300 border-none text-[10px] font-semibold">
+                    HCM & Legal Disciplinary
+                  </Badge>
+                </DialogTitle>
+                <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5 normal-case tracking-normal">
+                  Dokumen resmi penegakan disiplin kerja dan pembinaan personalia sesuai PP No. 35/2021 & Peraturan Perusahaan.
+                </p>
+              </div>
             </div>
-            <button
-              onClick={() => setCreateModalOpen(false)}
-              className="text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200"
-            >
-              <X className="h-5 w-5" />
-            </button>
+            <div className="flex items-center gap-3">
+              <span className="hidden sm:inline-flex text-[11px] text-slate-600 dark:text-zinc-400 font-mono bg-slate-100 dark:bg-zinc-800/60 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-zinc-700">
+                PP No. 35/2021
+              </span>
+              <button
+                type="button"
+                onClick={() => setCreateModalOpen(false)}
+                className="h-8 w-8 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-zinc-800 dark:hover:text-zinc-200 flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
           </div>
 
-          <form onSubmit={handleSaveRecord} className="p-6 space-y-4">
-            {/* Employee Selector */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700 dark:text-zinc-300 flex items-center justify-between">
-                <span>Pilih Karyawan Yang Diberikan Sanksi <span className="text-rose-500">*</span></span>
-                {selectedEmployeeActiveSp && selectedEmployeeActiveSp.length > 0 && (
-                  <span className="text-[11px] text-amber-600 dark:text-amber-400 font-semibold flex items-center gap-1">
-                    <AlertTriangle className="h-3 w-3" />
-                    Karyawan ini memiliki {selectedEmployeeActiveSp.length} SP aktif!
-                  </span>
-                )}
-              </label>
-              <select
-                value={formData.employeeId}
-                onChange={e => handleSelectEmployee(e.target.value)}
-                disabled={isEditing}
-                className="w-full text-xs h-9.5 px-3 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-slate-800 dark:text-zinc-200 font-medium focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-60"
-              >
-                <option value="">-- Pilih Nama Karyawan atau NIP --</option>
-                {employees.map(emp => (
-                  <option key={emp.id} value={emp.id}>
-                    {emp.full_name} ({emp.employee_code || 'N/A'}) - {emp.company || 'The Gesit Companies'} - {emp.department || '-'}
-                  </option>
-                ))}
-              </select>
-            </div>
+          {/* Form Body - Scrollable 2-Column Layout */}
+          <div className="flex-1 overflow-y-auto p-6 [scrollbar-width:thin]">
+            <form id="sp-form" onSubmit={handleSaveRecord} className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              {/* LEFT COLUMN: Input Dossier (7 Cols) */}
+              <div className="lg:col-span-7 space-y-5">
+                
+                {/* SECTION 1: IDENTITAS KARYAWAN */}
+                <div className="rounded-2xl border border-slate-200/80 dark:border-[#222225] bg-white dark:bg-[#0c0c0e] p-4.5 space-y-3.5 shadow-2xs">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-zinc-800/60">
+                    <div className="flex items-center gap-2 text-xs font-bold text-slate-800 dark:text-zinc-200">
+                      <UserCheck className="h-4 w-4 text-[#12346a] dark:text-blue-400" />
+                      <span>1. Data Karyawan & Registrasi Surat</span>
+                    </div>
+                    {formData.employeeName && !isEditing && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFormData(prev => ({
+                            ...prev,
+                            employeeId: '',
+                            employeeCode: '',
+                            employeeName: '',
+                            company: '',
+                            department: '',
+                            jobTitle: ''
+                          }));
+                          setEmpSearchInput('');
+                        }}
+                        className="text-[11px] text-primary hover:underline font-semibold"
+                      >
+                        Ganti Karyawan
+                      </button>
+                    )}
+                  </div>
 
-            {/* Readonly Employee Info Pill */}
-            {formData.employeeName && (
-              <div className="rounded-xl bg-slate-50 dark:bg-zinc-900/60 p-3 border border-slate-200/80 dark:border-zinc-800/80 grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
-                <div>
-                  <span className="text-slate-400 block text-[10px]">Nama Karyawan:</span>
-                  <span className="font-bold text-slate-800 dark:text-zinc-200">{formData.employeeName}</span>
+                  {/* Searchable Picker when not selected */}
+                  {!formData.employeeId ? (
+                    <div className="space-y-2">
+                      <label className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
+                        Cari Nama Karyawan atau NIP <span className="text-rose-500">*</span>
+                      </label>
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                        <Input
+                          type="text"
+                          placeholder="Ketik nama karyawan atau NIP..."
+                          value={empSearchInput}
+                          onChange={e => {
+                            setEmpSearchInput(e.target.value);
+                            setEmpDropdownOpen(true);
+                          }}
+                          onFocus={() => setEmpDropdownOpen(true)}
+                          className="pl-9 h-9.5 text-xs rounded-xl"
+                        />
+                      </div>
+
+                      {/* Dropdown suggestions */}
+                      {empDropdownOpen && (
+                        <div className="rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-lg max-h-56 overflow-y-auto divide-y divide-slate-100 dark:divide-zinc-800 mt-1">
+                          {filteredEmpList.length === 0 ? (
+                            <div className="p-3 text-center text-xs text-slate-400">
+                              Tidak ada karyawan yang cocok dengan pencarian "{empSearchInput}"
+                            </div>
+                          ) : (
+                            filteredEmpList.map(emp => (
+                              <button
+                                key={emp.id}
+                                type="button"
+                                onClick={() => handleSelectEmployee(emp.id)}
+                                className="w-full text-left p-2.5 hover:bg-slate-50 dark:hover:bg-zinc-800/80 transition-colors flex items-center justify-between gap-3 text-xs cursor-pointer"
+                              >
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  <Avatar className="h-7 w-7 rounded-lg shrink-0">
+                                    <AvatarFallback className="bg-[#12346a] text-white font-bold text-[10px]">
+                                      {emp.full_name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                  <div className="min-w-0">
+                                    <div className="font-bold text-slate-800 dark:text-zinc-200 truncate">{emp.full_name}</div>
+                                    <div className="text-[10px] text-slate-400 flex items-center gap-1.5">
+                                      <span className="font-mono">{emp.employee_code || '-'}</span>
+                                      <span>&bull;</span>
+                                      <span className="truncate">{emp.department || '-'}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-400 font-medium shrink-0 max-w-[120px] truncate">
+                                  {emp.company || 'The Gesit Companies'}
+                                </span>
+                              </button>
+                            ))
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    /* High-end Selected Employee Card */
+                    <div className="rounded-xl border border-slate-200/90 dark:border-zinc-800 bg-slate-50/70 dark:bg-zinc-900/50 p-3.5 space-y-2">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <Avatar className="h-10 w-10 rounded-xl border border-slate-200 dark:border-zinc-700 shadow-2xs">
+                            <AvatarFallback className="bg-[#12346a] text-white font-bold text-xs">
+                              {formData.employeeName.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="min-w-0">
+                            <h4 className="font-bold text-slate-900 dark:text-zinc-100 text-sm truncate">
+                              {formData.employeeName}
+                            </h4>
+                            <div className="text-[11px] text-slate-500 dark:text-zinc-400 flex items-center gap-2 mt-0.5">
+                              <span className="font-mono font-bold bg-white dark:bg-zinc-800 px-1.5 py-0.5 rounded border border-slate-200 dark:border-zinc-700 text-slate-800 dark:text-zinc-200">
+                                {formData.employeeCode || '-'}
+                              </span>
+                              <span>&bull;</span>
+                              <span className="truncate font-medium">{formData.jobTitle || 'Staff Karyawan'}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <Badge variant="outline" className="text-[10px] bg-white dark:bg-zinc-800 font-semibold border-slate-200 dark:border-zinc-700 shrink-0">
+                          {formData.company || 'The Gesit Companies'}
+                        </Badge>
+                      </div>
+
+                      {/* Active SP Alert if any */}
+                      {selectedEmployeeActiveSp && selectedEmployeeActiveSp.length > 0 && (
+                        <div className="mt-2 rounded-lg bg-amber-500/10 border border-amber-500/30 p-2.5 text-[11px] text-amber-800 dark:text-amber-300 flex items-center gap-2">
+                          <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+                          <div>
+                            <span className="font-bold">Peringatan Rekam Disiplin:</span> Karyawan ini memegang{' '}
+                            <strong>{selectedEmployeeActiveSp[0].spLevel} aktif</strong> hingga{' '}
+                            <strong>{formatDateIndo(selectedEmployeeActiveSp[0].validUntil)}</strong>. Disarankan menaikkan tingkat ke SP berikutnya.
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Nomor Surat Formatter */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
+                          Nomor Registrasi Surat <span className="text-rose-500">*</span>
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newNo = generateLetterNumber(formData.spLevel, records);
+                            setFormData(prev => ({ ...prev, letterNumber: newNo }));
+                            toast.success('Nomor surat di-generate otomatis.');
+                          }}
+                          className="text-[10px] text-primary hover:underline font-semibold"
+                        >
+                          Generate Ulang
+                        </button>
+                      </div>
+                      <Input
+                        type="text"
+                        value={formData.letterNumber}
+                        onChange={e => setFormData(prev => ({ ...prev, letterNumber: e.target.value }))}
+                        className="font-mono text-xs h-9 rounded-xl bg-white dark:bg-zinc-900 font-semibold"
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
+                        Departemen / Divisi
+                      </label>
+                      <Input
+                        type="text"
+                        value={formData.department}
+                        onChange={e => setFormData(prev => ({ ...prev, department: e.target.value }))}
+                        placeholder="Departemen karyawan"
+                        className="text-xs h-9 rounded-xl bg-slate-50/50 dark:bg-zinc-900"
+                      />
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <span className="text-slate-400 block text-[10px]">NIP:</span>
-                  <span className="font-mono font-semibold text-slate-800 dark:text-zinc-200">{formData.employeeCode || '-'}</span>
+
+                {/* SECTION 2: KLASIFIKASI TINGKAT SP (VISUAL CARDS) */}
+                <div className="rounded-2xl border border-slate-200/80 dark:border-[#222225] bg-white dark:bg-[#0c0c0e] p-4.5 space-y-3.5 shadow-2xs">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-zinc-800/60">
+                    <div className="flex items-center gap-2 text-xs font-bold text-slate-800 dark:text-zinc-200">
+                      <ShieldAlert className="h-4 w-4 text-[#12346a] dark:text-blue-400" />
+                      <span>2. Tingkat & Klasifikasi Sanksi</span>
+                    </div>
+                    <span className="text-[10px] text-slate-400">Pilih salah satu tingkatan</span>
+                  </div>
+
+                  {/* 4 Cards Grid */}
+                  <div className="grid grid-cols-2 gap-2.5">
+                    {/* Card 1: Surat Teguran */}
+                    <div
+                      onClick={() => {
+                        setFormData(prev => ({
+                          ...prev,
+                          spLevel: 'Surat Teguran',
+                          letterNumber: !isEditing ? generateLetterNumber('Surat Teguran', records) : prev.letterNumber
+                        }));
+                      }}
+                      className={`rounded-xl p-3 border cursor-pointer transition-all ${
+                        formData.spLevel === 'Surat Teguran'
+                          ? 'border-sky-500 bg-sky-50/80 dark:bg-sky-950/40 ring-2 ring-sky-500/20'
+                          : 'border-slate-200 dark:border-zinc-800 hover:border-slate-300 dark:hover:border-zinc-700 bg-white dark:bg-zinc-900/40'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-sky-800 dark:text-sky-300">Surat Teguran</span>
+                        {formData.spLevel === 'Surat Teguran' ? (
+                          <BadgeCheck className="h-4 w-4 text-sky-600 dark:text-sky-400" />
+                        ) : (
+                          <span className="text-[10px] text-slate-400 font-mono">Tahap Awal</span>
+                        )}
+                      </div>
+                      <div className="text-[10px] text-slate-500 dark:text-zinc-400 mt-1 leading-snug">
+                        Teguran tertulis pembinaan awal atas disiplin kerja ringan sebelum sanksi SP.
+                      </div>
+                    </div>
+
+                    {/* Card 2: SP 1 */}
+                    <div
+                      onClick={() => {
+                        setFormData(prev => ({
+                          ...prev,
+                          spLevel: 'SP 1',
+                          letterNumber: !isEditing ? generateLetterNumber('SP 1', records) : prev.letterNumber
+                        }));
+                      }}
+                      className={`rounded-xl p-3 border cursor-pointer transition-all ${
+                        formData.spLevel === 'SP 1'
+                          ? 'border-amber-500 bg-amber-50/80 dark:bg-amber-950/40 ring-2 ring-amber-500/20'
+                          : 'border-slate-200 dark:border-zinc-800 hover:border-slate-300 dark:hover:border-zinc-700 bg-white dark:bg-zinc-900/40'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1">
+                          <span className="h-2 w-2 rounded-full bg-amber-500" />
+                          SP 1 (Pertama)
+                        </span>
+                        {formData.spLevel === 'SP 1' ? (
+                          <BadgeCheck className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                        ) : (
+                          <span className="text-[10px] text-amber-600 font-medium">6 Bulan</span>
+                        )}
+                      </div>
+                      <div className="text-[10px] text-slate-500 dark:text-zinc-400 mt-1 leading-snug">
+                        Peringatan pertama formal berbobot sedang. Masa berlaku 6 bulan kalender.
+                      </div>
+                    </div>
+
+                    {/* Card 3: SP 2 */}
+                    <div
+                      onClick={() => {
+                        setFormData(prev => ({
+                          ...prev,
+                          spLevel: 'SP 2',
+                          letterNumber: !isEditing ? generateLetterNumber('SP 2', records) : prev.letterNumber
+                        }));
+                      }}
+                      className={`rounded-xl p-3 border cursor-pointer transition-all ${
+                        formData.spLevel === 'SP 2'
+                          ? 'border-orange-500 bg-orange-50/80 dark:bg-orange-950/40 ring-2 ring-orange-500/20'
+                          : 'border-slate-200 dark:border-zinc-800 hover:border-slate-300 dark:hover:border-zinc-700 bg-white dark:bg-zinc-900/40'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-orange-800 dark:text-orange-300 flex items-center gap-1">
+                          <AlertTriangle className="h-3 w-3 text-orange-500" />
+                          SP 2 (Kedua)
+                        </span>
+                        {formData.spLevel === 'SP 2' ? (
+                          <BadgeCheck className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+                        ) : (
+                          <span className="text-[10px] text-orange-600 font-medium">Eskalasi</span>
+                        )}
+                      </div>
+                      <div className="text-[10px] text-slate-500 dark:text-zinc-400 mt-1 leading-snug">
+                        Pengulangan pelanggaran / pengawasan intensif manajerial.
+                      </div>
+                    </div>
+
+                    {/* Card 4: SP 3 */}
+                    <div
+                      onClick={() => {
+                        setFormData(prev => ({
+                          ...prev,
+                          spLevel: 'SP 3',
+                          letterNumber: !isEditing ? generateLetterNumber('SP 3', records) : prev.letterNumber
+                        }));
+                      }}
+                      className={`rounded-xl p-3 border cursor-pointer transition-all ${
+                        formData.spLevel === 'SP 3'
+                          ? 'border-rose-500 bg-rose-50/80 dark:bg-rose-950/40 ring-2 ring-rose-500/20'
+                          : 'border-slate-200 dark:border-zinc-800 hover:border-slate-300 dark:hover:border-zinc-700 bg-white dark:bg-zinc-900/40'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-rose-800 dark:text-rose-300 flex items-center gap-1">
+                          <ShieldAlert className="h-3.5 w-3.5 text-rose-600" />
+                          SP 3 (Terakhir)
+                        </span>
+                        {formData.spLevel === 'SP 3' ? (
+                          <BadgeCheck className="h-4 w-4 text-rose-600 dark:text-rose-400" />
+                        ) : (
+                          <span className="text-[10px] text-rose-600 font-bold">Kritis</span>
+                        )}
+                      </div>
+                      <div className="text-[10px] text-slate-500 dark:text-zinc-400 mt-1 leading-snug">
+                        Sanksi tingkat kritis. Peringatan terakhir sebelum pemutusan hubungan kerja (PHK).
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <span className="text-slate-400 block text-[10px]">Perusahaan:</span>
-                  <span className="font-medium text-slate-800 dark:text-zinc-200 truncate block">{formData.company || '-'}</span>
+
+                {/* SECTION 3: KRONOLOGI & TEMPLATE KASUS */}
+                <div className="rounded-2xl border border-slate-200/80 dark:border-[#222225] bg-white dark:bg-[#0c0c0e] p-4.5 space-y-3.5 shadow-2xs">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-zinc-800/60">
+                    <div className="flex items-center gap-2 text-xs font-bold text-slate-800 dark:text-zinc-200">
+                      <FileText className="h-4 w-4 text-[#12346a] dark:text-blue-400" />
+                      <span>3. Berita Acara & Fakta Kejadian</span>
+                    </div>
+                    <span className="text-[10px] text-slate-400">Pilih template kasus atau tulis bebas</span>
+                  </div>
+
+                  {/* Kategori Pelanggaran Selector */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
+                      Kategori Pelanggaran <span className="text-rose-500">*</span>
+                    </label>
+                    <select
+                      value={formData.violationCategory}
+                      onChange={e => setFormData(prev => ({ ...prev, violationCategory: e.target.value as WarningViolationCategory }))}
+                      className="w-full text-xs h-9 px-3 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-slate-800 dark:text-zinc-200 font-medium focus:outline-none focus:ring-1 focus:ring-primary"
+                    >
+                      <option value="Kedisiplinan & Presensi">Kedisiplinan & Presensi (Mangkir, Keterlambatan Kronis, Manipulasi Jam Kerja)</option>
+                      <option value="Kinerja & Target">Kinerja & Target (Tidak Memenuhi KPI / Kelalaian Tugas Pokok)</option>
+                      <option value="Pelanggaran SOP & Tata Tertib">Pelanggaran SOP & Tata Tertib (K3, Prosedur Operasional, Aturan Seragam)</option>
+                      <option value="Kode Etik & Integritas">Kode Etik & Integritas (Perilaku Tidak Pantas, Pertikaian, Gratifikasi)</option>
+                      <option value="Kelalaian Fasilitas / Finansial">Kelalaian Fasilitas / Finansial (Kerusakan Aset, Kelalaian Kas / Bon)</option>
+                      <option value="Kerahasiaan Data & Informasi">Kerahasiaan Data & Informasi (Kebocoran Rahasia Perusahaan)</option>
+                      <option value="Lainnya">Lainnya</option>
+                    </select>
+                  </div>
+
+                  {/* Presets Chips */}
+                  <div className="space-y-1.5">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                      Template Kasus Standar HR Gesit (Klik untuk mengisi cepat):
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {VIOLATION_PRESETS.map((preset, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => handleApplyPreset(preset)}
+                          className="text-[11px] font-medium px-2.5 py-1 rounded-lg border border-slate-200 dark:border-zinc-800 hover:bg-blue-50 hover:border-blue-200 dark:hover:bg-blue-950/30 text-slate-700 dark:text-zinc-300 hover:text-[#12346a] dark:hover:text-blue-300 transition-colors flex items-center gap-1 cursor-pointer"
+                        >
+                          <Sparkles className="h-3 w-3 text-amber-500" />
+                          <span>{preset.title}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Dates Row */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-semibold text-slate-700 dark:text-zinc-300">
+                        Tanggal Kejadian <span className="text-rose-500">*</span>
+                      </label>
+                      <Input
+                        type="date"
+                        value={formData.incidentDate}
+                        onChange={e => setFormData(prev => ({ ...prev, incidentDate: e.target.value }))}
+                        className="text-xs h-8.5 rounded-xl bg-white dark:bg-zinc-900"
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-semibold text-slate-700 dark:text-zinc-300">
+                        Tanggal Terbit <span className="text-rose-500">*</span>
+                      </label>
+                      <Input
+                        type="date"
+                        value={formData.issuedDate}
+                        onChange={e => {
+                          const newDate = e.target.value;
+                          setFormData(prev => ({
+                            ...prev,
+                            issuedDate: newDate,
+                            validFrom: newDate,
+                            validUntil: calculateValidUntil(newDate)
+                          }));
+                        }}
+                        className="text-xs h-8.5 rounded-xl bg-white dark:bg-zinc-900"
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[11px] font-semibold text-slate-700 dark:text-zinc-300">
+                          Berlaku Hingga <span className="text-rose-500">*</span>
+                        </label>
+                        <span className="text-[9px] text-[#12346a] dark:text-blue-400 font-bold bg-blue-50 dark:bg-blue-950/50 px-1 rounded">
+                          +6 Bulan
+                        </span>
+                      </div>
+                      <Input
+                        type="date"
+                        value={formData.validUntil}
+                        onChange={e => setFormData(prev => ({ ...prev, validUntil: e.target.value }))}
+                        className="text-xs h-8.5 rounded-xl bg-white dark:bg-zinc-900 font-semibold"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  {/* Kronologi Textarea */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
+                      Rincian Fakta & Kronologi Pelanggaran <span className="text-rose-500">*</span>
+                    </label>
+                    <textarea
+                      value={formData.chronology}
+                      onChange={e => setFormData(prev => ({ ...prev, chronology: e.target.value }))}
+                      placeholder="Jelaskan secara formal fakta kejadian, waktu, saksi, dan pasal Peraturan Perusahaan yang dilanggar..."
+                      rows={4}
+                      className="w-full text-xs p-3 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-slate-800 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-primary leading-relaxed"
+                      required
+                    />
+                  </div>
+
+                  {/* Sanksi & Pembinaan */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
+                      Konsekuensi Sanksi & Ketentuan Pembinaan
+                    </label>
+                    <textarea
+                      value={formData.consequences}
+                      onChange={e => setFormData(prev => ({ ...prev, consequences: e.target.value }))}
+                      placeholder="Rincian sanksi administratif, pembinaan atasan, atau kewajiban perbaikan kinerja..."
+                      rows={3}
+                      className="w-full text-xs p-3 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-slate-800 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-primary leading-relaxed"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <span className="text-slate-400 block text-[10px]">Departemen / Jabatan:</span>
-                  <span className="font-medium text-slate-800 dark:text-zinc-200 truncate block">{formData.department} ({formData.jobTitle || '-'})</span>
+
+                {/* SECTION 4: PEJABAT PENGESAH & LAMPIRAN */}
+                <div className="rounded-2xl border border-slate-200/80 dark:border-[#222225] bg-white dark:bg-[#0c0c0e] p-4.5 space-y-3.5 shadow-2xs">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-zinc-800/60">
+                    <div className="flex items-center gap-2 text-xs font-bold text-slate-800 dark:text-zinc-200">
+                      <Briefcase className="h-4 w-4 text-[#12346a] dark:text-blue-400" />
+                      <span>4. Pengesahan & Bukti Pendukung</span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-semibold text-slate-700 dark:text-zinc-300">
+                        Pejabat HR Penandatangan
+                      </label>
+                      <Input
+                        type="text"
+                        value={formData.issuerName}
+                        onChange={e => setFormData(prev => ({ ...prev, issuerName: e.target.value }))}
+                        className="text-xs h-8.5 rounded-xl bg-white dark:bg-zinc-900"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-semibold text-slate-700 dark:text-zinc-300">
+                        Saksi / Atasan Langsung (Opsional)
+                      </label>
+                      <Input
+                        type="text"
+                        value={formData.witnessName}
+                        onChange={e => setFormData(prev => ({ ...prev, witnessName: e.target.value }))}
+                        placeholder="Nama Atasan Langsung / Saksi Lapangan"
+                        className="text-xs h-8.5 rounded-xl bg-white dark:bg-zinc-900"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold text-slate-700 dark:text-zinc-300 flex items-center justify-between">
+                      <span>Tautan Berkas / Scan Bukti (Google Drive)</span>
+                      <span className="text-[10px] text-slate-400 font-normal">URL Cloud Storage</span>
+                    </label>
+                    <Input
+                      type="url"
+                      value={formData.attachmentUrl}
+                      onChange={e => setFormData(prev => ({ ...prev, attachmentUrl: e.target.value }))}
+                      placeholder="https://drive.google.com/..."
+                      className="text-xs h-8.5 rounded-xl bg-white dark:bg-zinc-900 font-mono"
+                    />
+                  </div>
                 </div>
               </div>
-            )}
 
-            {/* Nomor Surat & Tingkat SP */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                    Nomor Registrasi Surat <span className="text-rose-500">*</span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const newNo = generateLetterNumber(formData.spLevel, records);
-                      setFormData(prev => ({ ...prev, letterNumber: newNo }));
-                    }}
-                    className="text-[10px] text-primary hover:underline font-semibold"
-                  >
-                    Generate Otomatis
-                  </button>
+              {/* RIGHT COLUMN: LIVE OFFICIAL DOCUMENT PREVIEW (5 Cols) */}
+              <div className="lg:col-span-5">
+                <div className="sticky top-0 rounded-2xl border border-slate-200/90 dark:border-zinc-800 bg-slate-50/70 dark:bg-[#111114] p-4.5 shadow-sm space-y-4">
+                  {/* Top Bar */}
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-zinc-800">
+                    <div className="flex items-center gap-2">
+                      <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                      <span className="text-[11px] font-bold tracking-wider text-slate-700 dark:text-zinc-200">
+                        Pratinjau Surat Resmi
+                      </span>
+                    </div>
+                    <Badge variant="outline" className="text-[9px] uppercase font-mono tracking-wider bg-white dark:bg-zinc-800 text-slate-600 dark:text-zinc-300 border-slate-200 dark:border-zinc-700">
+                      Live Kop Surat
+                    </Badge>
+                  </div>
+
+                  {/* Document Sheet Card */}
+                  <div className="rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-[#0c0c0e] p-4.5 font-serif leading-relaxed shadow-sm space-y-3.5 text-xs text-slate-800 dark:text-zinc-200">
+                    {/* Official Kop Surat */}
+                    <div className="border-b-2 border-slate-900 dark:border-zinc-600 pb-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2.5">
+                          <img src="/image/logo.png" alt="Logo" className="h-8 w-auto object-contain" />
+                          <div>
+                            <div className="text-xs font-black tracking-wide text-[#12346a] dark:text-blue-400 font-sans">
+                              THE GESIT COMPANIES
+                            </div>
+                            <div className="text-[9px] font-sans text-slate-500 dark:text-zinc-400 font-medium truncate max-w-[170px]">
+                              {formData.company || 'Corporate Human Capital'}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-[9px] font-mono font-bold text-slate-700 dark:text-zinc-300">
+                            {formData.letterNumber || '001/SP-1/HR-GESIT/X/2026'}
+                          </div>
+                          <div className="text-[9px] text-slate-400 font-sans">
+                            {formatDateIndo(formData.issuedDate)}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Judul & Nomor Surat */}
+                    <div className="text-center py-1">
+                      <div className="text-xs font-black uppercase underline tracking-wider text-slate-900 dark:text-zinc-100 font-sans">
+                        {formData.spLevel === 'Surat Teguran'
+                          ? 'SURAT TEGURAN TERTULIS'
+                          : `SURAT PERINGATAN ${formData.spLevel.replace('SP', '').trim() === '1' ? 'PERTAMA (SP I)' : formData.spLevel.replace('SP', '').trim() === '2' ? 'KEDUA (SP II)' : 'KETIGA (SP III)'}`}
+                      </div>
+                      <div className="text-[10px] text-slate-500 dark:text-zinc-400 font-mono mt-0.5">
+                        Status: Sanksi Disipliner Karyawan
+                      </div>
+                    </div>
+
+                    {/* Recipient Box */}
+                    <div className="rounded-lg bg-slate-50 dark:bg-zinc-900/60 p-3 font-sans text-[11px] border border-slate-100 dark:border-zinc-800 space-y-1">
+                      <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Diberikan Kepada:</div>
+                      <div className="font-bold text-slate-900 dark:text-zinc-100 text-xs">
+                        {formData.employeeName || '(Nama karyawan belum dipilih)'}
+                      </div>
+                      <div className="text-[10px] text-slate-500 dark:text-zinc-400 flex flex-wrap items-center gap-1.5 font-mono">
+                        <span>NIP: {formData.employeeCode || '-'}</span>
+                        <span>&bull;</span>
+                        <span>{formData.jobTitle || 'Staff'}</span>
+                        <span>&bull;</span>
+                        <span>{formData.department || '-'}</span>
+                      </div>
+                    </div>
+
+                    {/* Legal Validity Banner */}
+                    <div className="rounded-lg bg-blue-50/70 dark:bg-blue-950/40 border border-blue-200/80 dark:border-blue-900/40 p-2.5 font-sans text-[10px] text-blue-900 dark:text-blue-200 flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 font-semibold">
+                        <Clock className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
+                        <span>Masa Berlaku (6 Bulan):</span>
+                      </div>
+                      <span className="font-bold font-mono">
+                        {formatDateIndo(formData.validFrom)} s/d {formatDateIndo(formData.validUntil)}
+                      </span>
+                    </div>
+
+                    {/* Violation Excerpt */}
+                    <div className="font-sans text-[10px] space-y-1">
+                      <div className="text-slate-400 uppercase font-bold text-[9px] tracking-wider">Fakta Pelanggaran:</div>
+                      <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-zinc-900/40 text-slate-700 dark:text-zinc-300 italic text-[11px] leading-relaxed border border-slate-100 dark:border-zinc-800/80 max-h-28 overflow-y-auto">
+                        {formData.chronology || '(Rincian pelanggaran dan kronologi akan tampil di sini)'}
+                      </div>
+                    </div>
+
+                    {/* Signatures Preview */}
+                    <div className="pt-2 border-t border-slate-100 dark:border-zinc-800 grid grid-cols-2 gap-3 text-center font-sans text-[10px]">
+                      <div>
+                        <div className="text-slate-400 text-[9px]">Karyawan:</div>
+                        <div className="h-7" />
+                        <div className="font-bold underline text-slate-800 dark:text-zinc-200 truncate">{formData.employeeName || '(Karyawan)'}</div>
+                        <div className="text-[9px] font-mono text-slate-400">NIP: {formData.employeeCode || '-'}</div>
+                      </div>
+                      <div>
+                        <div className="text-slate-400 text-[9px]">Pejabat HR:</div>
+                        <div className="h-7" />
+                        <div className="font-bold underline text-slate-800 dark:text-zinc-200 truncate">{formData.issuerName || 'HR Manager'}</div>
+                        <div className="text-[9px] text-slate-400">{formData.issuerTitle || 'HR Department'}</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Regulatory Compliance Footer */}
+                  <div className="rounded-xl border border-slate-200/80 dark:border-zinc-800 p-3 text-[10px] text-slate-500 dark:text-zinc-400 space-y-1 bg-white/80 dark:bg-zinc-900/40">
+                    <div className="flex items-center gap-1.5 font-bold text-slate-700 dark:text-zinc-300">
+                      <Scale className="h-3.5 w-3.5 text-[#12346a] dark:text-blue-400" />
+                      <span>Kepatuhan Regulasi Ketenagakerjaan</span>
+                    </div>
+                    <p className="leading-relaxed">
+                      Sesuai PP No. 35/2021 Pasal 52, surat peringatan memiliki masa berlaku 6 bulan kalender. Pengulangan dalam masa aktif berhak dinaikkan ke tingkat sanksi berikutnya.
+                    </p>
+                  </div>
                 </div>
-                <Input
-                  type="text"
-                  value={formData.letterNumber}
-                  onChange={e => setFormData(prev => ({ ...prev, letterNumber: e.target.value }))}
-                  placeholder="Contoh: 004/SP-1/HR-GESIT/X/2026"
-                  className="font-mono text-xs h-9 rounded-xl"
-                  required
-                />
               </div>
+            </form>
+          </div>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                  Tingkat Surat Peringatan <span className="text-rose-500">*</span>
-                </label>
-                <select
-                  value={formData.spLevel}
-                  onChange={e => {
-                    const newLevel = e.target.value as WarningLetterLevel;
-                    setFormData(prev => ({
-                      ...prev,
-                      spLevel: newLevel,
-                      letterNumber: !isEditing ? generateLetterNumber(newLevel, records) : prev.letterNumber
-                    }));
-                  }}
-                  className="w-full text-xs h-9 px-3 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-slate-800 dark:text-zinc-200 font-bold focus:outline-none focus:ring-1 focus:ring-primary"
-                >
-                  <option value="Surat Teguran">Surat Teguran (Lisan / Pembinaan)</option>
-                  <option value="SP 1">SP 1 (Surat Peringatan Pertama)</option>
-                  <option value="SP 2">SP 2 (Surat Peringatan Kedua)</option>
-                  <option value="SP 3">SP 3 (Surat Peringatan Ketiga / Terakhir)</option>
-                </select>
-              </div>
+          {/* Sticky Modal Footer */}
+          <div className="sticky bottom-0 z-30 bg-slate-50 dark:bg-[#0c0c0e] px-6 py-3.5 border-t border-slate-200/80 dark:border-[#222225] flex items-center justify-between shrink-0">
+            <div className="text-xs text-slate-500 dark:text-zinc-400 flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-emerald-500" />
+              <span>Semua data tersinkronisasi dengan database Gesit People</span>
             </div>
 
-            {/* Kategori Pelanggaran */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                Kategori Pelanggaran <span className="text-rose-500">*</span>
-              </label>
-              <select
-                value={formData.violationCategory}
-                onChange={e => setFormData(prev => ({ ...prev, violationCategory: e.target.value as WarningViolationCategory }))}
-                className="w-full text-xs h-9 px-3 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-slate-800 dark:text-zinc-200 font-medium focus:outline-none focus:ring-1 focus:ring-primary"
-              >
-                <option value="Kedisiplinan & Presensi">Kedisiplinan & Presensi (Mangkir, Keterlambatan Kronis, Manipulasi Jam Kerja)</option>
-                <option value="Kinerja & Target">Kinerja & Target (Tidak Memenuhi KPI / Kelalaian Tugas Pokok)</option>
-                <option value="Pelanggaran SOP & Tata Tertib">Pelanggaran SOP & Tata Tertib (K3, Prosedur Operasional, Aturan Seragam)</option>
-                <option value="Kode Etik & Integritas">Kode Etik & Integritas (Perilaku Tidak Pantas, Pertikaian, Gratifikasi)</option>
-                <option value="Kelalaian Fasilitas / Finansial">Kelalaian Fasilitas / Finansial (Kerusakan Aset, Kelalaian Kas / Bon)</option>
-                <option value="Kerahasiaan Data & Informasi">Kerahasiaan Data & Informasi (Kebocoran Rahasia Perusahaan)</option>
-                <option value="Lainnya">Lainnya</option>
-              </select>
-            </div>
-
-            {/* Tanggal Kejadian, Terbit, Masa Berlaku */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                  Tanggal Kejadian <span className="text-rose-500">*</span>
-                </label>
-                <Input
-                  type="date"
-                  value={formData.incidentDate}
-                  onChange={e => setFormData(prev => ({ ...prev, incidentDate: e.target.value }))}
-                  className="text-xs h-9 rounded-xl"
-                  required
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                  Tanggal Diterbitkan <span className="text-rose-500">*</span>
-                </label>
-                <Input
-                  type="date"
-                  value={formData.issuedDate}
-                  onChange={e => {
-                    const newDate = e.target.value;
-                    setFormData(prev => ({
-                      ...prev,
-                      issuedDate: newDate,
-                      validFrom: newDate,
-                      validUntil: calculateValidUntil(newDate)
-                    }));
-                  }}
-                  className="text-xs h-9 rounded-xl"
-                  required
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700 dark:text-zinc-300 flex items-center justify-between">
-                  <span>Masa Berlaku Hingga <span className="text-rose-500">*</span></span>
-                  <span className="text-[10px] text-slate-400 font-normal">Standar 6 Bulan</span>
-                </label>
-                <Input
-                  type="date"
-                  value={formData.validUntil}
-                  onChange={e => setFormData(prev => ({ ...prev, validUntil: e.target.value }))}
-                  className="text-xs h-9 rounded-xl"
-                  required
-                />
-              </div>
-            </div>
-
-            {/* Kronologi Pelanggaran */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                Kronologi & Uraian Fakta Pelanggaran <span className="text-rose-500">*</span>
-              </label>
-              <textarea
-                value={formData.chronology}
-                onChange={e => setFormData(prev => ({ ...prev, chronology: e.target.value }))}
-                placeholder="Jelaskan secara detail kejadian, tanggal, bukti, saksi, dan pasal/peraturan perusahaan yang dilanggar..."
-                rows={4}
-                className="w-full text-xs p-3 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-slate-800 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-primary leading-relaxed"
-                required
-              />
-            </div>
-
-            {/* Sanksi & Pembinaan */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                Konsekuensi, Sanksi & Rencana Pembinaan
-              </label>
-              <textarea
-                value={formData.consequences}
-                onChange={e => setFormData(prev => ({ ...prev, consequences: e.target.value }))}
-                placeholder="Rincian sanksi administratif (penundaan berkala, evaluasi harian, pemotongan insentif, dll.)..."
-                rows={3}
-                className="w-full text-xs p-3 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-slate-800 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-primary leading-relaxed"
-              />
-            </div>
-
-            {/* Pejabat Penerbit & Saksi */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                  Nama Pejabat HR / Penandatangan
-                </label>
-                <Input
-                  type="text"
-                  value={formData.issuerName}
-                  onChange={e => setFormData(prev => ({ ...prev, issuerName: e.target.value }))}
-                  placeholder="Nama Pejabat HRD"
-                  className="text-xs h-9 rounded-xl"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                  Saksi / Atasan Langsung (Opsional)
-                </label>
-                <Input
-                  type="text"
-                  value={formData.witnessName}
-                  onChange={e => setFormData(prev => ({ ...prev, witnessName: e.target.value }))}
-                  placeholder="Nama Atasan Langsung / Saksi"
-                  className="text-xs h-9 rounded-xl"
-                />
-              </div>
-            </div>
-
-            {/* Dokumen Lampiran URL */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700 dark:text-zinc-300 flex items-center justify-between">
-                <span>Tautan Dokumen / Scan Surat Bertanda Tangan (Opsional)</span>
-                <span className="text-[10px] text-slate-400">Google Drive / File URL</span>
-              </label>
-              <Input
-                type="url"
-                value={formData.attachmentUrl}
-                onChange={e => setFormData(prev => ({ ...prev, attachmentUrl: e.target.value }))}
-                placeholder="https://drive.google.com/..."
-                className="text-xs h-9 rounded-xl font-mono"
-              />
-            </div>
-
-            {/* Form Actions */}
-            <div className="pt-4 border-t border-slate-200 dark:border-[#222225] flex items-center justify-end gap-2.5">
+            <div className="flex items-center gap-2.5">
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 onClick={() => setCreateModalOpen(false)}
-                className="text-xs h-9 rounded-xl"
+                className="text-xs h-9 rounded-xl px-4 cursor-pointer"
               >
                 Batal
               </Button>
               <Button
                 type="submit"
+                form="sp-form"
                 size="sm"
-                className="text-xs h-9 rounded-xl bg-[#12346a] hover:bg-[#1a448a] dark:bg-blue-600 dark:hover:bg-blue-700 text-white font-semibold shadow-xs"
+                className="text-xs h-9 rounded-xl bg-[#12346a] hover:bg-[#1a448a] dark:bg-blue-600 dark:hover:bg-blue-700 text-white font-semibold shadow-xs px-5 cursor-pointer"
               >
                 <Check className="h-4 w-4 mr-1.5" />
                 {isEditing ? 'Simpan Perubahan' : 'Terbitkan Surat Peringatan'}
               </Button>
             </div>
-          </form>
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -1362,7 +1854,10 @@ export const EmployeeWarningManager: React.FC<EmployeeWarningManagerProps> = ({ 
       {/* MODAL 2: DETAIL WARNING LETTER */}
       {/* ========================================================================= */}
       <Dialog open={detailModalOpen} onOpenChange={setDetailModalOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-0">
+        <DialogContent
+          showCloseButton={false}
+          className="sm:max-w-2xl md:max-w-2xl w-full max-h-[90vh] overflow-y-auto p-0"
+        >
           {selectedRecord && (
             <div>
               {/* Header */}
@@ -1615,7 +2110,10 @@ export const EmployeeWarningManager: React.FC<EmployeeWarningManagerProps> = ({ 
       {/* MODAL 3: PRINTABLE OFFICIAL LETTER (A4 FORMAT) */}
       {/* ========================================================================= */}
       <Dialog open={printModalOpen} onOpenChange={setPrintModalOpen}>
-        <DialogContent className="max-w-4xl max-h-[92vh] overflow-y-auto p-0">
+        <DialogContent
+          showCloseButton={false}
+          className="sm:max-w-4xl md:max-w-4xl w-full max-h-[92vh] overflow-y-auto p-0"
+        >
           {selectedRecord && (
             <div>
               {/* Header Toolbar (Hidden when printing) */}
