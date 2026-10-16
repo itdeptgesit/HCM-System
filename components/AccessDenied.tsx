@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ShieldAlert, ArrowLeft, LifeBuoy, Copy, Check, Lock, UserCheck } from 'lucide-react';
+import { ShieldAlert, ArrowLeft, LifeBuoy, Copy, Check, Lock, UserCheck } from '@/components/ui/icons';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';

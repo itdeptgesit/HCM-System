@@ -8,7 +8,7 @@ import {
   Clock, ArrowUpRight, CheckCircle2, XCircle, ArrowRightLeft,
   ChevronLeft, ChevronRight, Filter, ShieldAlert, Award, Upload, GraduationCap,
   X, Loader2
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import { supabase, supabaseAdmin, ensureAuthUserWithPassword } from '../lib/supabaseClient';
 import { UserAccount, UserGroup, EmployeeContractHistory } from '../types';
 import { uploadFileToGoogleDrive } from '../lib/googleDriveUpload';
@@ -1397,24 +1397,24 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
                           </TableCell>
                           <TableCell className="px-6 py-3.5">
                             {contractMeta.status === 'resigned' ? (
-                              <Badge variant="outline" className="bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400 border-slate-300 dark:border-zinc-700 text-xs font-semibold">
-                                ⏹ {contractMeta.label}
+                              <Badge variant="outline" className="bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-400 border-slate-300 dark:border-zinc-700 text-xs font-semibold">
+                                {contractMeta.label}
                               </Badge>
                             ) : contractMeta.isExpired ? (
                               <Badge className="bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 text-xs font-bold">
-                                ❌ {contractMeta.label}
+                                {contractMeta.label}
                               </Badge>
                             ) : contractMeta.isExpiring ? (
                               <Badge className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 text-xs font-bold animate-pulse">
-                                ⚠️ {contractMeta.label}
+                                {contractMeta.label}
                               </Badge>
                             ) : contractMeta.status === 'permanent' ? (
                               <Badge className="bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 text-xs font-semibold">
-                                ♾️ {contractMeta.label}
+                                {contractMeta.label}
                               </Badge>
                             ) : (
                               <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-xs font-semibold">
-                                ✓ {contractMeta.label}
+                                {contractMeta.label}
                               </Badge>
                             )}
                           </TableCell>

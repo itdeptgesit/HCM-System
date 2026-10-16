@@ -14,7 +14,7 @@ import {
   Building2,
   User,
   Shield
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import { useTheme } from 'next-themes';
 import { Toaster, toast } from 'sonner';
 import { supabase } from '../../lib/supabaseClient';

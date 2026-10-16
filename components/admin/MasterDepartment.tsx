@@ -9,7 +9,7 @@ import {
   Building2, 
   X,
   Layers
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import { supabase } from '../../lib/supabaseClient';
 import { useToast } from '../ToastProvider';
 

@@ -34,7 +34,7 @@ import {
   User,
   History,
   FileWarning
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import { useTheme } from 'next-themes';
 import { Toaster, toast } from 'sonner';
 

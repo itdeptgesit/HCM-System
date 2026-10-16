@@ -16,7 +16,7 @@ import {
 import { tv } from "tailwind-variants"
 import { twMerge } from "tailwind-merge"
 import { Popover } from "./popover"
-import { ChevronRight } from "lucide-react"
+import { ChevronRight } from '@/components/ui/icons'
 
 const menuVariants = tv({
   base: "outline-none p-1 max-h-[inherit] overflow-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:display-none",

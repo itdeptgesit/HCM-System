@@ -23,7 +23,7 @@ import {
   Landmark,
   ShieldCheck,
   Check
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 import { supabase } from '../../lib/supabaseClient';

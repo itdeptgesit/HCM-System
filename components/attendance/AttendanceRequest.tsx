@@ -5,7 +5,7 @@ import {
   Stethoscope, Gift, Receipt, AlertCircle, AlertTriangle, RotateCcw, Briefcase,
   BookOpen, ShieldCheck, Info, Sparkles, HelpCircle, Plus,
   MapPin, Compass, Image as ImageIcon, ExternalLink
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import { toast } from 'sonner';
 import { supabase } from '../../lib/supabaseClient';
 import { fetchAllRows, loadWorkforceAccounts, normalizeRequest, reviewWorkforceRequest } from '../../lib/workforceData';

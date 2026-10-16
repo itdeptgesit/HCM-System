@@ -1,7 +1,7 @@
 import React from 'react';
 import {
   Stethoscope, Gift, Receipt
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 

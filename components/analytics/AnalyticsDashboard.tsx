@@ -31,7 +31,7 @@ import {
   Receipt,
   UserX,
   Sparkles
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import {
   ResponsiveContainer,
   AreaChart,

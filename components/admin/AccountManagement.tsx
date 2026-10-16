@@ -21,7 +21,7 @@ import {
   Lock,
   Unlock,
   Check
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import { supabase, ensureAuthUserWithPassword } from '../../lib/supabaseClient';
 import { useToast } from '../ToastProvider';
 

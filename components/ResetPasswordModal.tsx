@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { X, KeyRound, Eye, EyeOff, Check, Loader2, ShieldAlert } from 'lucide-react';
+import { X, KeyRound, Eye, EyeOff, Check, Loader2, ShieldAlert } from '@/components/ui/icons';
 import { UserAccount } from '../types';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { Button } from './ui/button';

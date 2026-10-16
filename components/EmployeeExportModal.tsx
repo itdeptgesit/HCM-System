@@ -5,7 +5,7 @@ import {
   FileSpreadsheet, Download, Layers, SlidersHorizontal,
   Check, RefreshCw, CheckCircle2, User, Building,
   FileCheck, FileText, GraduationCap, CreditCard, ShieldCheck
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';

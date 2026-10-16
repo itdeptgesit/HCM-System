@@ -30,7 +30,7 @@ import {
   Timer,
   Sunrise,
   Sunset
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import { supabase } from '../../lib/supabaseClient';
 import { useToast } from '../ToastProvider';
 import { toast } from 'sonner';

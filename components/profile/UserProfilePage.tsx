@@ -32,7 +32,7 @@ import {
   Sparkles,
   Copy,
   ChevronRight
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import { toast } from 'sonner';
 import { supabase } from '../../lib/supabaseClient';
 import { uploadFileToGoogleDrive } from '../../lib/googleDriveUpload';

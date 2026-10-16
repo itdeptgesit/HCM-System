@@ -6,7 +6,7 @@ import {
   Timer, Briefcase, Users, FileText, BarChart3, Settings,
   Navigation, Shield, X, Loader2, User, Building2, Sunrise, Sunset,
   LayoutDashboard, ArrowRight
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import { toast } from 'sonner';
 import { supabase } from '../../lib/supabaseClient';
 import { isHRAccount, jakartaDate } from '../../lib/workforce-contract';

@@ -13,7 +13,7 @@ import {
   Trash2, 
   CheckCircle2,
   HelpCircle
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import { useToast } from '../ToastProvider';
 import {
   ModulePermission,

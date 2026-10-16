@@ -1,5 +1,5 @@
 import React from 'react';
-import { Layers } from 'lucide-react';
+import { Layers } from '@/components/ui/icons';
 
 interface ModulePlaceholderProps {
   title: string;

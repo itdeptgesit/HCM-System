@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
   Calendar, Award, Plus, Check, Clock, User, Building,
   AlertCircle, ShieldCheck, X, Send, FileText, Info, AlertTriangle, Sparkles
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

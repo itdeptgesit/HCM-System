@@ -4,7 +4,7 @@ import {
   CheckCircle2, XCircle, ChevronLeft, ChevronRight, Download, Eye, ExternalLink,
   Loader2, Info, Building2, Sun, Moon, ArrowUpDown, List, Grid, Shield,
   Clock, Sunrise, AlertTriangle, Check, EyeOff
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import { toast } from 'sonner';
 import { supabase } from '../../lib/supabaseClient';
 import { cn } from '@/lib/utils';

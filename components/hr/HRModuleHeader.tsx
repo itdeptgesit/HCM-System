@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowUpRight } from 'lucide-react';
+import { ArrowUpRight } from '@/components/ui/icons';
 
 export const HRModuleHeader: React.FC<{ eyebrow: string; title: string; description: string; action?: React.ReactNode }> = ({ eyebrow, title, description, action }) => (
   <div className="mb-5 flex flex-wrap items-end justify-between gap-4">

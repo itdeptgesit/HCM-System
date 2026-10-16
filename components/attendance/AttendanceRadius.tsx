@@ -4,7 +4,7 @@ import {
   Loader2, Locate, ExternalLink, Map as MapIcon, MapPinOff, Ban,
   Building2, CheckCircle2, Navigation, AlertTriangle, RotateCcw, Info,
   Users, UserCheck, Lock, Unlock, Check, X, ShieldAlert
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import { toast } from 'sonner';
 import { supabase } from '../../lib/supabaseClient';
 import { loadWorkforceAccounts } from '../../lib/workforceData';

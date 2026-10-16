@@ -22,7 +22,7 @@ import {
   Loader2, 
   Settings, 
   HelpCircle 
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import { supabase } from '../../lib/supabaseClient';
 import { 
   uploadFileToGoogleDrive, 

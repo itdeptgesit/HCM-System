@@ -23,7 +23,7 @@ import {
   ChevronDown,
   Search,
   ExternalLink
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import { supabase } from '../../lib/supabaseClient';
 import { fetchAllRows, loadWorkforceAccounts, normalizeAttendance } from '../../lib/workforceData';
 import { isActiveEmployee, isHRAccount, jakartaDate, resolveApprovalStatus } from '../../lib/workforce-contract';

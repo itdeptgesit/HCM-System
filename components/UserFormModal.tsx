@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Check, ChevronLeft, ChevronRight, X, CheckCircle2, Info, GraduationCap, Upload, ExternalLink, FileText, Loader2, Camera, Trash2 } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, X, CheckCircle2, Info, GraduationCap, Upload, ExternalLink, FileText, Loader2, Camera, Trash2 } from '@/components/ui/icons';
 import { uploadFileToGoogleDrive } from '../lib/googleDriveUpload';
 import { UserAccount, UserGroup, Company, DocumentCategory } from '../types';
 import { supabase } from '../lib/supabaseClient';

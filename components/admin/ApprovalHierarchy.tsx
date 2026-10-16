@@ -18,7 +18,7 @@ import {
   AlertCircle,
   Upload,
   FileSpreadsheet
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import * as XLSX from 'xlsx';
 import { supabase } from '../../lib/supabaseClient';
 import { useToast } from '../ToastProvider';

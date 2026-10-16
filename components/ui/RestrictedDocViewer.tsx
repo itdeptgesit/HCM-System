@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FileText, ExternalLink, ShieldCheck, AlertCircle, Eye, Image as ImageIcon } from 'lucide-react';
+import { FileText, ExternalLink, ShieldCheck, AlertCircle, Eye, Image as ImageIcon } from '@/components/ui/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';

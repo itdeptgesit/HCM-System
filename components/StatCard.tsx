@@ -1,4 +1,4 @@
-import { ArrowUpRight, ArrowDownRight, TrendingUp, TrendingDown, Minus, CheckCircle2 } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, TrendingUp, TrendingDown, Minus, CheckCircle2 } from '@/components/ui/icons';
 import { motion } from 'framer-motion';
 import { Sparkline } from './Sparkline';
 

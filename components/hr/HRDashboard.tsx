@@ -11,7 +11,7 @@ import {
   Sun,
   Check,
   X
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import { useNavigate } from 'react-router-dom';
 import { 
   ResponsiveContainer, 

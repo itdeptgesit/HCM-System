@@ -17,7 +17,7 @@ import {
   Eye,
   Info,
   X
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import * as XLSX from 'xlsx';
 import { fetchActivityLogs, AuditLogItem } from '../../lib/auditLogger';
 import { UserAccount } from '../../types';

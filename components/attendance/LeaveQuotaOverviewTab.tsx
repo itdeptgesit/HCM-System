@@ -4,7 +4,7 @@ import React, { useState, useMemo } from 'react';
 import {
   Calendar, Award, Plus, Search, Filter, RefreshCw, FileSpreadsheet,
   CheckCircle2, Clock, AlertTriangle, ArrowUpDown, ShieldCheck, ChevronRight
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

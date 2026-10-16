@@ -4,7 +4,7 @@ import { useRender } from "@base-ui/react/use-render"
 import { mergeProps } from "@base-ui/react/merge-props"
  
 import { cn } from "@/lib/utils"
-import { ChevronRightIcon, CheckIcon } from "lucide-react"
+import { ChevronRightIcon, CheckIcon } from '@/components/ui/icons'
 
 function DropdownMenu({ ...props }: MenuPrimitive.Root.Props) {
   return <MenuPrimitive.Root data-slot="dropdown-menu" {...props} />

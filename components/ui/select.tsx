@@ -13,7 +13,7 @@ import {
 } from "react-aria-components"
 import { Key } from "@react-types/shared"
 import { cn } from "@/lib/utils"
-import { ChevronDownIcon, CheckIcon } from "lucide-react"
+import { ChevronDownIcon, CheckIcon } from '@/components/ui/icons'
 import { Popover } from "./popover"
 
 export interface SelectProps<T extends object, V = any> extends Omit<RACSelectProps<T>, 'children'> {

@@ -5,7 +5,7 @@ import {
   FileSpreadsheet, Download, Upload, CheckCircle2, AlertTriangle,
   XCircle, ArrowRight, Loader2, RefreshCw, Users, ShieldAlert,
   HelpCircle, Eye, Info, X
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';

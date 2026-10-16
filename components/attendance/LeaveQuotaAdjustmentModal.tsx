@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import {
   Calendar, Award, Plus, Minus, Check, Clock, User, Building,
   AlertCircle, ShieldCheck, History, X, Save, Sparkles, HelpCircle
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
