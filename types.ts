@@ -676,3 +676,50 @@ export interface HCMDocument {
   updatedAt?: string;
 }
 
+// =========================================================================
+// EMPLOYEE WARNING LETTER (SURAT PERINGATAN / SP) TYPES
+// =========================================================================
+
+export type WarningLetterLevel = 'Surat Teguran' | 'SP 1' | 'SP 2' | 'SP 3';
+
+export type WarningViolationCategory = 
+  | 'Kedisiplinan & Presensi'
+  | 'Kinerja & Target'
+  | 'Pelanggaran SOP & Tata Tertib'
+  | 'Kode Etik & Integritas'
+  | 'Kelalaian Fasilitas / Finansial'
+  | 'Kerahasiaan Data & Informasi'
+  | 'Lainnya';
+
+export type WarningLetterStatus = 'Aktif' | 'Selesai' | 'Dibatalkan';
+
+export interface WarningLetterRecord {
+  id: string | number;
+  letterNumber: string;
+  employeeId: string | number;
+  employeeCode: string;
+  employeeName: string;
+  company: string;
+  department: string;
+  jobTitle?: string;
+  spLevel: WarningLetterLevel;
+  violationCategory: WarningViolationCategory;
+  incidentDate: string; // YYYY-MM-DD
+  issuedDate: string;   // YYYY-MM-DD
+  validFrom: string;    // YYYY-MM-DD
+  validUntil: string;   // YYYY-MM-DD
+  chronology: string;
+  consequences?: string;
+  issuerName: string;
+  issuerTitle?: string;
+  witnessName?: string;
+  status: WarningLetterStatus;
+  revocationReason?: string;
+  revokedAt?: string;
+  revokedBy?: string;
+  attachmentUrl?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+

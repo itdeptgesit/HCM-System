@@ -32,7 +32,8 @@ import {
   MapPin,
   Megaphone,
   User,
-  History
+  History,
+  FileWarning
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Toaster, toast } from 'sonner';
@@ -66,6 +67,7 @@ import { Kbd } from '@/components/ui/kbd';
 import HRDashboard from './components/hr/LiveHRDashboard';
 import { CompanyNewsManager } from './components/hr/CompanyNewsManager';
 import { EmployeeDataManager } from './components/EmployeeDataManager';
+import { EmployeeWarningManager } from './components/disciplinary/EmployeeWarningManager';
 import { AttendanceManager } from './components/AttendanceManager';
 import {
   AttendanceDashboard,
@@ -224,6 +226,9 @@ export default function App() {
     ...(canView('Cuti & Izin')
       ? [{ label: 'Pengajuan & Approval', path: '/requests', icon: CheckCircle2 }]
       : []),
+    ...(canView('Catatan SP') || isHR
+      ? [{ label: 'Catatan SP Karyawan', path: '/disciplinary', icon: FileWarning }]
+      : []),
     ...(isHR || canView('Dashboard')
       ? [{ label: 'News & Pengumuman', path: '/news', icon: Megaphone }]
       : []),
@@ -246,6 +251,7 @@ export default function App() {
   // Breadcrumb label helper
   const getBreadcrumbLabel = () => {
     if (location.pathname === '/profile') return 'Profil Saya';
+    if (location.pathname === '/disciplinary' || location.pathname.startsWith('/disciplinary')) return 'Catatan SP Karyawan';
     if (location.pathname === '/news') return 'News & Pengumuman Karyawan';
     if (location.pathname === '/attendance' || location.pathname === '/attendance/report') return 'Absensi / Report';
     if (location.pathname === '/attendance/requests') return 'Absensi / Request Absen';
@@ -686,6 +692,15 @@ export default function App() {
                   <Users className="h-3.5 w-3.5 text-muted-foreground" />
                   <span>Data Karyawan</span>
                 </DropdownMenuItem>
+                {(canView('Catatan SP') || isHR) && (
+                  <DropdownMenuItem
+                    onClick={() => navigate('/disciplinary')}
+                    className="text-xs cursor-pointer gap-2 py-2"
+                  >
+                    <FileWarning className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span>Catatan SP Karyawan</span>
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem
                   onClick={() => navigate('/attendance/report')}
                   className="text-xs cursor-pointer gap-2 py-2"
@@ -850,6 +865,26 @@ export default function App() {
             <Route
               path="/news"
               element={!isHR ? <Navigate to="/requests" replace /> : <CompanyNewsManager currentUser={currentUser} />}
+            />
+            <Route
+              path="/disciplinary"
+              element={
+                !isHR ? (
+                  <Navigate to="/requests" replace />
+                ) : canView('Catatan SP') || isHR ? (
+                  <EmployeeWarningManager currentUser={currentUser} />
+                ) : (
+                  <AccessDenied
+                    moduleName="Catatan SP"
+                    requiredAccess="Izin Lihat Catatan SP"
+                    currentUser={currentUser}
+                  />
+                )
+              }
+            />
+            <Route
+              path="/sp-records"
+              element={<Navigate to="/disciplinary" replace />}
             />
 
             {/* Other Workspace Modules */}
