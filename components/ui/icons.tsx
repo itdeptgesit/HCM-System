@@ -150,8 +150,8 @@ const BASIL_MAP: Record<string, string> = {
   Pin: 'basil:pin-outline',
 
   // Buildings & Org
-  Building: 'basil:university-outline',
-  Building2: 'basil:university-outline',
+  Building: 'basil:bank-outline',
+  Building2: 'basil:bank-outline',
   FolderTree: 'basil:stack-outline',
   FolderOpen: 'basil:folder-open-outline',
   GitMerge: 'basil:exchange-outline',
