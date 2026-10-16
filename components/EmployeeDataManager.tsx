@@ -258,20 +258,34 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
   }, []);
 
   // Compute contract status / days remaining
-  // Compute contract status / days remaining
   const getContractMeta = (emp: UserAccount) => {
+    // 1. Cek status kepegawaian: jika Resigned / Disabled / Inactive / Non-Aktif, jangan hitung sisa hari aktif
+    const empStatus = (emp.employmentStatus || emp.status || 'Active').toLowerCase();
+    const isNonActive = empStatus === 'resigned' || empStatus === 'disabled' || empStatus === 'inactive' || empStatus === 'non-active';
+
+    if (isNonActive) {
+      return {
+        status: 'resigned',
+        label: emp.employmentStatus === 'Resigned' ? 'Resigned' : 'Non-Aktif',
+        daysLeft: null,
+        daysRemaining: null,
+        isExpiring: false,
+        isExpired: false
+      };
+    }
+
     const raw = `${emp.contractType || ''} ${emp.employmentType || ''}`.toLowerCase();
     const isTetap = raw.includes('tetap') || raw.includes('pkwtt') || raw.includes('permanent');
 
     if (isTetap) {
-      return { status: 'permanent', label: 'Tetap (PKWTT)', daysLeft: null, isExpiring: false, isExpired: false };
+      return { status: 'permanent', label: 'Tetap (PKWTT)', daysLeft: null, daysRemaining: null, isExpiring: false, isExpired: false };
     }
 
     if (!emp.contractEndDate) {
       if (raw.includes('probation') || raw.includes('percobaan')) {
-        return { status: 'probation', label: 'Probation (3 Bulan)', daysLeft: null, isExpiring: false, isExpired: false };
+        return { status: 'probation', label: 'Probation (3 Bulan)', daysLeft: null, daysRemaining: null, isExpiring: false, isExpired: false };
       }
-      return { status: 'permanent', label: 'Tetap (PKWTT)', daysLeft: null, isExpiring: false, isExpired: false };
+      return { status: 'permanent', label: 'Tetap (PKWTT)', daysLeft: null, daysRemaining: null, isExpiring: false, isExpired: false };
     }
 
     const end = new Date(`${emp.contractEndDate}T00:00:00`);
@@ -281,11 +295,11 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
     const diffDays = Math.ceil((end.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
     if (diffDays < 0) {
-      return { status: 'expired', label: `Expired (${Math.abs(diffDays)} hari lalu)`, daysLeft: diffDays, isExpiring: false, isExpired: true };
+      return { status: 'expired', label: `Expired (${Math.abs(diffDays)} hari lalu)`, daysLeft: diffDays, daysRemaining: diffDays, isExpiring: false, isExpired: true };
     } else if (diffDays <= 60) {
-      return { status: 'expiring', label: `Sisa ${diffDays} hari`, daysLeft: diffDays, isExpiring: true, isExpired: false };
+      return { status: 'expiring', label: `Sisa ${diffDays} hari`, daysLeft: diffDays, daysRemaining: diffDays, isExpiring: true, isExpired: false };
     } else {
-      return { status: 'active', label: `Aktif (${diffDays} hari lagi)`, daysLeft: diffDays, isExpiring: false, isExpired: false };
+      return { status: 'active', label: `Aktif (${diffDays} hari lagi)`, daysLeft: diffDays, daysRemaining: diffDays, isExpiring: false, isExpired: false };
     }
   };
 
@@ -293,11 +307,11 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
   const stats = useMemo(() => {
     const total = employees.length;
     const activeEmployees = employees.filter(e => (e.employmentStatus || e.status || 'Active').toLowerCase() === 'active');
-    const pkwtList = employees.filter(e => {
+    const pkwtList = activeEmployees.filter(e => {
       const t = `${e.contractType || ''} ${e.employmentType || ''}`.toLowerCase();
       return (t.includes('pkwt') || t.includes('contract')) && !t.includes('pkwtt');
     });
-    const pkwttList = employees.filter(e => {
+    const pkwttList = activeEmployees.filter(e => {
       const t = `${e.contractType || ''} ${e.employmentType || ''}`.toLowerCase();
       return t.includes('tetap') || t.includes('pkwtt') || t.includes('permanent');
     });
@@ -1233,11 +1247,29 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
                         <div className="flex items-center gap-3">
                           <UserAvatar name={emp.fullName} url={emp.avatarUrl} size="md" />
                           <div className="min-w-0">
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-1.5 flex-wrap">
                               <span className="font-bold text-sm text-foreground truncate">{emp.fullName}</span>
                               {emp.nickname && emp.nickname !== emp.fullName && (
                                 <span className="text-[11px] text-muted-foreground font-normal">({emp.nickname})</span>
                               )}
+                              {(() => {
+                                const s = (emp.employmentStatus || emp.status || '').toLowerCase();
+                                if (s === 'resigned') {
+                                  return (
+                                    <Badge variant="outline" className="text-[10px] py-0 px-1.5 bg-slate-100 text-slate-600 dark:bg-zinc-800 dark:text-zinc-400 border-slate-200 dark:border-zinc-700 font-semibold">
+                                      Resigned
+                                    </Badge>
+                                  );
+                                }
+                                if (s === 'disabled' || s === 'inactive' || s === 'non-active') {
+                                  return (
+                                    <Badge variant="outline" className="text-[10px] py-0 px-1.5 bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400 border-rose-200 dark:border-rose-900 font-semibold">
+                                      Non-Aktif
+                                    </Badge>
+                                  );
+                                }
+                                return null;
+                              })()}
                             </div>
                             <div className="flex items-center gap-2 mt-0.5">
                               <span className="text-xs font-semibold text-primary">
@@ -1351,9 +1383,24 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
                               {' s/d '}
                               {emp.contractEndDate ? formatDateDDMMYYYY(emp.contractEndDate) : 'Tetap'}
                             </div>
+                            {(() => {
+                              const isNonActive = (emp.employmentStatus || emp.status || '').toLowerCase() !== 'active';
+                              if (isNonActive) {
+                                return (
+                                  <div className="text-[10px] text-muted-foreground font-normal mt-0.5">
+                                    {emp.separationDate ? `Berhenti: ${formatDateDDMMYYYY(emp.separationDate)}` : 'Status: Resigned'}
+                                  </div>
+                                );
+                              }
+                              return null;
+                            })()}
                           </TableCell>
                           <TableCell className="px-6 py-3.5">
-                            {contractMeta.isExpired ? (
+                            {contractMeta.status === 'resigned' ? (
+                              <Badge variant="outline" className="bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400 border-slate-300 dark:border-zinc-700 text-xs font-semibold">
+                                ⏹ {contractMeta.label}
+                              </Badge>
+                            ) : contractMeta.isExpired ? (
                               <Badge className="bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 text-xs font-bold">
                                 ❌ {contractMeta.label}
                               </Badge>
