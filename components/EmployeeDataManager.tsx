@@ -199,7 +199,13 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
           graduationYear: u.graduation_year,
           educationStartYear: u.education_start_year,
           gpa: u.gpa,
-          diplomaNumber: u.diploma_number
+          diplomaNumber: u.diploma_number,
+          // Jadwal & Shift Kerja
+          scheduleId: u.schedule_id,
+          workScheduleType: u.work_schedule_type || 'default',
+          customWorkStart: u.custom_work_start,
+          customWorkEnd: u.custom_work_end,
+          customGracePeriodMinutes: u.custom_grace_period_minutes
         }));
         setEmployees(mapped);
       }
@@ -788,7 +794,13 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
       graduation_year: userData.graduationYear || null,
       education_start_year: userData.educationStartYear || null,
       gpa: userData.gpa || null,
-      diploma_number: userData.diplomaNumber || null
+      diploma_number: userData.diplomaNumber || null,
+      // Jadwal & Shift Kerja
+      schedule_id: userData.scheduleId || null,
+      work_schedule_type: userData.workScheduleType || 'default',
+      custom_work_start: userData.customWorkStart || null,
+      custom_work_end: userData.customWorkEnd || null,
+      custom_grace_period_minutes: userData.customGracePeriodMinutes || null
     };
 
     try {

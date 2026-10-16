@@ -21,7 +21,7 @@ import { UserAvatar } from '../UserAvatar';
 import {
   AttendanceRecord, AttendanceSchedule, OfficeLocation, AttendanceSettings,
   UserAccount, LeaveRequest, OvertimeRequest, GPS_BG, GPS_DOT, STATUS_CONFIG, formatTime, formatDate, formatMinutes,
-  getDistanceMeters, getGeoLocation, renderStatusBadge, isUserAllowedAtLocation, parseLocationMeta
+  getDistanceMeters, getGeoLocation, renderStatusBadge, isUserAllowedAtLocation, parseLocationMeta, getUserSchedule
 } from './attendanceTypes';
 
 const ClockPanel: React.FC<{
@@ -29,9 +29,10 @@ const ClockPanel: React.FC<{
   currentUser?: any;
   todayRecord: AttendanceRecord | null;
   schedule: AttendanceSchedule | null;
+  allSchedules?: AttendanceSchedule[];
   locations: OfficeLocation[];
   onClockAction: () => void;
-}> = ({ userId, currentUser, todayRecord, schedule, locations, onClockAction }) => {
+}> = ({ userId, currentUser, todayRecord, schedule, allSchedules = [], locations, onClockAction }) => {
   const [loading, setLoading] = useState(false);
   const [now, setNow] = useState(new Date());
   const [locationStatus, setLocationStatus] = useState<'checking' | 'inside' | 'outside' | 'restricted' | 'unknown'>('checking');
@@ -115,8 +116,12 @@ const ClockPanel: React.FC<{
   const isClockedIn = !!todayRecord?.clock_in;
   const isClockedOut = !!todayRecord?.clock_out;
 
-  // Flexible Hours Policy: Check-in 07:00 - 10:00, Wajib 9 Jam Kerja
-  const policy = schedule;
+  // Jadwal kerja karyawan: Prioritas jadwal khusus / shift karyawan, fallback ke global
+  const effectiveSchedule = useMemo(() => {
+    return getUserSchedule(currentUser, schedule, allSchedules);
+  }, [currentUser, schedule, allSchedules]);
+
+  const policy = effectiveSchedule || schedule;
 
   const isFlexible = policy?.is_flexible ?? true;
   const flexStart = policy?.flex_start || '07:00';
@@ -131,10 +136,10 @@ const ClockPanel: React.FC<{
     // Masuk setelah batas fleksibel (10:00) = Terlambat
     isLate = nowMinutes > flexEndMinutes;
   } else {
-    const scheduleStart = (schedule as any)?.work_start || schedule?.start_time || '08:00';
+    const scheduleStart = (policy as any)?.work_start || (policy as any)?.start_time || '08:00';
     const [sh, sm] = scheduleStart.split(':').map(Number);
     const scheduleMinutes = (sh || 8) * 60 + (sm || 0);
-    isLate = nowMinutes > scheduleMinutes + (schedule?.grace_period_minutes || 15);
+    isLate = nowMinutes > scheduleMinutes + (policy?.grace_period_minutes || 15);
   }
 
   // Perhitungan Target Jam Pulang (Clock In + 9 Jam) & Durasi Real-Time
@@ -285,15 +290,16 @@ const ClockPanel: React.FC<{
         </div>
         <div className="mt-2 text-[13px] text-white/60">{dateStr}</div>
         
-        {/* Schedule Badge: Jam Fleksibel atau Tetap */}
+        {/* Schedule Badge: Jam Fleksibel atau Tetap / Shift */}
         {isFlexible ? (
           <div className="mt-2.5 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3.5 py-1 text-[11px] font-medium text-white/90 backdrop-blur-xs">
             <Clock size={11} className="text-[#BC9C33]" />
-            <span>Jam Fleksibel: Masuk {flexStart} - {flexEnd} · Pulang Wajib {requiredHours} Jam</span>
+            <span>{policy?.name || 'Jam Fleksibel'}: Masuk {flexStart} - {flexEnd} · Pulang Wajib {requiredHours} Jam</span>
           </div>
-        ) : schedule ? (
-          <div className="mt-2.5 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1 text-[11px] font-medium text-white/70">
-            <Clock size={11} /> {(schedule as any).work_start || schedule.start_time} — {(schedule as any).work_end || schedule.end_time} · Grace {schedule.grace_period_minutes}m
+        ) : policy ? (
+          <div className="mt-2.5 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3.5 py-1 text-[11px] font-medium text-white/90 backdrop-blur-xs">
+            <Clock size={11} className="text-[#BC9C33]" />
+            <span>{policy.name}: {(policy as any).work_start || (policy as any).start_time} — {(policy as any).work_end || (policy as any).end_time} · Toleransi {policy.grace_period_minutes}m</span>
           </div>
         ) : null}
       </div>
@@ -509,6 +515,7 @@ export const AttendanceDashboard: React.FC<AttendanceDashboardProps> = ({ curren
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
   const [overtimeRequests, setOvertimeRequests] = useState<OvertimeRequest[]>([]);
   const [schedule, setSchedule] = useState<AttendanceSchedule | null>(null);
+  const [allSchedules, setAllSchedules] = useState<AttendanceSchedule[]>([]);
   const [locations, setLocations] = useState<OfficeLocation[]>([]);
   const [settings, setSettings] = useState<AttendanceSettings | null>(null);
   const [allUsers, setAllUsers] = useState<UserAccount[]>([]);
@@ -527,7 +534,7 @@ export const AttendanceDashboard: React.FC<AttendanceDashboardProps> = ({ curren
       const today = jakartaDate();
       const [todayRes, schRes, locRes, empRes, recRes, lRes, oRes] = await Promise.all([
         supabase.from('attendance_records').select('*').eq('user_id', userId).eq('date', today).maybeSingle(),
-        supabase.from('attendance_schedules').select('*').eq('is_active', true).limit(1).maybeSingle(),
+        supabase.from('attendance_schedules').select('*').eq('is_active', true).order('id'),
         supabase.from('office_locations').select('*').eq('is_active', true),
         loadWorkforceAccounts().then(data => ({ data })),
         fetchAllRows((from, to) => {
@@ -540,7 +547,11 @@ export const AttendanceDashboard: React.FC<AttendanceDashboardProps> = ({ curren
       ]);
 
       setTodayRecord(todayRes.data ? normalizeAttendance(todayRes.data) as AttendanceRecord : null);
-      if (schRes.data) setSchedule(schRes.data as AttendanceSchedule);
+      if (schRes.data) {
+        const list = schRes.data as AttendanceSchedule[];
+        setAllSchedules(list);
+        setSchedule(list.find(s => s.is_flexible) || list[0] || null);
+      }
       if (locRes.data) setLocations(locRes.data as OfficeLocation[]);
       if (empRes.data) {
         setAllUsers(empRes.data.map((e: any) => ({
@@ -552,6 +563,11 @@ export const AttendanceDashboard: React.FC<AttendanceDashboardProps> = ({ curren
           company: e.company,
           status: e.status,
           avatar_url: e.avatar_url,
+          schedule_id: e.schedule_id,
+          work_schedule_type: e.work_schedule_type,
+          custom_work_start: e.custom_work_start,
+          custom_work_end: e.custom_work_end,
+          custom_grace_period_minutes: e.custom_grace_period_minutes,
         })));
       }
       if (recRes.data) setAllRecords(recRes.data.map(normalizeAttendance) as AttendanceRecord[]);
@@ -626,6 +642,7 @@ export const AttendanceDashboard: React.FC<AttendanceDashboardProps> = ({ curren
         currentUser={currentUser}
         todayRecord={todayRecord}
         schedule={schedule}
+        allSchedules={allSchedules}
         locations={locations}
         onClockAction={() => setRefreshKey(k => k + 1)}
       />
@@ -876,6 +893,7 @@ export const AttendanceDashboard: React.FC<AttendanceDashboardProps> = ({ curren
               <TableRow className="border-b border-slate-200 bg-slate-50/80">
                 <TableHead className="text-[10px] font-bold uppercase tracking-[0.08em] text-slate-400">Karyawan</TableHead>
                 <TableHead className="text-[10px] font-bold uppercase tracking-[0.08em] text-slate-400">Departemen</TableHead>
+                <TableHead className="text-[10px] font-bold uppercase tracking-[0.08em] text-slate-400">Jadwal</TableHead>
                 <TableHead className="text-[10px] font-bold uppercase tracking-[0.08em] text-slate-400">Clock In</TableHead>
                 <TableHead className="text-[10px] font-bold uppercase tracking-[0.08em] text-slate-400">Clock Out</TableHead>
                 <TableHead className="text-[10px] font-bold uppercase tracking-[0.08em] text-slate-400">Durasi</TableHead>
@@ -884,12 +902,13 @@ export const AttendanceDashboard: React.FC<AttendanceDashboardProps> = ({ curren
             </TableHeader>
             <TableBody>
               {activeUsers.length === 0 ? (
-                <TableRow><TableCell colSpan={6} className="py-12 text-center text-slate-400">Tidak ada karyawan aktif</TableCell></TableRow>
+                <TableRow><TableCell colSpan={7} className="py-12 text-center text-slate-400">Tidak ada karyawan aktif</TableCell></TableRow>
               ) : (
                 activeUsers.map(u => {
                   const today = jakartaDate();
                   const rec = allRecords.find(r => String(r.user_id) === String(u.id) && r.date === today);
                   const isPresent = rec && (rec.status === 'present' || rec.status === 'late');
+                  const userSch = getUserSchedule(u, schedule, allSchedules);
                   return (
                     <TableRow key={u.id} className={cn('border-b border-slate-100 transition-colors', isPresent ? 'hover:bg-emerald-50/30' : 'hover:bg-slate-50/50')}>
                       <TableCell className="py-3">
@@ -907,6 +926,12 @@ export const AttendanceDashboard: React.FC<AttendanceDashboardProps> = ({ curren
                         </div>
                       </TableCell>
                       <TableCell className="text-[12px] text-slate-500">{u.department || '-'}</TableCell>
+                      <TableCell className="text-[11px]">
+                        <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 font-medium text-slate-700">
+                          <Clock size={10} className="text-slate-400" />
+                          {userSch?.name ? userSch.name.replace(/Jam Kerja /i, '') : 'Default'}
+                        </span>
+                      </TableCell>
                       <TableCell className="tabular-nums text-[12px] text-slate-600">{rec ? formatTime(rec.clock_in) : <span className="text-slate-300">—</span>}</TableCell>
                       <TableCell className="tabular-nums text-[12px] text-slate-600">{rec?.clock_out ? formatTime(rec.clock_out) : <span className="text-slate-300">—</span>}</TableCell>
                       <TableCell className="tabular-nums text-[12px] font-semibold text-slate-600">{rec ? formatMinutes(rec.total_work_minutes) : <span className="text-slate-300">—</span>}</TableCell>

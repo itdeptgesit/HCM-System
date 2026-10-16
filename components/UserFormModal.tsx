@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Check, ChevronLeft, ChevronRight, X, CheckCircle2, Info, GraduationCap, Upload, ExternalLink, FileText, Loader2, Camera, Trash2 } from '@/components/ui/icons';
+import { Check, ChevronLeft, ChevronRight, X, CheckCircle2, Info, GraduationCap, Upload, ExternalLink, FileText, Loader2, Camera, Trash2, Clock } from '@/components/ui/icons';
 import { uploadFileToGoogleDrive } from '../lib/googleDriveUpload';
 import { UserAccount, UserGroup, Company, DocumentCategory } from '../types';
 import { supabase } from '../lib/supabaseClient';
@@ -212,6 +212,7 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [avatarError, setAvatarError] = useState('');
+  const [schedules, setSchedules] = useState<{ id: number | string; name: string; work_start: string; work_end: string; is_flexible: boolean; grace_period_minutes: number }[]>([]);
 
   const handleAvatarFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -330,14 +331,16 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
   useEffect(() => {
     if (!isOpen) return;
     const loadOptions = async () => {
-      const [{ data: companyRows }, { data: departmentRows }, { data: employeeRows }] = await Promise.all([
+      const [{ data: companyRows }, { data: departmentRows }, { data: employeeRows }, { data: scheduleRows }] = await Promise.all([
         supabase.from('companies').select('*').order('name'),
         supabase.from('departments').select('name').order('name'),
         supabase.from('user_accounts').select('employee_code').not('employee_code', 'is', null),
+        supabase.from('attendance_schedules').select('*').eq('is_active', true).order('name'),
       ]);
       if (companyRows) setCompanies(companyRows as Company[]);
       if (departmentRows) setDepartments(departmentRows as { name: string }[]);
       if (employeeRows) setExistingEmployeeIds(employeeRows.map((row: { employee_code: string | null }) => row.employee_code).filter((value): value is string => Boolean(value)));
+      if (scheduleRows) setSchedules(scheduleRows as any[]);
     };
     void loadOptions();
   }, [isOpen]);
@@ -1006,6 +1009,123 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
                   error={errors.gradeClass}
                   onChange={setField}
                 />
+
+                {/* ═══════ Jadwal Kerja Karyawan ═══════ */}
+                <div className="sm:col-span-2 rounded-2xl border border-border bg-muted/20 p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Clock size={16} className="text-primary" />
+                    <span className="text-xs font-bold text-foreground">Jadwal & Jam Kerja Karyawan</span>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    Tentukan apakah karyawan mengikuti jadwal default perusahaan, ditugaskan ke shift tertentu, atau menggunakan jam kerja khusus (tetap).
+                  </p>
+
+                  {/* Mode Selection */}
+                  <div className="inline-flex rounded-xl bg-muted p-0.5 border border-border/40 text-xs font-medium">
+                    {[
+                      { key: 'default', label: 'Default (Fleksibel)' },
+                      { key: 'shift', label: 'Pilih Shift' },
+                      { key: 'custom', label: 'Jam Khusus' },
+                    ].map(opt => (
+                      <button
+                        key={opt.key}
+                        type="button"
+                        onClick={() => {
+                          setField('workScheduleType' as any, opt.key);
+                          if (opt.key === 'default') {
+                            setField('scheduleId' as any, '');
+                            setField('customWorkStart' as any, '');
+                            setField('customWorkEnd' as any, '');
+                          }
+                        }}
+                        className={`px-3 py-1.5 rounded-lg transition-all ${
+                          (form.workScheduleType || 'default') === opt.key
+                            ? 'bg-card text-foreground shadow-sm font-semibold'
+                            : 'text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Shift Picker */}
+                  {(form.workScheduleType || 'default') === 'shift' && (
+                    <div>
+                      <label className="block">
+                        <span className={labelClass}>Pilih Shift / Jadwal</span>
+                        <select
+                          className={inputClass}
+                          value={String(form.scheduleId || '')}
+                          onChange={e => setField('scheduleId' as any, e.target.value)}
+                        >
+                          <option value="">— Pilih jadwal shift —</option>
+                          {schedules.filter(s => !s.is_flexible).map(s => (
+                            <option key={s.id} value={s.id}>
+                              {s.name} ({s.work_start?.slice(0, 5)} - {s.work_end?.slice(0, 5)})
+                            </option>
+                          ))}
+                          {schedules.filter(s => s.is_flexible).map(s => (
+                            <option key={s.id} value={s.id}>
+                              {s.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                  )}
+
+                  {/* Custom Work Hours */}
+                  {(form.workScheduleType || 'default') === 'custom' && (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="block">
+                          <span className={labelClass}>Jam Masuk</span>
+                          <input
+                            type="time"
+                            className={inputClass}
+                            value={String(form.customWorkStart || '')}
+                            onChange={e => setField('customWorkStart' as any, e.target.value)}
+                          />
+                        </label>
+                      </div>
+                      <div>
+                        <label className="block">
+                          <span className={labelClass}>Jam Pulang</span>
+                          <input
+                            type="time"
+                            className={inputClass}
+                            value={String(form.customWorkEnd || '')}
+                            onChange={e => setField('customWorkEnd' as any, e.target.value)}
+                          />
+                        </label>
+                      </div>
+                      <div>
+                        <label className="block">
+                          <span className={labelClass}>Toleransi (Menit)</span>
+                          <input
+                            type="number"
+                            min="0"
+                            max="60"
+                            className={inputClass}
+                            value={String(form.customGracePeriodMinutes ?? 15)}
+                            onChange={e => setField('customGracePeriodMinutes' as any, e.target.value)}
+                          />
+                        </label>
+                        <span className="text-[10px] text-muted-foreground">Toleransi keterlambatan</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Info Badge */}
+                  {(form.workScheduleType || 'default') === 'default' && (
+                    <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50/70 px-3 py-2">
+                      <span className="text-[11px] text-emerald-800">
+                        Karyawan ini mengikuti jadwal default perusahaan (jam kerja fleksibel yang diatur di Pengaturan Sistem).
+                      </span>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 

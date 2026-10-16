@@ -120,6 +120,47 @@ export interface UserAccount {
   attendance_hr_id?: string | null;
   attendance_manager_id?: string | null;
   attendance_vp_id?: string | null;
+  schedule_id?: number | string | null;
+  work_schedule_type?: 'default' | 'shift' | 'custom' | string | null;
+  custom_work_start?: string | null;
+  custom_work_end?: string | null;
+  custom_grace_period_minutes?: number | null;
+}
+
+export function getUserSchedule(
+  user?: Partial<UserAccount> | any | null,
+  globalSchedule?: AttendanceSchedule | null,
+  allSchedules?: AttendanceSchedule[]
+): AttendanceSchedule | null {
+  if (!user) return globalSchedule || null;
+
+  // 1. Cek jika karyawan menggunakan jam kerja khusus (Manual input)
+  if (user.work_schedule_type === 'custom' && user.custom_work_start) {
+    const wStart = user.custom_work_start.slice(0, 5);
+    const wEnd = user.custom_work_end ? user.custom_work_end.slice(0, 5) : '17:00';
+    return {
+      id: 'custom',
+      name: `Jam Khusus (${wStart} - ${wEnd})`,
+      start_time: wStart,
+      end_time: wEnd,
+      work_start: wStart,
+      work_end: wEnd,
+      grace_period_minutes: user.custom_grace_period_minutes ?? 15,
+      is_active: true,
+      is_flexible: false,
+      required_work_hours: 9
+    };
+  }
+
+  // 2. Cek jika karyawan ditugaskan ke Shift tertentu (attendance_schedules)
+  const schId = user.schedule_id || user.scheduleId;
+  if (schId && allSchedules && allSchedules.length > 0) {
+    const matched = allSchedules.find(s => String(s.id) === String(schId));
+    if (matched) return matched;
+  }
+
+  // 3. Fallback ke global active schedule
+  return globalSchedule || null;
 }
 
 export interface AttendanceRecord {

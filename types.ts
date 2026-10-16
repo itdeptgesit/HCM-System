@@ -243,6 +243,12 @@ export interface UserAccount {
   ijazahFileUrl?: string;
   skFileUrl?: string;
   bpjsFileUrl?: string;
+  // Jadwal & Jam Kerja (Shift / Non-Fleksibel)
+  scheduleId?: number | string;
+  workScheduleType?: 'default' | 'shift' | 'custom' | string;
+  customWorkStart?: string;
+  customWorkEnd?: string;
+  customGracePeriodMinutes?: number;
   createdAt?: string;
 }
 
