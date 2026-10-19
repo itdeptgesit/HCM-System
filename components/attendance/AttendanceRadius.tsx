@@ -789,8 +789,9 @@ const OfficeLocationsManager: React.FC<{
                           <div className="text-[11px] text-slate-600 mt-0.5 line-clamp-2">{loc.address}</div>
                           <div className="mt-2 pt-1 border-t border-slate-200 flex items-center justify-between text-[11px]">
                             <span className="font-semibold text-blue-600">Radius: {loc.radius_meters}m</span>
-                            <span className={loc.is_active ? 'text-emerald-600 font-bold' : 'text-slate-400 font-bold'}>
-                              {loc.is_active ? '● Aktif' : '○ Nonaktif'}
+                            <span className={`inline-flex items-center gap-1 font-bold ${loc.is_active ? 'text-emerald-600' : 'text-slate-400'}`}>
+                              <span className={`h-1.5 w-1.5 rounded-full ${loc.is_active ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                              {loc.is_active ? 'Aktif' : 'Nonaktif'}
                             </span>
                           </div>
                         </div>

@@ -2067,17 +2067,17 @@ export const AttendanceRequest: React.FC<AttendanceRequestProps> = ({ currentUse
                         <div className="text-[11px] space-y-1.5 pt-0.5">
                           <div className="flex flex-wrap items-center gap-1.5">
                             {validation.tenureYears >= 1 ? (
-                              <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 font-semibold">
-                                ✓ Masa Kerja: {validation.tenureYears} Tahun ({validation.tenureMonths} Bulan) &bull; Memenuhi Syarat (&ge; 1 Thn)
+                              <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 font-semibold inline-flex items-center gap-1">
+                                <Check size={11} /> Masa Kerja: {validation.tenureYears} Tahun ({validation.tenureMonths} Bulan) &bull; Memenuhi Syarat (&ge; 1 Thn)
                               </Badge>
                             ) : (
-                              <Badge variant="outline" className="text-[10px] bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20 font-semibold">
-                                ⚠ Masa Kerja Belum 1 Tahun ({validation.tenureMonths} Bulan)
+                              <Badge variant="outline" className="text-[10px] bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20 font-semibold inline-flex items-center gap-1">
+                                <AlertTriangle size={11} /> Masa Kerja Belum 1 Tahun ({validation.tenureMonths} Bulan)
                               </Badge>
                             )}
                             {isOverLimit && (
-                              <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 font-semibold">
-                                ⚠ Melebihi Plafon SK
+                              <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 font-semibold inline-flex items-center gap-1">
+                                <AlertTriangle size={11} /> Melebihi Plafon SK
                               </Badge>
                             )}
                           </div>

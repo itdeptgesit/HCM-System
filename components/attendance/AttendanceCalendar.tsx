@@ -1307,7 +1307,7 @@ const CompanyCalendarManager: React.FC = () => {
                     : 'Jadwal operasional perusahaan pada tanggal ini akan kembali normal sebagai hari kerja.'}
                 </p>
                 <p className="text-[10px] text-muted-foreground/80 pt-0.5">
-                  💡 HR dapat memeriksa kembali dan mengaktifkannya sewaktu-waktu melalui tab <strong>Daftar Hari Libur</strong>.
+                  HR dapat memeriksa kembali dan mengaktifkannya sewaktu-waktu melalui tab <strong>Daftar Hari Libur</strong>.
                 </p>
               </div>
             </div>

@@ -361,8 +361,9 @@ export const NewLeaveRequestModal: React.FC<NewLeaveRequestModalProps> = ({
 
               {selectedArticle22 && (
                 <div className="text-[11px] text-muted-foreground bg-background/80 p-2.5 rounded-lg border border-border/50 space-y-1">
-                  <p className="font-semibold text-foreground">
-                    ✓ {selectedArticle22.label} (Maks {selectedArticle22.maxDays} Hari Kerja)
+                  <p className="font-semibold text-foreground flex items-center">
+                    <Check className="h-3.5 w-3.5 text-emerald-600 mr-1.5 shrink-0" />
+                    <span>{selectedArticle22.label} (Maks {selectedArticle22.maxDays} Hari Kerja)</span>
                   </p>
                   <p>{selectedArticle22.description}</p>
                   <p className="text-emerald-600 dark:text-emerald-400 font-medium">

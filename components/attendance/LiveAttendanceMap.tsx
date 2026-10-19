@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   MapPin, Search, Filter, RefreshCw, Building2, User, Clock,
   CheckCircle2, AlertTriangle, ExternalLink, Users, Calendar,
-  Navigation, Eye, X, Layers, Compass, RotateCcw
+  Navigation, Eye, X, Layers, Compass, RotateCcw, Moon, Sun, Globe
 } from '@/components/ui/icons';
 import { MapContainer, TileLayer, Marker, Circle, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
@@ -41,20 +41,27 @@ const createOfficeIcon = (name: string) => {
         display: flex;
         align-items: center;
         justify-content: center;
-        width: 34px;
-        height: 34px;
-        border-radius: 10px;
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
         background: #1e3a8a;
         color: white;
         border: 2px solid white;
         box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-        font-size: 16px;
       ">
-        🏢
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/>
+          <path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/>
+          <path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/>
+          <path d="M10 6h4"/>
+          <path d="M10 10h4"/>
+          <path d="M10 14h4"/>
+          <path d="M10 18h4"/>
+        </svg>
       </div>
     `,
-    iconSize: [34, 34],
-    iconAnchor: [17, 17],
+    iconSize: [32, 32],
+    iconAnchor: [16, 16],
     popupAnchor: [0, -18]
   });
 };
@@ -551,53 +558,56 @@ export function LiveAttendanceMap({ currentUser }: LiveAttendanceMapProps) {
                     type="button"
                     onClick={() => setMapTheme('dark')}
                     className={cn(
-                      'px-2 py-0.5 text-[10px] font-bold rounded-md transition-all flex items-center gap-1',
+                      'px-2.5 py-1 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 cursor-pointer',
                       mapTheme === 'dark'
                         ? 'bg-primary dark:bg-blue-600 text-white shadow-2xs'
                         : 'text-muted-foreground hover:text-foreground'
                     )}
-                    title="Mode Gelap Bersih (100% Gratis, Tanpa Watermark)"
+                    title="Mode Gelap Bersih"
                   >
-                    <span>🌙 Dark</span>
+                    <Moon size={12} />
+                    <span>Dark</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setMapTheme('light')}
                     className={cn(
-                      'px-2 py-0.5 text-[10px] font-bold rounded-md transition-all flex items-center gap-1',
+                      'px-2.5 py-1 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 cursor-pointer',
                       mapTheme === 'light'
                         ? 'bg-primary dark:bg-blue-600 text-white shadow-2xs'
                         : 'text-muted-foreground hover:text-foreground'
                     )}
                     title="OpenStreetMap Terang"
                   >
-                    <span>☀️ Terang</span>
+                    <Sun size={12} />
+                    <span>Terang</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setMapTheme('satellite')}
                     className={cn(
-                      'px-2 py-0.5 text-[10px] font-bold rounded-md transition-all flex items-center gap-1',
+                      'px-2.5 py-1 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 cursor-pointer',
                       mapTheme === 'satellite'
                         ? 'bg-primary dark:bg-blue-600 text-white shadow-2xs'
                         : 'text-muted-foreground hover:text-foreground'
                     )}
                     title="Citra Satelit Esri Asli"
                   >
-                    <span>🛰️ Satelit</span>
+                    <Globe size={12} />
+                    <span>Satelit</span>
                   </button>
                 </div>
 
                 {/* Legend Badges */}
-                <div className="flex items-center gap-2.5 text-[11px] text-muted-foreground">
-                  <span className="flex items-center gap-1 font-semibold text-blue-600 dark:text-blue-400">
-                    <span className="h-2.5 w-2.5 rounded bg-blue-600 inline-block" /> Kantor
+                <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1.5 font-medium text-foreground">
+                    <span className="h-2 w-2 rounded-xs bg-blue-600 inline-block" /> Kantor
                   </span>
-                  <span className="flex items-center gap-1 font-semibold text-emerald-600 dark:text-emerald-400">
-                    <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 inline-block" /> Di Radius
+                  <span className="flex items-center gap-1.5 font-medium text-foreground">
+                    <span className="h-2 w-2 rounded-full bg-emerald-500 inline-block" /> Di Radius
                   </span>
-                  <span className="flex items-center gap-1 font-semibold text-amber-600 dark:text-amber-400">
-                    <span className="h-2.5 w-2.5 rounded-full bg-amber-500 inline-block" /> Luar Radius
+                  <span className="flex items-center gap-1.5 font-medium text-foreground">
+                    <span className="h-2 w-2 rounded-full bg-amber-500 inline-block" /> Luar Radius
                   </span>
                 </div>
               </div>
@@ -631,7 +641,8 @@ export function LiveAttendanceMap({ currentUser }: LiveAttendanceMapProps) {
                         <Popup>
                           <div className="p-1 min-w-[210px] text-xs font-sans">
                             <div className="flex items-center gap-1.5 font-bold text-blue-900">
-                              <span>🏢</span> {loc.name}
+                              <Building2 size={14} className="text-blue-700 shrink-0" />
+                              <span>{loc.name}</span>
                             </div>
                             <p className="text-[11px] text-slate-600 mt-1 line-clamp-2">
                               {loc.address}
@@ -703,8 +714,9 @@ export function LiveAttendanceMap({ currentUser }: LiveAttendanceMapProps) {
 
                             <div className="flex items-center justify-between">
                               <span className="text-slate-500">Status Radius:</span>
-                              <span className={`font-bold ${pt.isInsideRadius ? 'text-emerald-600' : 'text-amber-600'}`}>
-                                {pt.isInsideRadius ? '● Di Dalam Kantor' : '▲ Di Luar Kantor'}
+                              <span className={`inline-flex items-center gap-1 font-bold ${pt.isInsideRadius ? 'text-emerald-600' : 'text-amber-600'}`}>
+                                <span className={`h-1.5 w-1.5 rounded-full ${pt.isInsideRadius ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                                {pt.isInsideRadius ? 'Di Dalam Radius' : 'Di Luar Radius'}
                               </span>
                             </div>
 

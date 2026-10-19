@@ -434,9 +434,13 @@ const ClockPanel: React.FC<{
                     : 'bg-amber-100 text-amber-800'
                 }`}
               >
-                {isNineHoursReached
-                  ? '✓ 9 Jam Terpenuhi'
-                  : `Kurang ${Math.floor(remainingMinutes / 60)}j ${remainingMinutes % 60}m`}
+                {isNineHoursReached ? (
+                  <span className="inline-flex items-center gap-1">
+                    <CheckCircle2 size={11} /> 9 Jam Terpenuhi
+                  </span>
+                ) : (
+                  `Kurang ${Math.floor(remainingMinutes / 60)}j ${remainingMinutes % 60}m`
+                )}
               </span>
             </div>
 
