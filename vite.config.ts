@@ -25,6 +25,11 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
+        '@workspace/ui/components': path.resolve(__dirname, 'components/ui'),
+        '@workspace/ui/lib': path.resolve(__dirname, 'lib'),
+        '@workspace/ui': path.resolve(__dirname, 'components/ui'),
+        '@tanstack/react-router': path.resolve(__dirname, 'lib/router-shim'),
+        'motion/react': path.resolve(__dirname, 'node_modules/framer-motion'),
       }
     },
     build: {

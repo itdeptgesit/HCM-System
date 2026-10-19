@@ -706,7 +706,7 @@ export const AttendanceRequest: React.FC<AttendanceRequestProps> = ({ currentUse
                             <TableCell>
                               <div className="flex items-center gap-2">
                                 <span className={cn('flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-sm', typeInfo?.badge || 'bg-muted')}>
-                                  {typeInfo?.icon || '📝'}
+                                  {typeInfo?.icon || <FileText className="w-3.5 h-3.5" />}
                                 </span>
                                 <span className="text-xs font-semibold text-foreground">{typeInfo?.label || req.leave_type}</span>
                               </div>
@@ -1644,7 +1644,6 @@ export const AttendanceRequest: React.FC<AttendanceRequestProps> = ({ currentUse
   };
 
   // ── Request (combined: Leave, OT, Reimb, Attendance Correction) ───────────────────────────
-
   const renderRequest = () => {
     const scopedCorrections = attendanceCorrections.filter(row => matchesRequestScope(row.user_id));
     const tabs = [
@@ -1733,6 +1732,7 @@ export const AttendanceRequest: React.FC<AttendanceRequestProps> = ({ currentUse
 
         {loadError && <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">Data belum berhasil dimuat: {loadError}</div>}
         {loading && <p role="status" className="text-sm text-muted-foreground">Memuat pengajuan...</p>}
+
         {/* Tab Navigation */}
         <Tabs
           value={requestTab}
@@ -1855,7 +1855,7 @@ export const AttendanceRequest: React.FC<AttendanceRequestProps> = ({ currentUse
   };
 
   return (
-    <div className="w-full">
+    <div className="w-full h-full flex-1 flex flex-col min-h-0 overflow-y-auto">
       {renderRequest()}
       {viewRequest && (
         <Dialog open onOpenChange={(open) => { if (!open) setViewRequest(null); }}>

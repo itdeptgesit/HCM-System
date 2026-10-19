@@ -57,24 +57,21 @@ export const ResetPasswordModal: React.FC<ResetPasswordModalProps> = ({ isOpen, 
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()} disablePointerDismissal={true}>
-      <DialogContent className="sm:max-w-md p-0 overflow-hidden font-sans border border-border/60 shadow-2xl rounded-2xl">
-        <DialogHeader className="px-6 py-4 relative overflow-hidden border-b border-border/40 bg-muted/20 shrink-0">
-          <div className="absolute top-0 right-0 p-8 opacity-5">
-            <KeyRound size={80} />
-          </div>
+      <DialogContent showCloseButton={false} className="sm:max-w-md p-0 overflow-hidden font-sans border border-border/80 bg-card text-card-foreground shadow-2xl rounded-2xl">
+        <DialogHeader className="px-6 py-5 relative overflow-hidden border-b border-border/60 bg-muted/20 shrink-0">
           <div className="flex items-start justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-4 mb-2">
-                <div className="w-10 h-10 bg-amber-500/10 text-amber-600 dark:text-amber-500 rounded-lg flex items-center justify-center">
-                  <KeyRound size={20} />
-                </div>
-                <DialogTitle className="text-lg font-semibold text-foreground">Reset Passcode</DialogTitle>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-amber-500/10 text-amber-600 dark:text-amber-500 rounded-xl border border-amber-500/20 flex items-center justify-center shrink-0">
+                <KeyRound size={20} />
               </div>
-              <DialogDescription className="text-xs text-muted-foreground mt-1">
-                Force override for target identity
-              </DialogDescription>
+              <div>
+                <DialogTitle className="text-base font-bold text-foreground">Reset Passcode Karyawan</DialogTitle>
+                <DialogDescription className="text-xs text-muted-foreground mt-0.5">
+                  Atur ulang kata sandi akses akun pengguna secara langsung
+                </DialogDescription>
+              </div>
             </div>
-            <Button variant="ghost" size="icon-sm" onClick={onClose} className="text-muted-foreground hover:text-destructive"><X size={16} /></Button>
+            <Button variant="ghost" size="icon-sm" onClick={onClose} className="text-muted-foreground hover:text-foreground -mr-2 -mt-1"><X size={16} /></Button>
           </div>
         </DialogHeader>
 
@@ -86,36 +83,40 @@ export const ResetPasswordModal: React.FC<ResetPasswordModalProps> = ({ isOpen, 
                 animate={{ opacity: 1, scale: 1 }}
                 className="flex flex-col items-center text-center py-6"
               >
-                <div className="w-16 h-16 rounded-xl bg-emerald-500 text-white flex items-center justify-center mb-6 shadow-xl shadow-emerald-500/20">
-                  <Check size={32} strokeWidth={3} />
+                <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mb-4 shadow-sm">
+                  <Check size={28} strokeWidth={2.5} />
                 </div>
-                <h3 className="text-lg font-semibold text-emerald-700 dark:text-emerald-400">Passcode Overridden</h3>
-                <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
-                  Secure passcode for {user?.email} has been <br /> successfully reset.
+                <h3 className="text-base font-bold text-foreground">Passcode Berhasil Diperbarui</h3>
+                <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
+                  Kata sandi baru untuk <span className="font-semibold text-foreground">{user?.email}</span> telah aktif dan siap digunakan login.
                 </p>
               </motion.div>
             ) : (
-              <form onSubmit={handleSubmit} className="space-y-6">
-                <div className="bg-amber-500/10 border border-amber-500/25 p-4 rounded-lg">
-                  <p className="text-xs font-semibold text-amber-700 dark:text-amber-400">Target Identity</p>
-                  <p className="text-sm font-semibold text-foreground mt-1">{user?.fullName}</p>
-                  <p className="text-xs text-muted-foreground">{user?.email}</p>
+              <form onSubmit={handleSubmit} className="space-y-5">
+                <div className="bg-muted/40 border border-border/60 p-3.5 rounded-xl flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary border border-primary/20 flex items-center justify-center font-bold text-xs shrink-0">
+                    {user?.fullName?.charAt(0)?.toUpperCase() || 'U'}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-bold text-foreground truncate">{user?.fullName}</p>
+                    <p className="text-[11px] text-muted-foreground truncate">{user?.email} {user?.employeeCode ? `• ${user?.employeeCode}` : ''}</p>
+                  </div>
                 </div>
 
                 {error && (
                   <motion.div
-                    initial={{ opacity: 0, y: -10 }}
+                    initial={{ opacity: 0, y: -6 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="bg-destructive/10 border border-destructive/20 p-4 rounded-lg text-xs font-medium text-destructive flex items-center gap-3"
+                    className="bg-destructive/10 border border-destructive/20 p-3 rounded-xl text-xs font-medium text-destructive flex items-center gap-2.5"
                   >
-                    <ShieldAlert size={14} />
+                    <ShieldAlert size={15} className="shrink-0" />
                     <span>{error}</span>
                   </motion.div>
                 )}
 
-                <div className="space-y-5">
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium text-foreground">New Passcode</Label>
+                <div className="space-y-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold text-foreground">Passcode Baru</Label>
                     <div className="relative">
                       <Input
                         type={showPassword ? "text" : "password"}
@@ -123,54 +124,56 @@ export const ResetPasswordModal: React.FC<ResetPasswordModalProps> = ({ isOpen, 
                         minLength={6}
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
-                        className="pr-12"
-                        placeholder="••••••••"
+                        className="pr-10 h-10 text-xs rounded-xl border-border/80"
+                        placeholder="Minimal 6 karakter..."
                       />
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1"
                       >
-                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                        {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
                       </button>
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium text-foreground">Confirm Identity</Label>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold text-foreground">Konfirmasi Passcode Baru</Label>
                     <Input
                       type={showPassword ? "text" : "password"}
                       required
                       minLength={6}
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
-                      placeholder="••••••••"
+                      placeholder="Ketik ulang passcode baru..."
+                      className="h-10 text-xs rounded-xl border-border/80"
                     />
                   </div>
                 </div>
 
-                <div className="flex flex-col gap-3 pt-6 border-t border-border/40 mt-2">
+                <div className="flex items-center justify-end gap-2 pt-4 border-t border-border/60">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={onClose}
+                    disabled={isLoading}
+                    className="text-xs font-semibold h-9 px-4 rounded-xl border-border/80"
+                  >
+                    Batal
+                  </Button>
                   <Button
                     type="submit"
-                    disabled={isLoading}
-                    className="font-semibold"
+                    disabled={isLoading || !newPassword || !confirmPassword}
+                    className="text-xs font-semibold h-9 px-4 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90"
                   >
                     {isLoading ? (
                       <>
-                        <Loader2 size={16} className="mr-3 animate-spin" />
-                        Overriding...
+                        <Loader2 size={14} className="mr-2 animate-spin" />
+                        Menyimpan...
                       </>
                     ) : (
-                      'Reset Passcode'
+                      'Simpan Passcode'
                     )}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={onClose}
-                    className="text-sm font-medium text-muted-foreground"
-                  >
-                    Dismiss
                   </Button>
                 </div>
               </form>

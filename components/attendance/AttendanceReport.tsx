@@ -68,7 +68,7 @@ export const AttendanceReport: React.FC<AttendanceReportProps> = ({ currentUser,
   const [reportHolidays, setReportHolidays] = useState<Set<string>>(new Set());
   const [reportError, setReportError] = useState('');
   const [reportLoading, setReportLoading] = useState(false);
-  const [reportSort, setReportSort] = useState<'name' | 'present' | 'late' | 'absent' | 'hours'>('name');
+  const [reportSort, setReportSort] = useState<'name' | 'present' | 'late' | 'absent' | 'hours' | 'rate_desc' | 'rate_asc' | 'missing'>('name');
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
   const [viewAttendancePhoto, setViewAttendancePhoto] = useState<string | null>(null);
   const [reportTab, setReportTab] = useState<'summary' | 'logs'>('summary');
@@ -141,16 +141,27 @@ export const AttendanceReport: React.FC<AttendanceReportProps> = ({ currentUser,
 
   const employeeSummaries = useMemo(() => reportUsers.map(user => summarizeEmployee(user, reportRecords, reportLeaves, reportStart, reportEnd, reportHolidays)), [reportUsers, reportRecords, reportLeaves, reportStart, reportEnd, reportHolidays]);
   const reportSummary = useMemo(() => employeeSummaries.reduce((sum, row) => ({
-    present: sum.present + row.present, late: sum.late + row.late, absent: sum.absent + row.absent,
-    leave: sum.leave + row.leave, missing: sum.missing + row.missing, totalWork: sum.totalWork + row.totalWork,
-    totalOT: sum.totalOT + row.totalOT, total: sum.total + row.total,
-  }), { present: 0, late: 0, absent: 0, leave: 0, missing: 0, totalWork: 0, totalOT: 0, total: 0 }), [employeeSummaries]);
+    present: sum.present + row.present,
+    late: sum.late + row.late,
+    absent: sum.absent + row.absent,
+    leave: sum.leave + row.leave,
+    missing: sum.missing + row.missing,
+    missingCheckout: sum.missingCheckout + (row.missingCheckout || 0),
+    scheduledDays: sum.scheduledDays + (row.scheduledDays || 0),
+    attendedDays: sum.attendedDays + (row.attendedDays || 0),
+    totalWork: sum.totalWork + row.totalWork,
+    totalOT: sum.totalOT + row.totalOT,
+    total: sum.total + row.total,
+  }), { present: 0, late: 0, absent: 0, leave: 0, missing: 0, missingCheckout: 0, scheduledDays: 0, attendedDays: 0, totalWork: 0, totalOT: 0, total: 0 }), [employeeSummaries]);
 
   const reportRows = useMemo(() => {
     const sorted = [...employeeSummaries];
     switch (reportSort) {
+      case 'rate_desc': sorted.sort((a, b) => b.attendanceRate - a.attendanceRate); break;
+      case 'rate_asc': sorted.sort((a, b) => a.attendanceRate - b.attendanceRate); break;
       case 'present': sorted.sort((a, b) => b.present - a.present); break;
       case 'late': sorted.sort((a, b) => b.late - a.late); break;
+      case 'missing': sorted.sort((a, b) => b.missing - a.missing); break;
       case 'absent': sorted.sort((a, b) => b.absent - a.absent); break;
       case 'hours': sorted.sort((a, b) => b.totalWork - a.totalWork); break;
       default: sorted.sort((a, b) => (a.user.full_name || a.user.username || '').localeCompare(b.user.full_name || b.user.username || '')); break;
@@ -158,14 +169,26 @@ export const AttendanceReport: React.FC<AttendanceReportProps> = ({ currentUser,
     return sorted;
   }, [employeeSummaries, reportSort]);
 
+  const getAttendanceHealth = (rate: number, lateCount: number, missingCount: number) => {
+    if (rate >= 95 && lateCount <= 1 && missingCount === 0) {
+      return { label: 'Sangat Baik', color: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' };
+    }
+    if (rate >= 85 && lateCount <= 3) {
+      return { label: 'Baik', color: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20' };
+    }
+    if (rate >= 75) {
+      return { label: 'Perhatian', color: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20' };
+    }
+    return { label: 'Indisipliner', color: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20' };
+  };
+
   const exportReportExcel = () => {
     if (reportRows.length === 0) {
       toast.error('Belum ada data untuk diekspor');
       return;
     }
     const rows = reportRows.map(row => {
-      const userTotalDays = row.present + row.late + row.absent + row.missing + row.leave;
-      const rate = userTotalDays > 0 ? Math.round(((row.present + row.late) / userTotalDays) * 100) : 0;
+      const health = getAttendanceHealth(row.attendanceRate, row.late, row.missing);
       return {
         'NIK Karyawan': row.user.employee_code || '-',
         'Nama Karyawan': row.user.full_name || row.user.username || 'Tanpa Nama',
@@ -175,24 +198,28 @@ export const AttendanceReport: React.FC<AttendanceReportProps> = ({ currentUser,
         'Jabatan': row.user.job_title || '-',
         'Level': row.user.job_level || 'Staff',
         'Status Kerja': row.user.employment_type || 'PKWT',
-        'Tingkat Kehadiran (%)': `${rate}%`,
+        'Hari Kerja Wajib': row.scheduledDays,
+        'Tingkat Kehadiran (%)': `${row.attendanceRate}%`,
+        'Status Kedisiplinan': health.label,
         'Hadir (Tepat Waktu)': row.present,
         'Terlambat': row.late,
-        'Lupa Absen / Tanpa Log': row.missing,
+        'Lupa Clock-Out': row.missingCheckout || 0,
+        'Tanpa Log / Mangkir': row.missing,
         'Absen': row.absent,
-        'Cuti / Izin': row.leave,
+        'Cuti / Izin Resmi': row.leave,
         'Hari Libur': row.holiday,
-        'Total Hari Kerja': userTotalDays,
-        'Jam Kerja Efektif': formatMinutes(row.totalWork),
-        'Lembur': formatMinutes(row.totalOT),
+        'Total Jam Kerja Efektif': formatMinutes(row.totalWork),
+        'Rata-rata Jam Kerja/Hari': formatMinutes(row.avgDailyWorkMinutes),
+        'Total Lembur': formatMinutes(row.totalOT),
       };
     });
     const worksheet = XLSX.utils.json_to_sheet(rows);
     worksheet['!cols'] = [
       { wch: 14 }, { wch: 26 }, { wch: 25 }, { wch: 22 }, { wch: 20 },
-      { wch: 22 }, { wch: 14 }, { wch: 16 }, { wch: 20 }, { wch: 16 },
-      { wch: 14 }, { wch: 22 }, { wch: 12 }, { wch: 14 }, { wch: 12 },
-      { wch: 16 }, { wch: 18 }, { wch: 14 },
+      { wch: 22 }, { wch: 14 }, { wch: 16 }, { wch: 18 }, { wch: 20 },
+      { wch: 18 }, { wch: 16 }, { wch: 14 }, { wch: 16 }, { wch: 20 },
+      { wch: 12 }, { wch: 16 }, { wch: 12 }, { wch: 22 }, { wch: 22 },
+      { wch: 14 },
     ];
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Rekap Kehadiran');
@@ -243,9 +270,12 @@ export const AttendanceReport: React.FC<AttendanceReportProps> = ({ currentUser,
   }, [reportStart, reportEnd]);
 
   const reportOverallRate = useMemo(() => {
-    const totalSlots = reportSummary.present + reportSummary.late + reportSummary.absent + reportSummary.missing + reportSummary.leave;
-    if (totalSlots === 0) return 0;
-    return Math.round(((reportSummary.present + reportSummary.late) / totalSlots) * 100);
+    if (reportSummary.scheduledDays === 0) {
+      const totalSlots = reportSummary.present + reportSummary.late + reportSummary.absent + reportSummary.missing + reportSummary.leave;
+      if (totalSlots === 0) return 0;
+      return Math.round(((reportSummary.present + reportSummary.late) / totalSlots) * 100);
+    }
+    return Math.min(100, Math.round(((reportSummary.attendedDays + reportSummary.leave) / reportSummary.scheduledDays) * 100));
   }, [reportSummary]);
 
   const filteredDailyRecords = useMemo(() => {
@@ -322,38 +352,38 @@ export const AttendanceReport: React.FC<AttendanceReportProps> = ({ currentUser,
           color="slate"
         />
         <StatCard
-          label="Hadir Tepat"
-          value={reportSummary.present}
+          label="Kehadiran Rata-rata"
+          value={`${reportOverallRate}%`}
           icon={CheckCircle2}
-          subValue={`${reportOverallRate}% rate kehadiran`}
+          subValue={`${reportSummary.present} Tepat • ${reportSummary.late} Telat`}
           color="emerald"
-          status="on-track"
+          status={reportOverallRate >= 85 ? "on-track" : "at-risk"}
         />
         <StatCard
           label="Terlambat"
           value={reportSummary.late}
           icon={Clock}
-          subValue={reportSummary.late > 0 ? "Lewat batas masuk" : "Nihil terlambat"}
+          subValue={reportSummary.late > 0 ? "Perlu evaluasi disiplin" : "Nihil terlambat"}
           color="amber"
           status={reportSummary.late > 0 ? "at-risk" : undefined}
         />
         <StatCard
-          label="Tanpa Log"
-          value={reportSummary.missing}
-          icon={XCircle}
-          subValue="Belum ada presensi"
-          color="rose"
-          status={reportSummary.missing > 0 ? "at-risk" : undefined}
-        />
-        <StatCard
-          label="Cuti & Izin"
+          label="Cuti & Izin Resmi"
           value={reportSummary.leave}
           icon={Calendar}
-          subValue="Pengajuan disetujui"
+          subValue="Pengajuan disetujui HR"
           color="purple"
         />
         <StatCard
-          label="Jam Kerja"
+          label="Lupa Clock-Out"
+          value={reportSummary.missingCheckout || 0}
+          icon={XCircle}
+          subValue={reportSummary.missingCheckout > 0 ? "Belum/lupa checkout" : "Semua checkout tertib"}
+          color="rose"
+          status={reportSummary.missingCheckout > 0 ? "at-risk" : undefined}
+        />
+        <StatCard
+          label="Total Jam Kerja"
           value={formatMinutes(reportSummary.totalWork)}
           icon={Timer}
           subValue={`Lembur: ${formatMinutes(reportSummary.totalOT)}`}
@@ -504,8 +534,11 @@ export const AttendanceReport: React.FC<AttendanceReportProps> = ({ currentUser,
                 className="h-9 w-full rounded-md border border-border/60 dark:border-zinc-800 bg-background dark:bg-zinc-900 px-2.5 text-xs font-medium text-foreground dark:text-zinc-100 outline-none focus:border-primary focus:ring-1 focus:ring-primary"
               >
                 <option value="name" className="bg-white dark:bg-zinc-900 text-foreground dark:text-zinc-100">Nama (A-Z)</option>
+                <option value="rate_desc" className="bg-white dark:bg-zinc-900 text-foreground dark:text-zinc-100">Kehadiran Tertinggi (%)</option>
+                <option value="rate_asc" className="bg-white dark:bg-zinc-900 text-foreground dark:text-zinc-100">Kehadiran Terendah (%)</option>
                 <option value="present" className="bg-white dark:bg-zinc-900 text-foreground dark:text-zinc-100">Hadir Terbanyak</option>
                 <option value="late" className="bg-white dark:bg-zinc-900 text-foreground dark:text-zinc-100">Terlambat Terbanyak</option>
+                <option value="missing" className="bg-white dark:bg-zinc-900 text-foreground dark:text-zinc-100">Mangkir Terbanyak</option>
                 <option value="absent" className="bg-white dark:bg-zinc-900 text-foreground dark:text-zinc-100">Absen Terbanyak</option>
                 <option value="hours" className="bg-white dark:bg-zinc-900 text-foreground dark:text-zinc-100">Jam Kerja Terbanyak</option>
               </select>
@@ -545,17 +578,19 @@ export const AttendanceReport: React.FC<AttendanceReportProps> = ({ currentUser,
                 <Table>
                   <TableHeader>
                     <TableRow className="hover:bg-transparent">
-                      <TableHead className="w-[250px]">Karyawan & NIK</TableHead>
+                      <TableHead className="w-[240px]">Karyawan & NIK</TableHead>
                       <TableHead>Perusahaan & Dept</TableHead>
-                      <TableHead className="text-center">Status Kerja</TableHead>
+                      <TableHead className="text-center">Status</TableHead>
                       <TableHead className="text-center">Kehadiran</TableHead>
+                      <TableHead className="text-center">Hari Wajib</TableHead>
                       <TableHead className="text-center">Hadir</TableHead>
                       <TableHead className="text-center">Terlambat</TableHead>
-                      <TableHead className="text-center">Tanpa Log</TableHead>
                       <TableHead className="text-center">Cuti / Izin</TableHead>
-                      <TableHead className="text-center">Total Hari</TableHead>
+                      <TableHead className="text-center">Lupa Pulang</TableHead>
+                      <TableHead className="text-center">Mangkir</TableHead>
                       <TableHead className="text-center">Jam Kerja</TableHead>
-                      <TableHead className="text-center">Lembur</TableHead>
+                      <TableHead className="text-center">Rata-rata/Hr</TableHead>
+                      <TableHead className="text-center">Evaluasi</TableHead>
                       <TableHead className="text-right">Detail Log</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -565,8 +600,7 @@ export const AttendanceReport: React.FC<AttendanceReportProps> = ({ currentUser,
                       const dayLogs = reportRecords
                         .filter(r => String(r.user_id) === String(row.user.id))
                         .sort((a, b) => (a.date < b.date ? 1 : -1));
-                      const userTotalDays = row.present + row.late + row.absent + row.missing + row.leave;
-                      const userRate = userTotalDays > 0 ? Math.round(((row.present + row.late) / userTotalDays) * 100) : 0;
+                      const health = getAttendanceHealth(row.attendanceRate, row.late, row.missing);
 
                       return (
                         <React.Fragment key={row.user.id}>
@@ -611,17 +645,22 @@ export const AttendanceReport: React.FC<AttendanceReportProps> = ({ currentUser,
                             {/* Tingkat Kehadiran Bar */}
                             <TableCell className="text-center">
                               <div className="flex flex-col items-center gap-1">
-                                <span className="text-xs font-bold tabular-nums text-foreground">{userRate}%</span>
+                                <span className="text-xs font-bold tabular-nums text-foreground">{row.attendanceRate}%</span>
                                 <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
                                   <div
                                     className={cn(
                                       'h-full rounded-full transition-all',
-                                      userRate >= 80 ? 'bg-emerald-500' : userRate >= 50 ? 'bg-amber-500' : userRate > 0 ? 'bg-rose-500' : 'bg-muted-foreground/30'
+                                      row.attendanceRate >= 90 ? 'bg-emerald-500' : row.attendanceRate >= 75 ? 'bg-amber-500' : row.attendanceRate > 0 ? 'bg-rose-500' : 'bg-muted-foreground/30'
                                     )}
-                                    style={{ width: `${userRate}%` }}
+                                    style={{ width: `${Math.min(100, Math.max(0, row.attendanceRate))}%` }}
                                   />
                                 </div>
                               </div>
+                            </TableCell>
+
+                            {/* Hari Kerja Wajib */}
+                            <TableCell className="text-center tabular-nums text-xs font-semibold text-muted-foreground">
+                              {row.scheduledDays}
                             </TableCell>
 
                             {/* Hadir */}
@@ -646,17 +685,6 @@ export const AttendanceReport: React.FC<AttendanceReportProps> = ({ currentUser,
                               )}
                             </TableCell>
 
-                            {/* Tanpa Log */}
-                            <TableCell className="text-center">
-                              {row.missing > 0 ? (
-                                <Badge variant="outline" className="bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20 tabular-nums text-xs font-bold">
-                                  {row.missing}
-                                </Badge>
-                              ) : (
-                                <span className="text-xs text-muted-foreground/40 tabular-nums">0</span>
-                              )}
-                            </TableCell>
-
                             {/* Cuti / Izin */}
                             <TableCell className="text-center">
                               {row.leave > 0 ? (
@@ -668,23 +696,43 @@ export const AttendanceReport: React.FC<AttendanceReportProps> = ({ currentUser,
                               )}
                             </TableCell>
 
-                            {/* Total Hari */}
-                            <TableCell className="text-center tabular-nums text-xs font-semibold text-muted-foreground">
-                              {userTotalDays}
+                            {/* Lupa Pulang (Missing Checkout) */}
+                            <TableCell className="text-center">
+                              {row.missingCheckout > 0 ? (
+                                <Badge variant="outline" className="bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30 tabular-nums text-xs font-bold">
+                                  {row.missingCheckout}
+                                </Badge>
+                              ) : (
+                                <span className="text-xs text-muted-foreground/40 tabular-nums">0</span>
+                              )}
                             </TableCell>
 
-                            {/* Jam Kerja */}
-                            <TableCell className="text-center tabular-nums text-xs font-bold text-foreground">
+                            {/* Mangkir / Tanpa Log */}
+                            <TableCell className="text-center">
+                              {row.missing > 0 ? (
+                                <Badge variant="outline" className="bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20 tabular-nums text-xs font-bold">
+                                  {row.missing}
+                                </Badge>
+                              ) : (
+                                <span className="text-xs text-muted-foreground/40 tabular-nums">0</span>
+                              )}
+                            </TableCell>
+
+                            {/* Jam Kerja Total */}
+                            <TableCell className="text-center tabular-nums text-xs font-bold text-foreground whitespace-nowrap">
                               {formatMinutes(row.totalWork)}
                             </TableCell>
 
-                            {/* Lembur */}
-                            <TableCell className="text-center tabular-nums text-xs">
-                              {row.totalOT > 0 ? (
-                                <span className="font-bold text-blue-500">{formatMinutes(row.totalOT)}</span>
-                              ) : (
-                                <span className="text-muted-foreground/40">-</span>
-                              )}
+                            {/* Rata-rata Jam Kerja/Hari */}
+                            <TableCell className="text-center tabular-nums text-xs text-muted-foreground whitespace-nowrap font-medium">
+                              {formatMinutes(row.avgDailyWorkMinutes)}
+                            </TableCell>
+
+                            {/* Status Evaluasi Disiplin */}
+                            <TableCell className="text-center">
+                              <Badge variant="outline" className={cn('text-[10px] font-semibold whitespace-nowrap', health.color)}>
+                                {health.label}
+                              </Badge>
                             </TableCell>
 
                             {/* Detail Button */}
@@ -709,7 +757,7 @@ export const AttendanceReport: React.FC<AttendanceReportProps> = ({ currentUser,
                           {/* Expanded Drawer: Log Harian Karyawan */}
                           {isExpanded && (
                             <TableRow className="border-b border-border/30 bg-muted/20 dark:bg-zinc-950/40">
-                              <TableCell colSpan={12} className="p-3 sm:p-4">
+                              <TableCell colSpan={14} className="p-3 sm:p-4">
                                 <div className="overflow-hidden rounded-xl border border-border/50 dark:border-zinc-800 bg-card/60 dark:bg-zinc-950/70 shadow-2xs">
                                   {/* Banner */}
                                   <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/40 bg-muted/40 dark:bg-zinc-900/60 px-4 py-2.5">
@@ -726,8 +774,9 @@ export const AttendanceReport: React.FC<AttendanceReportProps> = ({ currentUser,
                                         {dayLogs.length} Hari Tercatat
                                       </Badge>
                                     </div>
-                                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                                      <span>Total Efektif: <strong className="font-bold text-foreground">{formatMinutes(row.totalWork)}</strong></span>
+                                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                                      <span>Rata-rata/Hari: <strong className="font-bold text-foreground">{formatMinutes(row.avgDailyWorkMinutes)}</strong></span>
+                                      <span>Total Jam Kerja: <strong className="font-bold text-foreground">{formatMinutes(row.totalWork)}</strong></span>
                                       {row.totalOT > 0 && <span>Lembur: <strong className="font-bold text-blue-500">{formatMinutes(row.totalOT)}</strong></span>}
                                     </div>
                                   </div>
@@ -787,8 +836,18 @@ export const AttendanceReport: React.FC<AttendanceReportProps> = ({ currentUser,
                                                   <span className="inline-flex items-center gap-1 rounded bg-blue-500/10 px-1.5 py-0.5 text-[11px] font-semibold text-blue-600 dark:text-blue-400">
                                                     <Sunset size={11} /> {formatTime(r.clock_out)}
                                                   </span>
+                                                ) : r.clock_in ? (
+                                                  r.date === jakartaDate() ? (
+                                                    <span className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                                      Sedang Kerja
+                                                    </span>
+                                                  ) : (
+                                                    <span className="inline-flex items-center gap-1 rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-600 dark:text-amber-400">
+                                                      Lupa Clock-out
+                                                    </span>
+                                                  )
                                                 ) : (
-                                                  <span className="text-muted-foreground/60 text-[11px]">Belum pul</span>
+                                                  <span className="text-muted-foreground/60 text-[11px]">-</span>
                                                 )}
                                               </TableCell>
                                               <TableCell className="text-xs text-muted-foreground">
@@ -950,8 +1009,18 @@ export const AttendanceReport: React.FC<AttendanceReportProps> = ({ currentUser,
                               <span className="inline-flex items-center gap-1 rounded bg-blue-500/10 px-1.5 py-0.5 text-[11px] font-semibold text-blue-600 dark:text-blue-400">
                                 <Sunset size={11} /> {formatTime(r.clock_out)}
                               </span>
+                            ) : r.clock_in ? (
+                              r.date === jakartaDate() ? (
+                                <span className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                  Sedang Kerja
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-600 dark:text-amber-400">
+                                  Lupa Clock-out
+                                </span>
+                              )
                             ) : (
-                              <span className="text-muted-foreground/60 text-[11px]">Belum pul</span>
+                              <span className="text-muted-foreground/40 text-[11px]">-</span>
                             )}
                           </TableCell>
                           <TableCell className="text-center tabular-nums text-xs font-semibold text-foreground">

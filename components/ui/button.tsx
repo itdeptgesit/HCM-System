@@ -48,6 +48,7 @@ interface ButtonProps extends Omit<RACButtonProps, 'render'>, VariantProps<typeo
     title?: string // Standard HTML title attribute
     type?: "submit" | "reset" | "button" // Standard HTML type
     render?: React.ReactElement | ((props: any) => React.ReactNode)
+    nativeButton?: boolean
 }
 
 function Button({

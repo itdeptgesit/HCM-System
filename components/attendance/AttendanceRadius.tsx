@@ -6,6 +6,7 @@ import {
   Users, UserCheck, Lock, Unlock, Check, X, ShieldAlert
 } from '@/components/ui/icons';
 import { toast } from 'sonner';
+import { useTheme } from 'next-themes';
 import { supabase } from '../../lib/supabaseClient';
 import { loadWorkforceAccounts } from '../../lib/workforceData';
 import { cn } from '@/lib/utils';
@@ -33,6 +34,8 @@ const MapPicker: React.FC<{
   radius: string;
   onPick: (lat: number, lng: number) => void;
 }> = ({ lat, lng, radius, onPick }) => {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
   const center: [number, number] = [Number(lat) || -6.22, Number(lng) || 106.84];
   const ClickHandler = () => {
     useMapEvents({
@@ -41,11 +44,13 @@ const MapPicker: React.FC<{
     return null;
   };
   return (
-    <div className="overflow-hidden rounded-xl border border-border/60 dark:border-zinc-800">
+    <div className={cn("overflow-hidden rounded-xl border border-border/60 dark:border-zinc-800", isDark && "map-theme-dark")}>
       <MapContainer center={center} zoom={16} style={{ height: 260, width: '100%' }} scrollWheelZoom>
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+          key={isDark ? 'osm-dark' : 'osm-light'}
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          maxZoom={19}
         />
         <ClickHandler />
         <Marker position={center} />
@@ -69,6 +74,8 @@ const OfficeLocationsManager: React.FC<{
   onRefresh?: () => void;
   loading?: boolean;
 }> = ({ locations, setLocations, onRefresh, loading }) => {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
   const [activeTab, setActiveTab] = useState<'list' | 'map'>('list');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
@@ -765,11 +772,13 @@ const OfficeLocationsManager: React.FC<{
             </Badge>
           </CardHeader>
           <CardContent className="p-0">
-            <div style={{ height: 500, width: '100%' }}>
+            <div className={cn("relative", isDark && "map-theme-dark")} style={{ height: 500, width: '100%' }}>
               <MapContainer center={defaultMapCenter} zoom={12} style={{ height: '100%', width: '100%' }} scrollWheelZoom>
                 <TileLayer
-                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                  key={isDark ? 'osm-dark' : 'osm-light'}
+                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                   url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                  maxZoom={19}
                 />
                 {filteredLocations.map(loc => (
                   <React.Fragment key={loc.id}>

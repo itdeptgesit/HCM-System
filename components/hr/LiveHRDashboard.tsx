@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Users,
@@ -22,8 +22,15 @@ import {
   HelpCircle,
   ChevronDown,
   Search,
-  ExternalLink
+  ExternalLink,
+  Sparkles,
+  Activity,
+  MoreHorizontal,
+  Target,
+  Layers,
+  ShieldCheck
 } from '@/components/ui/icons';
+import { Button } from '@/components/ui/button';
 import { supabase } from '../../lib/supabaseClient';
 import { fetchAllRows, loadWorkforceAccounts, normalizeAttendance } from '../../lib/workforceData';
 import { isActiveEmployee, isHRAccount, jakartaDate, resolveApprovalStatus } from '../../lib/workforce-contract';
@@ -31,6 +38,7 @@ import { UserAvatar } from '../UserAvatar';
 
 interface LiveHRDashboardProps {
   currentUser?: any;
+  onMetricsUpdate?: (m: { totalHeadcount: number; pendingCount: number; attendanceRate: string }) => void;
 }
 
 interface DemographicGroup {
@@ -73,7 +81,7 @@ function isContractExpiringWithin30Days(contractEndDateStr?: string | null): boo
   return diffDays >= 0 && diffDays <= 30;
 }
 
-export default function LiveHRDashboard({ currentUser }: LiveHRDashboardProps) {
+export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHRDashboardProps) {
   const navigate = useNavigate();
 
   // Filters State
@@ -102,6 +110,13 @@ export default function LiveHRDashboard({ currentUser }: LiveHRDashboardProps) {
     employees: [],
   });
   const [drilldownSearch, setDrilldownSearch] = useState<string>('');
+  const [chartsReady, setChartsReady] = useState<boolean>(false);
+
+  useEffect(() => {
+    setChartsReady(false);
+    const timer = setTimeout(() => setChartsReady(true), 150);
+    return () => clearTimeout(timer);
+  }, [loading, selectedCompany, selectedDepartment]);
 
   const today = jakartaDate();
   const isHR = isHRAccount(currentUser);
@@ -290,6 +305,107 @@ export default function LiveHRDashboard({ currentUser }: LiveHRDashboardProps) {
   const approvedLeaves = filteredLeaves.filter(r => resolveApprovalStatus(r) === 'approved').length;
   const pendingLeaves = filteredLeaves.filter(r => resolveApprovalStatus(r) === 'pending').length;
   const rejectedLeaves = filteredLeaves.filter(r => resolveApprovalStatus(r) === 'rejected').length;
+
+  const totalPendingRequestsCount = useMemo(() => {
+    return requests.filter(r => resolveApprovalStatus(r) === 'pending').length;
+  }, [requests]);
+
+  const onMetricsUpdateRef = useRef(onMetricsUpdate);
+  onMetricsUpdateRef.current = onMetricsUpdate;
+
+  useEffect(() => {
+    if (onMetricsUpdateRef.current && !loading) {
+      onMetricsUpdateRef.current({
+        totalHeadcount,
+        pendingCount: totalPendingRequestsCount,
+        attendanceRate,
+      });
+    }
+  }, [totalHeadcount, totalPendingRequestsCount, attendanceRate, loading]);
+
+  const attentionRecords = useMemo(() => {
+    const list: {
+      id: string | number;
+      name: string;
+      code: string;
+      note: string;
+      status: string;
+      tone: 'red' | 'yellow' | 'blue';
+    }[] = [];
+    todayAttendance
+      .filter(r => ['late', 'terlambat'].includes(String(r.status).toLowerCase()))
+      .forEach(r => {
+        const emp = accounts.find(a => String(a.id) === String(r.user_id));
+        list.push({
+          id: r.id,
+          name: emp?.full_name || emp?.name || 'Karyawan',
+          code: `${emp?.employee_code || 'EMP'} • ${emp?.department || 'Operasional'}`,
+          note: r.clock_in ? `Check-in ${r.clock_in.slice(0, 5)} WIB` : 'Presensi Terlambat',
+          status: 'Terlambat',
+          tone: 'red',
+        });
+      });
+    todayAttendance
+      .filter(r => ['leave', 'cuti', 'izin', 'sick', 'sakit'].includes(String(r.status).toLowerCase()))
+      .slice(0, 3)
+      .forEach(r => {
+        const emp = accounts.find(a => String(a.id) === String(r.user_id));
+        list.push({
+          id: r.id,
+          name: emp?.full_name || emp?.name || 'Karyawan',
+          code: `${emp?.employee_code || 'EMP'} • ${emp?.department || 'Operasional'}`,
+          note: r.notes || 'Izin Resmi Tercatat',
+          status: String(r.status).toUpperCase(),
+          tone: 'blue',
+        });
+      });
+    return list.slice(0, 5);
+  }, [todayAttendance, accounts]);
+
+  const pendingRequestsList = useMemo(() => {
+    return requests
+      .filter(r => resolveApprovalStatus(r) === 'pending')
+      .map(r => {
+        const emp = accounts.find(a => String(a.id) === String(r.user_id));
+        const typeLabel =
+          r.type === 'leave'
+            ? `Cuti: ${r.leave_type || 'Tahunan'}`
+            : r.type === 'overtime'
+            ? `Lembur: ${r.duration_hours || 2} Jam`
+            : r.type === 'reimbursement'
+            ? `Klaim: Rp ${(r.amount || 0).toLocaleString('id-ID')}`
+            : 'Koreksi Presensi';
+        return {
+          id: r.id,
+          type: r.type,
+          title: `${typeLabel} • ${emp?.full_name || 'Karyawan'}`,
+          dept: emp?.department || 'Staff Operasional',
+          date: r.created_at
+            ? new Date(r.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })
+            : 'Hari ini',
+          avatar: (emp?.full_name || 'K').slice(0, 2).toUpperCase(),
+        };
+      })
+      .slice(0, 4);
+  }, [requests, accounts]);
+
+  const tenureHistogram = useMemo(() => {
+    const bins = [
+      { label: '<1 Thn', min: 0, max: 0.99, count: 0 },
+      { label: '1-2 Thn', min: 1, max: 1.99, count: 0 },
+      { label: '2-3 Thn', min: 2, max: 2.99, count: 0 },
+      { label: '3-5 Thn', min: 3, max: 4.99, count: 0 },
+      { label: '5-10 Thn', min: 5, max: 9.99, count: 0 },
+      { label: '>10 Thn', min: 10, max: 100, count: 0 },
+    ];
+    tenuresWithData.forEach(({ tenure }) => {
+      const found = bins.find(b => tenure >= b.min && tenure <= b.max);
+      if (found) found.count++;
+    });
+    const maxCount = Math.max(...bins.map(b => b.count), 1);
+    const peak = bins.find(b => b.count === maxCount) || bins[2];
+    return { bins, maxCount, peakLabel: peak.label };
+  }, [tenuresWithData]);
 
   // Age Distribution
   const ageDistribution: DemographicGroup[] = useMemo(() => {
@@ -549,6 +665,114 @@ export default function LiveHRDashboard({ currentUser }: LiveHRDashboardProps) {
       .sort((a, b) => b.employees - a.employees);
   }, [companiesList, filteredEmployees, selectedCompany]);
 
+  // Nexora UI: Status Kepegawaian Percentages for Multi-segment Bar
+  const permPct = totalHeadcount > 0 ? Math.round((statusPermanent / totalHeadcount) * 100) : 0;
+  const contPct = totalHeadcount > 0 ? Math.round((statusContract / totalHeadcount) * 100) : 0;
+  const probPct = totalHeadcount > 0 ? Math.round((statusProbation / totalHeadcount) * 100) : 0;
+  const internPct = totalHeadcount > 0 ? Math.max(0, 100 - permPct - contPct - probPct) : 0;
+
+  const retentionRate = useMemo(() => {
+    if (totalHeadcount === 0) return '100.0';
+    const num = Number(String(turnoverRate || '0').replace(',', '.'));
+    return (100 - num).toFixed(1);
+  }, [totalHeadcount, turnoverRate]);
+
+  // Nexora UI: Top Companies for Deal-style List Card with Colorized Company Logos
+  const topCompanies = useMemo(() => {
+    const list = (companySummaryRows || []).filter(c => c.employees > 0).slice(0, 5);
+    
+    const getCompanyColor = (name: string, fallbackIdx: number) => {
+      const clean = (name || '').toUpperCase();
+      if (clean.includes('GESIT PERKASA')) {
+        return {
+          bar: 'bg-[#2d3776]',
+          badge: 'bg-[#2d3776]/10 text-[#2d3776] border-[#2d3776]/30 dark:bg-[#2d3776]/20 dark:text-[#9eaee6]',
+          label: 'Holding Utama',
+          logoColor: 'text-[#2d3776] dark:text-[#8d9ee8]',
+          bg: 'bg-[#2d3776]/10',
+          border: 'border-[#2d3776]/30'
+        };
+      }
+      if (clean.includes('DHARMA ALUMAS')) {
+        return {
+          bar: 'bg-sky-500',
+          badge: 'bg-sky-50 text-sky-700 border-sky-200/70 dark:bg-sky-950/40 dark:text-sky-300',
+          label: 'Operasional',
+          logoColor: 'text-sky-600 dark:text-sky-400',
+          bg: 'bg-sky-500/10 dark:bg-sky-500/15',
+          border: 'border-sky-500/30 dark:border-sky-500/35'
+        };
+      }
+      if (clean.includes('GESIT ALUMAS')) {
+        return {
+          bar: 'bg-emerald-500',
+          badge: 'bg-emerald-50 text-emerald-700 border-emerald-200/70 dark:bg-emerald-950/40 dark:text-emerald-300',
+          label: 'Bisnis Unit',
+          logoColor: 'text-emerald-600 dark:text-emerald-400',
+          bg: 'bg-emerald-500/10 dark:bg-emerald-500/15',
+          border: 'border-emerald-500/30 dark:border-emerald-500/35'
+        };
+      }
+      if (clean.includes('PRODAS PERDANA')) {
+        return {
+          bar: 'bg-orange-500',
+          badge: 'bg-orange-50 text-orange-700 border-orange-200/70 dark:bg-orange-950/40 dark:text-orange-300',
+          label: 'Investasi',
+          logoColor: 'text-orange-500 dark:text-orange-400',
+          bg: 'bg-orange-500/10 dark:bg-orange-500/15',
+          border: 'border-orange-500/30 dark:border-orange-500/35'
+        };
+      }
+      if (clean.includes('GESIT INTRADE')) {
+        return {
+          bar: 'bg-indigo-500',
+          badge: 'bg-indigo-50 text-indigo-700 border-indigo-200/70 dark:bg-indigo-950/40 dark:text-indigo-300',
+          label: 'Proyek',
+          logoColor: 'text-indigo-600 dark:text-indigo-400',
+          bg: 'bg-indigo-500/10 dark:bg-indigo-500/15',
+          border: 'border-indigo-500/30 dark:border-indigo-500/35'
+        };
+      }
+
+      const fallbacks = [
+        {
+          bar: 'bg-[#2d3776]',
+          badge: 'bg-[#2d3776]/10 text-[#2d3776] border-[#2d3776]/30 dark:bg-[#2d3776]/20 dark:text-[#9eaee6]',
+          label: 'Holding Utama',
+          logoColor: 'text-[#2d3776] dark:text-[#8d9ee8]',
+          bg: 'bg-[#2d3776]/10',
+          border: 'border-[#2d3776]/30'
+        },
+        {
+          bar: 'bg-sky-500',
+          badge: 'bg-sky-50 text-sky-700 border-sky-200/70 dark:bg-sky-950/40 dark:text-sky-300',
+          label: 'Operasional',
+          logoColor: 'text-sky-600 dark:text-sky-400',
+          bg: 'bg-sky-500/10 dark:bg-sky-500/15',
+          border: 'border-sky-500/30 dark:border-sky-500/35'
+        },
+        {
+          bar: 'bg-emerald-500',
+          badge: 'bg-emerald-50 text-emerald-700 border-emerald-200/70 dark:bg-emerald-950/40 dark:text-emerald-300',
+          label: 'Bisnis Unit',
+          logoColor: 'text-emerald-600 dark:text-emerald-400',
+          bg: 'bg-emerald-500/10 dark:bg-emerald-500/15',
+          border: 'border-emerald-500/30 dark:border-emerald-500/35'
+        },
+      ];
+      return fallbacks[fallbackIdx % fallbacks.length];
+    };
+
+    return list.map((item, idx) => {
+      const pct = totalHeadcount > 0 ? Math.round((item.employees / totalHeadcount) * 100) : 0;
+      return {
+        ...item,
+        percentage: pct,
+        color: getCompanyColor(item.company, idx)
+      };
+    });
+  }, [companySummaryRows, totalHeadcount]);
+
   // Helper to open drilldown list with real data
   const openDrilldown = (groupName: string, category: string, employeeList?: any[]) => {
     let list = employeeList;
@@ -612,20 +836,145 @@ export default function LiveHRDashboard({ currentUser }: LiveHRDashboardProps) {
     setSnapshotDate(jakartaDate());
   };
 
+  const userGreetingName = useMemo(() => {
+    const raw = currentUser?.nickname || currentUser?.fullName || currentUser?.name || 'HR Admin';
+    return String(raw).trim().split(' ')[0] || 'Admin';
+  }, [currentUser]);
+
+  const formattedTodayDate = useMemo(() => {
+    try {
+      return new Intl.DateTimeFormat('en-US', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
+      }).format(new Date());
+    } catch {
+      return 'Monday, 19 October 2026';
+    }
+  }, []);
+
   return (
     <div className="w-full space-y-6 font-sans text-slate-800 dark:text-slate-100 transition-colors duration-200">
-      {/* ── TOP HEADER ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-200/60 dark:border-slate-800/60">
-        <div>
-          <span className="text-[11px] font-bold tracking-widest text-slate-400 dark:text-slate-500 uppercase block mb-1">
-            PEOPLE INTELLIGENCE
-          </span>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-            Dashboard Human Capital
+      {/* ── NEXORA STYLE HERO GREETING BANNER ── */}
+      <div className="relative overflow-hidden rounded-2xl border border-slate-200/80 dark:border-[#222225] bg-white dark:bg-[#131316] p-6 sm:p-7 shadow-xs transition-colors">
+        {/* Subtle Ambient Radial Mesh Glow Pattern */}
+        <div
+          className="pointer-events-none absolute -right-16 -top-20 h-72 w-96 rounded-full opacity-60 dark:opacity-20 blur-3xl"
+          style={{
+            background: 'radial-gradient(circle, rgba(16, 185, 129, 0.22) 0%, rgba(20, 184, 166, 0.12) 40%, transparent 70%)'
+          }}
+        />
+
+        {/* Top Pills and Action Buttons */}
+        <div className="relative z-10 flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 dark:border-zinc-800 bg-slate-50/80 dark:bg-zinc-900/80 px-3 py-1 text-xs font-medium text-slate-700 dark:text-zinc-300">
+              <Sparkles className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+              <span>AI insights refreshed {loading ? 'memuat...' : 'baru saja'}</span>
+            </div>
+            <div className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+              <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span>Live</span>
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:items-end gap-1.5">
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExportKPI}
+                className="h-8.5 rounded-lg gap-1.5 text-xs font-medium border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-slate-50 dark:hover:bg-zinc-800"
+              >
+                <Download className="size-3.5" />
+                <span>Export Report</span>
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => loadData()}
+                disabled={loading}
+                className="h-8.5 rounded-lg gap-1.5 text-xs font-medium bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200 shadow-xs cursor-pointer"
+              >
+                <RotateCcw className={`size-3.5 ${loading ? 'animate-spin' : ''}`} />
+                <span>Refresh Data</span>
+              </Button>
+            </div>
+            <span className="text-[11px] font-medium text-slate-400 dark:text-zinc-500">
+              {formattedTodayDate}
+            </span>
+          </div>
+        </div>
+
+        {/* Welcome Headline & Subtitle */}
+        <div className="relative z-10 mt-4 sm:mt-5 space-y-1.5">
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+            Welcome back, {userGreetingName}
           </h1>
-          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1 font-normal">
-            Kenali profil, pergerakan, dan kebutuhan karyawan dalam satu pandangan terpadu.
+          <p className="text-xs sm:text-sm text-slate-500 dark:text-zinc-400 font-normal max-w-3xl leading-relaxed">
+            Here's how your workforce is performing today — headcount is stable at <strong className="font-semibold text-slate-800 dark:text-zinc-200">{totalHeadcount} active employees</strong> with <strong className="font-semibold text-slate-800 dark:text-zinc-200">{attendanceRate}% attendance</strong>, and <strong className="font-semibold text-slate-800 dark:text-zinc-200">{totalPendingRequestsCount} pending requests</strong> needing your attention.
           </p>
+        </div>
+
+        {/* Bottom Inline Metrics in Banner */}
+        <div className="relative z-10 mt-6 sm:mt-7 pt-5 border-t border-slate-100 dark:border-zinc-800/80 flex flex-wrap items-center gap-6 sm:gap-10">
+          <div>
+            <span className="block text-[10px] font-bold tracking-wider text-slate-400 dark:text-zinc-500 uppercase">
+              TOTAL KARYAWAN
+            </span>
+            <span className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tracking-tight mt-0.5 block">
+              {totalHeadcount}
+            </span>
+          </div>
+
+          <div className="h-8 w-px bg-slate-200/60 dark:bg-zinc-800 hidden sm:block" />
+
+          <div>
+            <span className="block text-[10px] font-bold tracking-wider text-slate-400 dark:text-zinc-500 uppercase">
+              KEHADIRAN HARI INI
+            </span>
+            <span className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tracking-tight mt-0.5 block">
+              {attendanceRate}%
+            </span>
+          </div>
+
+          <div className="h-8 w-px bg-slate-200/60 dark:bg-zinc-800 hidden sm:block" />
+
+          <div>
+            <span className="block text-[10px] font-bold tracking-wider text-slate-400 dark:text-zinc-500 uppercase">
+              PENGAJUAN PENDING
+            </span>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <span className="size-2 rounded-full bg-emerald-500" />
+              <span className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
+                {totalPendingRequestsCount}
+              </span>
+            </div>
+          </div>
+
+          <div className="h-8 w-px bg-slate-200/60 dark:bg-zinc-800 hidden lg:block" />
+
+          <div className="flex items-center gap-2.5">
+            <div className="flex -space-x-2 overflow-hidden items-center">
+              {accounts.slice(0, 3).map((a, i) => (
+                <UserAvatar
+                  key={a.id || i}
+                  name={a.full_name || a.name || a.username || 'User'}
+                  url={a.avatar_url || a.avatarUrl}
+                  size="xs"
+                  className="size-7 text-[10px] ring-2 ring-white dark:ring-[#131316] shadow-none"
+                />
+              ))}
+              {accounts.length > 3 && (
+                <div className="inline-flex size-7 items-center justify-center rounded-full bg-slate-100 dark:bg-zinc-800 text-[10px] font-semibold text-slate-600 dark:text-zinc-300 ring-2 ring-white dark:ring-[#131316] shrink-0">
+                  +{accounts.length - 3}
+                </div>
+              )}
+            </div>
+            <span className="text-xs text-slate-500 dark:text-zinc-400 font-medium">
+              karyawan terdaftar
+            </span>
+          </div>
         </div>
       </div>
 
@@ -806,51 +1155,312 @@ export default function LiveHRDashboard({ currentUser }: LiveHRDashboardProps) {
         </div>
       </div>
 
-      {/* ── WORKFORCE SNAPSHOT BANNER ── */}
-      <div className="bg-white dark:bg-[#131316] border-l-4 border-l-amber-500 border border-slate-200/80 dark:border-[#222225] rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 shrink-0 border border-amber-200/50 dark:border-amber-800/40">
-            <BarChart2 className="h-5 w-5" />
-          </div>
+      {/* ── NEXORA ADAPTED ROW: WORKFORCE HEALTH & TOP ENTITAS PERUSAHAAN ── */}
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-stretch">
+        {/* Left (7 Cols): Sales Pipeline Health -> Kesehatan & Komposisi SDM */}
+        <div className="xl:col-span-7 bg-white dark:bg-[#131316] border border-slate-200/80 dark:border-[#222225] rounded-2xl p-6 shadow-xs flex flex-col justify-between">
           <div>
-            <span className="text-[10px] font-bold tracking-wider text-amber-700 dark:text-amber-400 uppercase block">
-              WORKFORCE SNAPSHOT
-            </span>
-            <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-200 mt-0.5">
-              Kelompok usia terbesar <strong className="font-bold text-slate-900 dark:text-white">{ageDistribution.find(x => x.isHighlight)?.label || '25–34 tahun'}</strong>,{' '}
-              <strong className="font-bold text-slate-900 dark:text-white">
-                {educationDistribution.find(x => x.label === 'S1')?.count || 0}
-              </strong> karyawan berpendidikan S1 atau lebih tinggi, dan{' '}
-              <strong className="font-bold text-slate-900 dark:text-white">{expiringContracts.length}</strong> kontrak berakhir dalam 30 hari.
-            </p>
+            {/* Header with Dark Square Icon */}
+            <div className="flex items-center gap-3">
+              <div className="size-9 rounded-xl bg-slate-900 dark:bg-zinc-100 text-white dark:text-zinc-900 flex items-center justify-center shadow-xs shrink-0">
+                <Activity className="size-4.5" />
+              </div>
+              <h3 className="text-base font-bold text-slate-900 dark:text-white tracking-tight">
+                Kesehatan & Komposisi SDM
+              </h3>
+            </div>
+
+            {/* Subheader and Multi-segment Progress Bar */}
+            <div className="mt-5">
+              <div className="flex items-center justify-between text-xs mb-2.5">
+                <span className="font-bold text-slate-900 dark:text-white">
+                  Distribusi Status Kepegawaian
+                </span>
+                <span className="text-slate-400 dark:text-zinc-500 font-medium">
+                  100% dari {totalHeadcount} karyawan aktif
+                </span>
+              </div>
+
+              {/* Segmented Color Bar */}
+              <div className="w-full h-2.5 bg-slate-100 dark:bg-zinc-800 rounded-full overflow-hidden flex gap-0.5 p-0.5">
+                <div
+                  style={{ width: `${permPct}%` }}
+                  className="h-full bg-emerald-500 rounded-l-full transition-all duration-700 ease-out"
+                  title={`Tetap (PKWTT): ${statusPermanent} (${permPct}%)`}
+                />
+                <div
+                  style={{ width: `${contPct}%` }}
+                  className="h-full bg-blue-500 transition-all duration-700 ease-out"
+                  title={`Kontrak (PKWT): ${statusContract} (${contPct}%)`}
+                />
+                <div
+                  style={{ width: `${probPct}%` }}
+                  className="h-full bg-amber-500 transition-all duration-700 ease-out"
+                  title={`Probation: ${statusProbation} (${probPct}%)`}
+                />
+                <div
+                  style={{ width: `${internPct}%` }}
+                  className="h-full bg-purple-500 rounded-r-full transition-all duration-700 ease-out"
+                  title={`Magang / Intern: ${statusIntern} (${internPct}%)`}
+                />
+              </div>
+
+              {/* Legend with Color Dots */}
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mt-3 text-xs">
+                <div className="flex items-center gap-1.5">
+                  <span className="size-2 rounded-full bg-emerald-500 shrink-0" />
+                  <span className="text-slate-600 dark:text-zinc-400 font-medium">
+                    Tetap (PKWTT) <strong className="text-slate-900 dark:text-white font-bold">{permPct}%</strong>
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="size-2 rounded-full bg-blue-500 shrink-0" />
+                  <span className="text-slate-600 dark:text-zinc-400 font-medium">
+                    Kontrak (PKWT) <strong className="text-slate-900 dark:text-white font-bold">{contPct}%</strong>
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="size-2 rounded-full bg-amber-500 shrink-0" />
+                  <span className="text-slate-600 dark:text-zinc-400 font-medium">
+                    Probation <strong className="text-slate-900 dark:text-white font-bold">{probPct}%</strong>
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="size-2 rounded-full bg-purple-500 shrink-0" />
+                  <span className="text-slate-600 dark:text-zinc-400 font-medium">
+                    Magang <strong className="text-slate-900 dark:text-white font-bold">{internPct}%</strong>
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Section 2: Presensi & Disiplin Hari Ini */}
+            <div className="mt-5 pt-4 border-t border-slate-100 dark:border-zinc-800/60">
+              <div className="flex items-center justify-between text-xs mb-2.5">
+                <span className="font-bold text-slate-900 dark:text-white">
+                  Monitoring Presensi Hari Ini
+                </span>
+                <span className="text-slate-400 dark:text-zinc-500 font-medium">
+                  {checkedInCount} check-in dari {totalHeadcount} karyawan
+                </span>
+              </div>
+
+              {/* Attendance Segmented Bar */}
+              <div className="w-full h-2.5 bg-slate-100 dark:bg-zinc-800 rounded-full overflow-hidden flex gap-0.5 p-0.5">
+                <div
+                  style={{ width: `${totalHeadcount > 0 ? (onTimeCount / totalHeadcount) * 100 : 0}%` }}
+                  className="h-full bg-emerald-500 rounded-l-full transition-all duration-700 ease-out"
+                  title={`Tepat Waktu: ${onTimeCount}`}
+                />
+                <div
+                  style={{ width: `${totalHeadcount > 0 ? (lateCount / totalHeadcount) * 100 : 0}%` }}
+                  className="h-full bg-amber-500 transition-all duration-700 ease-out"
+                  title={`Terlambat: ${lateCount}`}
+                />
+                <div
+                  style={{ width: `${totalHeadcount > 0 ? (leaveCount / totalHeadcount) * 100 : 0}%` }}
+                  className="h-full bg-blue-500 transition-all duration-700 ease-out"
+                  title={`Cuti / Izin: ${leaveCount}`}
+                />
+                <div
+                  style={{ width: `${totalHeadcount > 0 ? (notCheckedInCount / totalHeadcount) * 100 : 0}%` }}
+                  className="h-full bg-slate-300 dark:bg-zinc-700 rounded-r-full transition-all duration-700 ease-out"
+                  title={`Belum Absen: ${notCheckedInCount}`}
+                />
+              </div>
+
+              {/* Attendance Legend */}
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mt-3 text-xs">
+                <div className="flex items-center gap-1.5">
+                  <span className="size-2 rounded-full bg-emerald-500 shrink-0" />
+                  <span className="text-slate-600 dark:text-zinc-400 font-medium">
+                    Tepat Waktu <strong className="text-slate-900 dark:text-white font-bold">{onTimeCount}</strong>
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="size-2 rounded-full bg-amber-500 shrink-0" />
+                  <span className="text-slate-600 dark:text-zinc-400 font-medium">
+                    Terlambat <strong className="text-slate-900 dark:text-white font-bold">{lateCount}</strong>
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="size-2 rounded-full bg-blue-500 shrink-0" />
+                  <span className="text-slate-600 dark:text-zinc-400 font-medium">
+                    Cuti / Izin <strong className="text-slate-900 dark:text-white font-bold">{leaveCount}</strong>
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="size-2 rounded-full bg-slate-400 dark:bg-zinc-500 shrink-0" />
+                  <span className="text-slate-600 dark:text-zinc-400 font-medium">
+                    Belum Absen <strong className="text-slate-900 dark:text-white font-bold">{notCheckedInCount}</strong>
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* 4 Bottom Sub-Cards matching Screenshot 2 */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5 pt-4 border-t border-slate-100 dark:border-zinc-800/80">
+              <div className="rounded-xl border border-slate-200/70 dark:border-zinc-800/80 bg-slate-50/50 dark:bg-zinc-900/40 p-3.5 flex flex-col justify-between">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold text-slate-500 dark:text-zinc-400">
+                    Karyawan Tetap
+                  </span>
+                  <Users className="size-3.5 text-slate-400 dark:text-zinc-500" />
+                </div>
+                <div className="text-xl font-bold text-slate-900 dark:text-white tracking-tight mt-2">
+                  {statusPermanent} <span className="text-xs font-normal text-slate-400 dark:text-zinc-500">Orang</span>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-slate-200/70 dark:border-zinc-800/80 bg-slate-50/50 dark:bg-zinc-900/40 p-3.5 flex flex-col justify-between">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold text-slate-500 dark:text-zinc-400">
+                    Kehadiran
+                  </span>
+                  <Target className="size-3.5 text-slate-400 dark:text-zinc-500" />
+                </div>
+                <div className="text-xl font-bold text-slate-900 dark:text-white tracking-tight mt-2">
+                  {attendanceRate}%
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-slate-200/70 dark:border-zinc-800/80 bg-slate-50/50 dark:bg-zinc-900/40 p-3.5 flex flex-col justify-between">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold text-slate-500 dark:text-zinc-400">
+                    Masa Kerja
+                  </span>
+                  <TrendingUp className="size-3.5 text-slate-400 dark:text-zinc-500" />
+                </div>
+                <div className="text-xl font-bold text-slate-900 dark:text-white tracking-tight mt-2">
+                  {avgTenure} <span className="text-xs font-normal text-slate-400 dark:text-zinc-500">Thn</span>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-slate-200/70 dark:border-zinc-800/80 bg-slate-50/50 dark:bg-zinc-900/40 p-3.5 flex flex-col justify-between">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold text-slate-500 dark:text-zinc-400">
+                    Retensi SDM
+                  </span>
+                  <ShieldCheck className="size-3.5 text-slate-400 dark:text-zinc-500" />
+                </div>
+                <div className="text-xl font-bold text-slate-900 dark:text-white tracking-tight mt-2">
+                  {retentionRate}%
+                </div>
+              </div>
+            </div>
           </div>
         </div>
-        <button
-          onClick={() => openDrilldown('Kontrak Berakhir ≤30 Hari', 'Evaluasi Kontrak', expiringContracts)}
-          className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-700 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white shrink-0 cursor-pointer py-1.5 px-3 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-        >
-          <span>Tinjau kontrak</span>
-          <ArrowRight className="h-3.5 w-3.5" />
-        </button>
+
+        {/* Right (5 Cols): Top Open Deals -> Top Entitas Perusahaan */}
+        <div className="xl:col-span-5 bg-white dark:bg-[#131316] border border-slate-200/80 dark:border-[#222225] rounded-2xl p-6 shadow-xs flex flex-col justify-between">
+          <div>
+            {/* Header with Title, Badge, and More */}
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white tracking-tight">
+                  Top Entitas Perusahaan
+                </h3>
+                <p className="text-xs text-slate-400 dark:text-zinc-500 mt-0.5">
+                  Distribusi penempatan karyawan per badan hukum
+                </p>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="rounded-full bg-slate-100 dark:bg-zinc-800 text-[11px] font-semibold text-slate-600 dark:text-zinc-300 px-2.5 py-0.5">
+                  {topCompanies.length} entitas
+                </span>
+                <button
+                  type="button"
+                  onClick={() => openDrilldown('Perusahaan', 'Entitas')}
+                  className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200 transition-colors"
+                >
+                  <MoreHorizontal className="size-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* List of 5 Company Items with Colorized Gesit Logos */}
+            <div className="space-y-2.5 mt-5">
+              {topCompanies.map((comp) => {
+                return (
+                  <div
+                    key={comp.company}
+                    onClick={() => openDrilldown(comp.company, 'Perusahaan', comp.employeeList)}
+                    className="group rounded-xl border border-slate-100 dark:border-zinc-800/60 bg-white dark:bg-[#131316] p-3 sm:p-3.5 hover:border-slate-200 dark:hover:border-zinc-700 hover:bg-slate-50/60 dark:hover:bg-zinc-900/60 transition-all cursor-pointer flex items-center justify-between gap-3"
+                  >
+                    {/* Left: Clean Frameless Colorized Gesit Logo & Details */}
+                    <div className="flex items-center gap-3.5 min-w-0">
+                      <div
+                        className={`size-7 shrink-0 ${comp.color.logoColor} group-hover:scale-110 transition-transform`}
+                        style={{
+                          maskImage: 'url(/image/logo.png)',
+                          WebkitMaskImage: 'url(/image/logo.png)',
+                          maskSize: 'contain',
+                          WebkitMaskSize: 'contain',
+                          maskRepeat: 'no-repeat',
+                          WebkitMaskRepeat: 'no-repeat',
+                          maskPosition: 'center',
+                          backgroundColor: 'currentColor'
+                        }}
+                      />
+
+                      <div className="min-w-0">
+                        <h4 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white truncate">
+                          {comp.company}
+                        </h4>
+                        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                          <span className="text-[11px] text-slate-400 dark:text-zinc-500">
+                            HQ
+                          </span>
+                          <span className="text-slate-300 dark:text-zinc-700">•</span>
+                          <span className={`inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-semibold border ${comp.color.badge}`}>
+                            {comp.color.label}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Right: Value & Progress Bar */}
+                    <div className="text-right shrink-0">
+                      <div className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">
+                        {comp.employees} <span className="text-[11px] font-normal text-slate-400 dark:text-zinc-500">Orang</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 justify-end mt-1">
+                        <div className="w-16 sm:w-20 h-1.5 rounded-full bg-slate-100 dark:bg-zinc-800 overflow-hidden">
+                          <div
+                            style={{ width: `${comp.percentage}%` }}
+                            className={`h-full rounded-full ${comp.color.bar}`}
+                          />
+                        </div>
+                        <span className="text-[10px] font-mono font-medium text-slate-400 dark:text-zinc-500 min-w-6 text-right">
+                          {comp.percentage}%
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* ── ROW 2: ABSENSI & CUTI (2 COLUMNS) ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Absensi & Kehadiran */}
+      {/* ── ROW 2: OPERATIONAL CENTER (3 COLUMNS: ABSENSI, CUTI, ACTION CENTER) ── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {/* 1. Absensi & Kehadiran */}
         <div className="bg-white dark:bg-[#131316] border border-slate-200/80 dark:border-[#222225] rounded-2xl p-6 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex items-start justify-between mb-4">
               <div>
                 <h3 className="text-sm font-bold text-slate-900 dark:text-white">Absensi & kehadiran</h3>
                 <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
-                  Snapshot: {snapshotDate} · Log Presensi Karyawan
+                  Snapshot: {snapshotDate} · Log Presensi
                 </p>
               </div>
               <button
                 onClick={() => navigate('/attendance')}
                 className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-400 transition-colors cursor-pointer"
               >
-                <span>Lihat detail</span>
+                <span>Detail</span>
                 <ArrowRight className="h-3 w-3" />
               </button>
             </div>
@@ -865,7 +1475,7 @@ export default function LiveHRDashboard({ currentUser }: LiveHRDashboardProps) {
                   <span className="text-sm font-bold text-slate-500">%</span>
                 </div>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-                  {checkedInCount} check-in dari {totalHeadcount} karyawan aktif
+                  {checkedInCount} check-in dari {totalHeadcount} karyawan
                 </p>
               </div>
 
@@ -875,62 +1485,62 @@ export default function LiveHRDashboard({ currentUser }: LiveHRDashboardProps) {
                   {checkedInCount > 0 ? attendanceRate : '0,0'}%
                 </span>
                 <span className="text-[10px] text-slate-400 dark:text-slate-500 block mt-0.5">
-                  Log presensi harian
+                  Harian realtime
                 </span>
               </div>
             </div>
 
-            {/* Stacked Progress Bar */}
-            <div className="w-full h-3.5 bg-slate-100 dark:bg-[#1F1F24] rounded-full overflow-hidden flex gap-1 mt-6 p-0.5">
+            {/* Stacked Progress Bar with smooth entry animation */}
+            <div className="w-full h-3 bg-slate-100 dark:bg-[#1F1F24] rounded-full overflow-hidden flex gap-0.5 mt-6 p-0.5">
               <div
-                style={{ width: `${totalHeadcount > 0 ? (onTimeCount / totalHeadcount) * 100 : 0}%` }}
-                className="h-full bg-emerald-600 dark:bg-emerald-500 rounded-l-full transition-all duration-500"
+                style={{ width: `${chartsReady && totalHeadcount > 0 ? (onTimeCount / totalHeadcount) * 100 : 0}%` }}
+                className="h-full bg-emerald-600 dark:bg-emerald-500 rounded-l-full transition-all duration-1000 ease-out"
                 title={`Tepat waktu (${onTimeCount})`}
               />
               <div
-                style={{ width: `${totalHeadcount > 0 ? (lateCount / totalHeadcount) * 100 : 0}%` }}
-                className="h-full bg-amber-500 dark:bg-amber-400 transition-all duration-500"
+                style={{ width: `${chartsReady && totalHeadcount > 0 ? (lateCount / totalHeadcount) * 100 : 0}%` }}
+                className="h-full bg-amber-500 dark:bg-amber-400 transition-all duration-1000 ease-out"
                 title={`Terlambat (${lateCount})`}
               />
               <div
-                style={{ width: `${totalHeadcount > 0 ? (leaveCount / totalHeadcount) * 100 : 0}%` }}
-                className="h-full bg-blue-500 dark:bg-blue-400 transition-all duration-500"
+                style={{ width: `${chartsReady && totalHeadcount > 0 ? (leaveCount / totalHeadcount) * 100 : 0}%` }}
+                className="h-full bg-blue-500 dark:bg-blue-400 transition-all duration-1000 ease-out"
                 title={`Cuti / Izin (${leaveCount})`}
               />
               <div
-                style={{ width: `${totalHeadcount > 0 ? (notCheckedInCount / totalHeadcount) * 100 : 100}%` }}
-                className="h-full bg-slate-300 dark:bg-slate-700 rounded-r-full transition-all duration-500"
+                style={{ width: `${chartsReady && totalHeadcount > 0 ? (notCheckedInCount / totalHeadcount) * 100 : 0}%` }}
+                className="h-full bg-slate-300 dark:bg-slate-700 rounded-r-full transition-all duration-1000 ease-out"
                 title={`Belum check-in (${notCheckedInCount})`}
               />
             </div>
 
             {/* Legend */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 text-[11px]">
+            <div className="grid grid-cols-2 gap-2.5 mt-4 text-[11px]">
               <div className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-full bg-emerald-600 dark:bg-emerald-500 shrink-0" />
+                <span className="h-2 w-2 rounded-full bg-emerald-600 dark:bg-emerald-500 shrink-0" />
                 <span className="text-slate-500 dark:text-slate-400">Tepat waktu</span>
                 <strong className="font-bold text-slate-900 dark:text-white ml-auto">{onTimeCount}</strong>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-full bg-amber-500 dark:bg-amber-400 shrink-0" />
+                <span className="h-2 w-2 rounded-full bg-amber-500 dark:bg-amber-400 shrink-0" />
                 <span className="text-slate-500 dark:text-slate-400">Terlambat</span>
                 <strong className="font-bold text-slate-900 dark:text-white ml-auto">{lateCount}</strong>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-full bg-blue-500 dark:bg-blue-400 shrink-0" />
+                <span className="h-2 w-2 rounded-full bg-blue-500 dark:bg-blue-400 shrink-0" />
                 <span className="text-slate-500 dark:text-slate-400">Cuti / Izin</span>
                 <strong className="font-bold text-slate-900 dark:text-white ml-auto">{leaveCount}</strong>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-full bg-slate-400 dark:bg-slate-600 shrink-0" />
-                <span className="text-slate-500 dark:text-slate-400">Belum check-in</span>
+                <span className="h-2 w-2 rounded-full bg-slate-400 dark:bg-slate-600 shrink-0" />
+                <span className="text-slate-500 dark:text-slate-400">Belum absen</span>
                 <strong className="font-bold text-slate-900 dark:text-white ml-auto">{notCheckedInCount}</strong>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Cuti & Izin */}
+        {/* 2. Cuti & Izin */}
         <div className="bg-white dark:bg-[#131316] border border-slate-200/80 dark:border-[#222225] rounded-2xl p-6 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex items-start justify-between mb-4">
@@ -944,7 +1554,7 @@ export default function LiveHRDashboard({ currentUser }: LiveHRDashboardProps) {
                 onClick={() => navigate('/requests')}
                 className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-400 transition-colors cursor-pointer"
               >
-                <span>Lihat pengajuan</span>
+                <span>Kelola</span>
                 <ArrowRight className="h-3 w-3" />
               </button>
             </div>
@@ -970,42 +1580,119 @@ export default function LiveHRDashboard({ currentUser }: LiveHRDashboardProps) {
             </div>
 
             {/* 3 Status Cards */}
-            <div className="grid grid-cols-3 gap-3 mt-6">
-              <div className="p-3.5 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/40 text-center">
-                <span className="text-2xl font-black text-emerald-800 dark:text-emerald-300 block">
+            <div className="grid grid-cols-3 gap-2.5 mt-6">
+              <div className="p-3 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/40 text-center">
+                <span className="text-xl font-black text-emerald-800 dark:text-emerald-300 block">
                   {approvedLeaves}
                 </span>
-                <span className="text-[11px] font-medium text-emerald-700 dark:text-emerald-400 mt-1 block">
+                <span className="text-[10px] font-medium text-emerald-700 dark:text-emerald-400 mt-0.5 block">
                   Disetujui
                 </span>
               </div>
-              <div className="p-3.5 rounded-xl bg-amber-50/70 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/40 text-center">
-                <span className="text-2xl font-black text-amber-800 dark:text-amber-300 block">
+              <div className="p-3 rounded-xl bg-amber-50/70 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/40 text-center">
+                <span className="text-xl font-black text-amber-800 dark:text-amber-300 block">
                   {pendingLeaves}
                 </span>
-                <span className="text-[11px] font-medium text-amber-700 dark:text-amber-400 mt-1 block">
+                <span className="text-[10px] font-medium text-amber-700 dark:text-amber-400 mt-0.5 block">
                   Menunggu
                 </span>
               </div>
-              <div className="p-3.5 rounded-xl bg-rose-50/70 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-900/40 text-center">
-                <span className="text-2xl font-black text-rose-800 dark:text-rose-300 block">
+              <div className="p-3 rounded-xl bg-rose-50/70 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-900/40 text-center">
+                <span className="text-xl font-black text-rose-800 dark:text-rose-300 block">
                   {rejectedLeaves}
                 </span>
-                <span className="text-[11px] font-medium text-rose-700 dark:text-rose-400 mt-1 block">
+                <span className="text-[10px] font-medium text-rose-700 dark:text-rose-400 mt-0.5 block">
                   Ditolak
                 </span>
               </div>
             </div>
 
             <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400 mt-4">
-              <span className="h-2 w-2 rounded-full bg-blue-600 dark:bg-blue-500" />
+              <span className="h-1.5 w-1.5 rounded-full bg-blue-600 dark:bg-blue-500" />
               <span>Sinkronisasi otomatis dari permohonan aktif</span>
+            </div>
+          </div>
+        </div>
+
+        {/* 3. Perlu Perhatian HR (Action Center) */}
+        <div className="bg-white dark:bg-[#131316] border border-slate-200/80 dark:border-[#222225] rounded-2xl p-6 shadow-xs flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">Perlu perhatian HR</h3>
+                <p className="text-[11px] text-slate-400 dark:text-slate-500">Tindak lanjut & peringatan dini</p>
+              </div>
+              <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-md uppercase border border-amber-200/50 dark:border-amber-900/40">
+                Action Center
+              </span>
+            </div>
+
+            <div className="space-y-2 mt-2">
+              {/* Row 1: Kontrak Berakhir */}
+              <div
+                onClick={() => openDrilldown('Kontrak Berakhir ≤30 Hari', 'Tinjau Kontrak', expiringContracts)}
+                className="flex items-center justify-between p-2.5 rounded-xl hover:bg-slate-50 dark:hover:bg-[#18181b] transition-colors cursor-pointer border border-slate-100 dark:border-slate-800/60"
+              >
+                <div>
+                  <h4 className="text-xs font-bold text-slate-900 dark:text-white">Kontrak berakhir ≤30 hari</h4>
+                  <p className="text-[10px] text-slate-400 dark:text-slate-500">Tinjau perpanjangan PKWT</p>
+                </div>
+                <div className="flex items-center gap-1.5 text-xs font-black text-amber-600 dark:text-amber-400">
+                  <span className="px-2 py-0.5 bg-amber-50 dark:bg-amber-950/40 rounded-lg">{expiringContracts.length}</span>
+                  <ArrowRight className="h-3 w-3 text-slate-400" />
+                </div>
+              </div>
+
+              {/* Row 2: Usia >= 55 Tahun */}
+              <div
+                onClick={() => openDrilldown('Usia ≥55 Tahun', 'Monitoring Masa Pensiun', seniorEmployees)}
+                className="flex items-center justify-between p-2.5 rounded-xl hover:bg-slate-50 dark:hover:bg-[#18181b] transition-colors cursor-pointer border border-slate-100 dark:border-slate-800/60"
+              >
+                <div>
+                  <h4 className="text-xs font-bold text-slate-900 dark:text-white">Usia ≥55 tahun</h4>
+                  <p className="text-[10px] text-slate-400 dark:text-slate-500">Pemantauan persiapan pensiun</p>
+                </div>
+                <div className="flex items-center gap-1.5 text-xs font-black text-slate-700 dark:text-slate-300">
+                  <span className="px-2 py-0.5 bg-slate-100 dark:bg-[#18181b] rounded-lg">{seniorEmployees.length}</span>
+                  <ArrowRight className="h-3 w-3 text-slate-400" />
+                </div>
+              </div>
+
+              {/* Row 3: Karyawan Probation */}
+              <div
+                onClick={() => openDrilldown('Karyawan Probation', 'Evaluasi Masa Percobaan', probationEmployees)}
+                className="flex items-center justify-between p-2.5 rounded-xl hover:bg-slate-50 dark:hover:bg-[#18181b] transition-colors cursor-pointer border border-slate-100 dark:border-slate-800/60"
+              >
+                <div>
+                  <h4 className="text-xs font-bold text-slate-900 dark:text-white">Karyawan probation</h4>
+                  <p className="text-[10px] text-slate-400 dark:text-slate-500">Evaluasi masa percobaan</p>
+                </div>
+                <div className="flex items-center gap-1.5 text-xs font-black text-slate-700 dark:text-slate-300">
+                  <span className="px-2 py-0.5 bg-slate-100 dark:bg-[#18181b] rounded-lg">{probationEmployees.length}</span>
+                  <ArrowRight className="h-3 w-3 text-slate-400" />
+                </div>
+              </div>
+
+              {/* Row 4: Data Pendidikan Belum Lengkap */}
+              <div
+                onClick={() => openDrilldown('Data Pendidikan Belum Lengkap', 'Kelengkapan Profil', incompleteEducationEmployees)}
+                className="flex items-center justify-between p-2.5 rounded-xl hover:bg-slate-50 dark:hover:bg-[#18181b] transition-colors cursor-pointer border border-slate-100 dark:border-slate-800/60"
+              >
+                <div>
+                  <h4 className="text-xs font-bold text-slate-900 dark:text-white">Data profil belum lengkap</h4>
+                  <p className="text-[10px] text-slate-400 dark:text-slate-500">Lengkapi data SDM</p>
+                </div>
+                <div className="flex items-center gap-1.5 text-xs font-black text-slate-700 dark:text-slate-300">
+                  <span className="px-2 py-0.5 bg-slate-100 dark:bg-[#18181b] rounded-lg">{incompleteEducationEmployees.length}</span>
+                  <ArrowRight className="h-3 w-3 text-slate-400" />
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* ── ROW 3: 6 DEMOGRAPHIC & WORKFORCE CARDS (3x2 GRID) ── */}
+      {/* ── ROW 3: PROFIL DEMOGRAFI KARYAWAN (3 KOLOM SEIMBANG) ── */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {/* 1. Distribusi Usia */}
         <div className="bg-white dark:bg-[#131316] border border-slate-200/80 dark:border-[#222225] rounded-2xl p-5 shadow-xs flex flex-col justify-between">
@@ -1020,7 +1707,7 @@ export default function LiveHRDashboard({ currentUser }: LiveHRDashboardProps) {
               </span>
             </div>
 
-            <div className="space-y-3.5 mt-4">
+            <div className="space-y-3 mt-4">
               {ageDistribution.map(item => (
                 <div key={item.label}>
                   <div className="flex justify-between text-xs font-medium mb-1">
@@ -1032,8 +1719,8 @@ export default function LiveHRDashboard({ currentUser }: LiveHRDashboardProps) {
                   </div>
                   <div className="w-full h-2 bg-slate-100 dark:bg-[#1F1F24] rounded-full overflow-hidden">
                     <div
-                      style={{ width: `${item.percentage}%` }}
-                      className={`h-full rounded-full transition-all duration-500 ${
+                      style={{ width: `${chartsReady ? item.percentage : 0}%` }}
+                      className={`h-full rounded-full transition-all duration-1000 ease-out ${
                         item.isHighlight ? 'bg-blue-600 dark:bg-blue-500' : 'bg-slate-400 dark:bg-slate-600'
                       }`}
                     />
@@ -1045,7 +1732,7 @@ export default function LiveHRDashboard({ currentUser }: LiveHRDashboardProps) {
 
           <button
             onClick={() => openDrilldown('Kelompok Usia', 'Demografi')}
-            className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 mt-6 pt-3 border-t border-slate-100 dark:border-slate-800/80 transition-colors cursor-pointer"
+            className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 mt-5 pt-3 border-t border-slate-100 dark:border-slate-800/80 transition-colors cursor-pointer"
           >
             <span>Klik kelompok untuk melihat karyawan</span>
             <ArrowRight className="h-3 w-3" />
@@ -1058,14 +1745,14 @@ export default function LiveHRDashboard({ currentUser }: LiveHRDashboardProps) {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h3 className="text-sm font-bold text-slate-900 dark:text-white">Pendidikan terakhir</h3>
-                <p className="text-[11px] text-slate-400 dark:text-slate-500">Jenjang pendidikan yang tercatat</p>
+                <p className="text-[11px] text-slate-400 dark:text-slate-500">Jenjang pendidikan tercatat</p>
               </div>
               <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-[#18181b] px-2 py-0.5 rounded-md">
                 {totalHeadcount} orang
               </span>
             </div>
 
-            <div className="space-y-3 mt-3">
+            <div className="space-y-3 mt-4">
               {educationDistribution.map(item => (
                 <div key={item.label}>
                   <div className="flex justify-between text-xs font-medium mb-1">
@@ -1077,8 +1764,8 @@ export default function LiveHRDashboard({ currentUser }: LiveHRDashboardProps) {
                   </div>
                   <div className="w-full h-2 bg-slate-100 dark:bg-[#1F1F24] rounded-full overflow-hidden">
                     <div
-                      style={{ width: `${item.percentage}%` }}
-                      className={`h-full rounded-full transition-all duration-500 ${
+                      style={{ width: `${chartsReady ? item.percentage : 0}%` }}
+                      className={`h-full rounded-full transition-all duration-1000 ease-out ${
                         item.isHighlight ? 'bg-amber-500 dark:bg-amber-400' : 'bg-slate-400 dark:bg-slate-600'
                       }`}
                     />
@@ -1110,7 +1797,7 @@ export default function LiveHRDashboard({ currentUser }: LiveHRDashboardProps) {
               </span>
             </div>
 
-            <div className="space-y-3.5 mt-4">
+            <div className="space-y-3 mt-4">
               {tenureDistribution.map(item => (
                 <div key={item.label}>
                   <div className="flex justify-between text-xs font-medium mb-1">
@@ -1122,8 +1809,8 @@ export default function LiveHRDashboard({ currentUser }: LiveHRDashboardProps) {
                   </div>
                   <div className="w-full h-2 bg-slate-100 dark:bg-[#1F1F24] rounded-full overflow-hidden">
                     <div
-                      style={{ width: `${item.percentage}%` }}
-                      className={`h-full rounded-full transition-all duration-500 ${
+                      style={{ width: `${chartsReady ? item.percentage : 0}%` }}
+                      className={`h-full rounded-full transition-all duration-1000 ease-out ${
                         item.isHighlight ? 'bg-blue-600 dark:bg-blue-500' : 'bg-slate-400 dark:bg-slate-600'
                       }`}
                     />
@@ -1135,147 +1822,46 @@ export default function LiveHRDashboard({ currentUser }: LiveHRDashboardProps) {
 
           <button
             onClick={() => openDrilldown('Masa Kerja', 'Tenur Karyawan')}
-            className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 mt-6 pt-3 border-t border-slate-100 dark:border-slate-800/80 transition-colors cursor-pointer"
+            className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 mt-5 pt-3 border-t border-slate-100 dark:border-slate-800/80 transition-colors cursor-pointer"
           >
             <span>Klik kelompok untuk melihat karyawan</span>
             <ArrowRight className="h-3 w-3" />
           </button>
         </div>
+      </div>
 
-        {/* 4. Status Kepegawaian (Donut) */}
-        <div className="bg-white dark:bg-[#131316] border border-slate-200/80 dark:border-[#222225] rounded-2xl p-5 shadow-xs flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-sm font-bold text-slate-900 dark:text-white">Status kepegawaian</h3>
-                <p className="text-[11px] text-slate-400 dark:text-slate-500">Komposisi hubungan kerja</p>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-center gap-6 my-4">
-              {/* Donut SVG with theme-matched track */}
-              <div className="relative w-32 h-32 flex items-center justify-center shrink-0">
-                <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
-                  <circle cx="50" cy="50" r="38" fill="transparent" stroke="currentColor" className="text-slate-100 dark:text-[#222225]" strokeWidth="14" />
-                  {/* Permanent */}
-                  <circle
-                    cx="50"
-                    cy="50"
-                    r="38"
-                    fill="transparent"
-                    stroke="currentColor"
-                    className="text-[#103065] dark:text-blue-500"
-                    strokeWidth="14"
-                    strokeDasharray="238.76"
-                    strokeDashoffset={totalHeadcount > 0 ? 238.76 * (1 - statusPermanent / totalHeadcount) : 238.76}
-                  />
-                  {/* Contract */}
-                  <circle
-                    cx="50"
-                    cy="50"
-                    r="38"
-                    fill="transparent"
-                    stroke="currentColor"
-                    className="text-[#2563eb] dark:text-sky-400"
-                    strokeWidth="14"
-                    strokeDasharray="238.76"
-                    strokeDashoffset={totalHeadcount > 0 ? 238.76 * (1 - statusContract / totalHeadcount) : 238.76}
-                    transform={`rotate(${totalHeadcount > 0 ? (statusPermanent / totalHeadcount) * 360 : 0} 50 50)`}
-                  />
-                  {/* Probation */}
-                  <circle
-                    cx="50"
-                    cy="50"
-                    r="38"
-                    fill="transparent"
-                    stroke="currentColor"
-                    className="text-[#d97706] dark:text-amber-400"
-                    strokeWidth="14"
-                    strokeDasharray="238.76"
-                    strokeDashoffset={totalHeadcount > 0 ? 238.76 * (1 - statusProbation / totalHeadcount) : 238.76}
-                    transform={`rotate(${totalHeadcount > 0 ? ((statusPermanent + statusContract) / totalHeadcount) * 360 : 0} 50 50)`}
-                  />
-                </svg>
-                <div className="absolute text-center">
-                  <span className="text-xl font-black text-slate-900 dark:text-white block leading-none">
-                    {totalHeadcount}
-                  </span>
-                  <span className="text-[9px] text-slate-400 dark:text-slate-500 block mt-0.5">Karyawan aktif</span>
-                </div>
-              </div>
-
-              {/* Legend on right */}
-              <div className="space-y-2 text-xs">
-                <div className="flex items-center gap-2">
-                  <span className="h-2.5 w-2.5 rounded-full bg-[#1E3A8A] dark:bg-blue-500 shrink-0" />
-                  <span className="text-slate-600 dark:text-slate-300">PKWTT</span>
-                  <strong className="font-bold text-slate-900 dark:text-white ml-2">{statusPermanent}</strong>
-                  <span className="text-[10px] text-slate-400 font-normal">
-                    {totalHeadcount > 0 ? ((statusPermanent / totalHeadcount) * 100).toFixed(1) : 0}%
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="h-2.5 w-2.5 rounded-full bg-[#3B82F6] dark:bg-blue-400 shrink-0" />
-                  <span className="text-slate-600 dark:text-slate-300">PKWT</span>
-                  <strong className="font-bold text-slate-900 dark:text-white ml-2">{statusContract}</strong>
-                  <span className="text-[10px] text-slate-400 font-normal">
-                    {totalHeadcount > 0 ? ((statusContract / totalHeadcount) * 100).toFixed(1) : 0}%
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="h-2.5 w-2.5 rounded-full bg-[#F59E0B] dark:bg-amber-400 shrink-0" />
-                  <span className="text-slate-600 dark:text-slate-300">Probation</span>
-                  <strong className="font-bold text-slate-900 dark:text-white ml-2">{statusProbation}</strong>
-                  <span className="text-[10px] text-slate-400 font-normal">
-                    {totalHeadcount > 0 ? ((statusProbation / totalHeadcount) * 100).toFixed(1) : 0}%
-                  </span>
-                </div>
-                {statusIntern > 0 && (
-                  <div className="flex items-center gap-2">
-                    <span className="h-2.5 w-2.5 rounded-full bg-cyan-500 shrink-0" />
-                    <span className="text-slate-600 dark:text-slate-300">Magang</span>
-                    <strong className="font-bold text-slate-900 dark:text-white ml-2">{statusIntern}</strong>
-                    <span className="text-[10px] text-slate-400 font-normal">
-                      {totalHeadcount > 0 ? ((statusIntern / totalHeadcount) * 100).toFixed(1) : 0}%
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="text-[11px] text-slate-400 dark:text-slate-500 pt-3 border-t border-slate-100 dark:border-slate-800/80">
-            Proporsi berdasarkan data akun aktif
-          </div>
-        </div>
-
-        {/* 5. Sebaran Departemen */}
-        <div className="bg-white dark:bg-[#131316] border border-slate-200/80 dark:border-[#222225] rounded-2xl p-5 shadow-xs flex flex-col justify-between">
+      {/* ── ROW 4: STRUKTUR ORGANISASI & KOMPOSISI SDM (4 KOLOM: 2 COL DEPARTEMEN + 1 COL STATUS + 1 COL GENDER) ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        {/* 1. Sebaran Departemen (Mengambil 2 Kolom dengan sub-grid 2 kolom sehingga padat dan seimbang) */}
+        <div className="lg:col-span-2 bg-white dark:bg-[#131316] border border-slate-200/80 dark:border-[#222225] rounded-2xl p-5 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h3 className="text-sm font-bold text-slate-900 dark:text-white">Sebaran departemen</h3>
-                <p className="text-[11px] text-slate-400 dark:text-slate-500">Jumlah karyawan pada setiap fungsi</p>
+                <p className="text-[11px] text-slate-400 dark:text-slate-500">Distribusi karyawan pada tiap unit fungsi</p>
               </div>
               <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-[#18181b] px-2 py-0.5 rounded-md">
-                {totalHeadcount} orang
+                {totalHeadcount} orang · {departmentDistribution.length} divisi
               </span>
             </div>
 
-            <div className="space-y-3.5 mt-4">
+            {/* Sub-grid 2 kolom untuk departemen agar ringkas dan seimbang dengan tinggi donut chart */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 mt-3">
               {departmentDistribution.map(item => (
-                <div key={item.label}>
+                <div key={item.label} className="flex flex-col justify-center">
                   <div className="flex justify-between text-xs font-medium mb-1">
-                    <span className="text-slate-600 dark:text-slate-300">{item.label}</span>
-                    <span className="text-slate-900 dark:text-white font-bold">
+                    <span className="text-slate-600 dark:text-slate-300 truncate pr-1" title={item.label}>
+                      {item.label}
+                    </span>
+                    <span className="text-slate-900 dark:text-white font-bold shrink-0">
                       {item.count}{' '}
                       <span className="text-[10px] text-slate-400 font-normal">({item.percentage}%)</span>
                     </span>
                   </div>
-                  <div className="w-full h-2 bg-slate-100 dark:bg-[#1F1F24] rounded-full overflow-hidden">
+                  <div className="w-full h-1.5 bg-slate-100 dark:bg-[#1F1F24] rounded-full overflow-hidden">
                     <div
-                      style={{ width: `${item.percentage}%` }}
-                      className={`h-full rounded-full transition-all duration-500 ${
+                      style={{ width: `${chartsReady ? item.percentage : 0}%` }}
+                      className={`h-full rounded-full transition-all duration-1000 ease-out ${
                         item.isHighlight ? 'bg-slate-900 dark:bg-blue-500' : 'bg-slate-400 dark:bg-slate-600'
                       }`}
                     />
@@ -1287,26 +1873,135 @@ export default function LiveHRDashboard({ currentUser }: LiveHRDashboardProps) {
 
           <button
             onClick={() => openDrilldown('Departemen', 'Fungsi Organisasi')}
-            className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 mt-6 pt-3 border-t border-slate-100 dark:border-slate-800/80 transition-colors cursor-pointer"
+            className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 mt-5 pt-3 border-t border-slate-100 dark:border-slate-800/80 transition-colors cursor-pointer"
           >
             <span>Klik kelompok untuk melihat karyawan</span>
             <ArrowRight className="h-3 w-3" />
           </button>
         </div>
 
-        {/* 6. Komposisi Gender (Donut) */}
-        <div className="bg-white dark:bg-[#131316] border border-slate-200/80 dark:border-[#222225] rounded-2xl p-5 shadow-xs flex flex-col justify-between">
+        {/* 2. Status Kepegawaian (1 Kolom: Donut Chart Centered & Legend Proporsional) */}
+        <div className="lg:col-span-1 bg-white dark:bg-[#131316] border border-slate-200/80 dark:border-[#222225] rounded-2xl p-5 shadow-xs flex flex-col justify-between">
           <div>
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-3">
               <div>
-                <h3 className="text-sm font-bold text-slate-900 dark:text-white">Komposisi gender</h3>
-                <p className="text-[11px] text-slate-400 dark:text-slate-500">Data gender yang tercatat</p>
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">Status kepegawaian</h3>
+                <p className="text-[11px] text-slate-400 dark:text-slate-500">Hubungan kerja</p>
               </div>
             </div>
 
-            <div className="flex items-center justify-center gap-6 my-4">
-              {/* Donut SVG */}
-              <div className="relative w-32 h-32 flex items-center justify-center shrink-0">
+            {/* Donut SVG Centered */}
+            <div className="flex justify-center my-2">
+              <div className="relative w-28 h-28 flex items-center justify-center shrink-0">
+                <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
+                  <circle cx="50" cy="50" r="38" fill="transparent" stroke="currentColor" className="text-slate-100 dark:text-[#222225]" strokeWidth="14" />
+                  {/* Permanent */}
+                  <circle
+                    cx="50"
+                    cy="50"
+                    r="38"
+                    fill="transparent"
+                    stroke="currentColor"
+                    className="text-[#103065] dark:text-blue-500 transition-all duration-1000 ease-out"
+                    strokeWidth="14"
+                    strokeDasharray="238.76"
+                    strokeDashoffset={chartsReady && totalHeadcount > 0 ? 238.76 * (1 - statusPermanent / totalHeadcount) : 238.76}
+                  />
+                  {/* Contract */}
+                  <circle
+                    cx="50"
+                    cy="50"
+                    r="38"
+                    fill="transparent"
+                    stroke="currentColor"
+                    className="text-[#2563eb] dark:text-sky-400 transition-all duration-1000 ease-out"
+                    strokeWidth="14"
+                    strokeDasharray="238.76"
+                    strokeDashoffset={chartsReady && totalHeadcount > 0 ? 238.76 * (1 - statusContract / totalHeadcount) : 238.76}
+                    transform={`rotate(${totalHeadcount > 0 ? (statusPermanent / totalHeadcount) * 360 : 0} 50 50)`}
+                  />
+                  {/* Probation */}
+                  <circle
+                    cx="50"
+                    cy="50"
+                    r="38"
+                    fill="transparent"
+                    stroke="currentColor"
+                    className="text-[#d97706] dark:text-amber-400 transition-all duration-1000 ease-out"
+                    strokeWidth="14"
+                    strokeDasharray="238.76"
+                    strokeDashoffset={chartsReady && totalHeadcount > 0 ? 238.76 * (1 - statusProbation / totalHeadcount) : 238.76}
+                    transform={`rotate(${totalHeadcount > 0 ? ((statusPermanent + statusContract) / totalHeadcount) * 360 : 0} 50 50)`}
+                  />
+                </svg>
+                <div className="absolute text-center">
+                  <span className="text-lg font-black text-slate-900 dark:text-white block leading-none">
+                    {totalHeadcount}
+                  </span>
+                  <span className="text-[8px] text-slate-400 dark:text-slate-500 block mt-0.5">Aktif</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Legend Stacked */}
+            <div className="space-y-1.5 text-xs mt-3">
+              <div className="flex items-center justify-between py-1 border-b border-slate-50 dark:border-slate-800/40">
+                <div className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-[#103065] dark:bg-blue-500 shrink-0" />
+                  <span className="text-slate-600 dark:text-slate-300">PKWTT</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <strong className="font-bold text-slate-900 dark:text-white">{statusPermanent}</strong>
+                  <span className="text-[10px] text-slate-400">
+                    ({totalHeadcount > 0 ? ((statusPermanent / totalHeadcount) * 100).toFixed(1) : 0}%)
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between py-1 border-b border-slate-50 dark:border-slate-800/40">
+                <div className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-[#2563eb] dark:bg-sky-400 shrink-0" />
+                  <span className="text-slate-600 dark:text-slate-300">PKWT</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <strong className="font-bold text-slate-900 dark:text-white">{statusContract}</strong>
+                  <span className="text-[10px] text-slate-400">
+                    ({totalHeadcount > 0 ? ((statusContract / totalHeadcount) * 100).toFixed(1) : 0}%)
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between py-1">
+                <div className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-[#d97706] dark:bg-amber-400 shrink-0" />
+                  <span className="text-slate-600 dark:text-slate-300">Probation</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <strong className="font-bold text-slate-900 dark:text-white">{statusProbation}</strong>
+                  <span className="text-[10px] text-slate-400">
+                    ({totalHeadcount > 0 ? ((statusProbation / totalHeadcount) * 100).toFixed(1) : 0}%)
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="text-[10px] text-slate-400 dark:text-slate-500 pt-3 border-t border-slate-100 dark:border-slate-800/80">
+            Database karyawan aktif
+          </div>
+        </div>
+
+        {/* 3. Komposisi Gender (1 Kolom: Donut Chart Centered & Legend Proporsional) */}
+        <div className="lg:col-span-1 bg-white dark:bg-[#131316] border border-slate-200/80 dark:border-[#222225] rounded-2xl p-5 shadow-xs flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">Komposisi gender</h3>
+                <p className="text-[11px] text-slate-400 dark:text-slate-500">Gender database</p>
+              </div>
+            </div>
+
+            {/* Donut SVG Centered */}
+            <div className="flex justify-center my-2">
+              <div className="relative w-28 h-28 flex items-center justify-center shrink-0">
                 <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
                   <circle cx="50" cy="50" r="38" fill="transparent" stroke="currentColor" className="text-slate-100 dark:text-[#222225]" strokeWidth="14" />
                   {/* Laki-laki */}
@@ -1316,10 +2011,10 @@ export default function LiveHRDashboard({ currentUser }: LiveHRDashboardProps) {
                     r="38"
                     fill="transparent"
                     stroke="currentColor"
-                    className="text-[#103065] dark:text-blue-500"
+                    className="text-[#103065] dark:text-blue-500 transition-all duration-1000 ease-out"
                     strokeWidth="14"
                     strokeDasharray="238.76"
-                    strokeDashoffset={totalHeadcount > 0 ? 238.76 * (1 - maleCount / totalHeadcount) : 238.76}
+                    strokeDashoffset={chartsReady && totalHeadcount > 0 ? 238.76 * (1 - maleCount / totalHeadcount) : 238.76}
                   />
                   {/* Perempuan */}
                   <circle
@@ -1328,195 +2023,62 @@ export default function LiveHRDashboard({ currentUser }: LiveHRDashboardProps) {
                     r="38"
                     fill="transparent"
                     stroke="currentColor"
-                    className="text-[#0284C7] dark:text-sky-400"
+                    className="text-[#0284C7] dark:text-sky-400 transition-all duration-1000 ease-out"
                     strokeWidth="14"
                     strokeDasharray="238.76"
-                    strokeDashoffset={totalHeadcount > 0 ? 238.76 * (1 - femaleCount / totalHeadcount) : 238.76}
+                    strokeDashoffset={chartsReady && totalHeadcount > 0 ? 238.76 * (1 - femaleCount / totalHeadcount) : 238.76}
                     transform={`rotate(${totalHeadcount > 0 ? (maleCount / totalHeadcount) * 360 : 0} 50 50)`}
                   />
                 </svg>
                 <div className="absolute text-center">
-                  <span className="text-xl font-black text-slate-900 dark:text-white block leading-none">
+                  <span className="text-lg font-black text-slate-900 dark:text-white block leading-none">
                     {totalHeadcount}
                   </span>
-                  <span className="text-[9px] text-slate-400 dark:text-slate-500 block mt-0.5">Karyawan aktif</span>
+                  <span className="text-[8px] text-slate-400 dark:text-slate-500 block mt-0.5">Aktif</span>
                 </div>
               </div>
+            </div>
 
-              {/* Legend on right */}
-              <div className="space-y-2 text-xs">
+            {/* Legend Stacked */}
+            <div className="space-y-1.5 text-xs mt-3">
+              <div className="flex items-center justify-between py-1 border-b border-slate-50 dark:border-slate-800/40">
                 <div className="flex items-center gap-2">
-                  <span className="h-2.5 w-2.5 rounded-full bg-[#1E3A8A] dark:bg-blue-500 shrink-0" />
+                  <span className="h-2 w-2 rounded-full bg-[#103065] dark:bg-blue-500 shrink-0" />
                   <span className="text-slate-600 dark:text-slate-300">Laki-laki</span>
-                  <strong className="font-bold text-slate-900 dark:text-white ml-2">{maleCount}</strong>
-                  <span className="text-[10px] text-slate-400 font-normal">
-                    {totalHeadcount > 0 ? ((maleCount / totalHeadcount) * 100).toFixed(1) : 0}%
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <strong className="font-bold text-slate-900 dark:text-white">{maleCount}</strong>
+                  <span className="text-[10px] text-slate-400">
+                    ({totalHeadcount > 0 ? ((maleCount / totalHeadcount) * 100).toFixed(1) : 0}%)
                   </span>
                 </div>
+              </div>
+              <div className="flex items-center justify-between py-1 border-b border-slate-50 dark:border-slate-800/40">
                 <div className="flex items-center gap-2">
-                  <span className="h-2.5 w-2.5 rounded-full bg-[#0284C7] dark:bg-sky-400 shrink-0" />
+                  <span className="h-2 w-2 rounded-full bg-[#0284C7] dark:bg-sky-400 shrink-0" />
                   <span className="text-slate-600 dark:text-slate-300">Perempuan</span>
-                  <strong className="font-bold text-slate-900 dark:text-white ml-2">{femaleCount}</strong>
-                  <span className="text-[10px] text-slate-400 font-normal">
-                    {totalHeadcount > 0 ? ((femaleCount / totalHeadcount) * 100).toFixed(1) : 0}%
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <strong className="font-bold text-slate-900 dark:text-white">{femaleCount}</strong>
+                  <span className="text-[10px] text-slate-400">
+                    ({totalHeadcount > 0 ? ((femaleCount / totalHeadcount) * 100).toFixed(1) : 0}%)
                   </span>
                 </div>
-                {unspecifiedGenderCount > 0 && (
+              </div>
+              {unspecifiedGenderCount > 0 && (
+                <div className="flex items-center justify-between py-1">
                   <div className="flex items-center gap-2">
-                    <span className="h-2.5 w-2.5 rounded-full bg-slate-400 dark:bg-slate-600 shrink-0" />
+                    <span className="h-2 w-2 rounded-full bg-slate-400 dark:bg-slate-600 shrink-0" />
                     <span className="text-slate-600 dark:text-slate-300">Belum diisi</span>
-                    <strong className="font-bold text-slate-900 dark:text-white ml-2">{unspecifiedGenderCount}</strong>
                   </div>
-                )}
-              </div>
+                  <strong className="font-bold text-slate-900 dark:text-white">{unspecifiedGenderCount}</strong>
+                </div>
+              )}
             </div>
           </div>
 
-          <div className="text-[11px] text-slate-400 dark:text-slate-500 pt-3 border-t border-slate-100 dark:border-slate-800/80">
-            Proporsi berdasarkan data gender database
-          </div>
-        </div>
-      </div>
-
-      {/* ── ROW 4: HEADCOUNT TREND & ACTION CENTER (2 COLUMNS) ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Pergerakan Jumlah Karyawan */}
-        <div className="bg-white dark:bg-[#131316] border border-slate-200/80 dark:border-[#222225] rounded-2xl p-6 shadow-xs flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-sm font-bold text-slate-900 dark:text-white">Pergerakan jumlah karyawan</h3>
-                <p className="text-[11px] text-slate-400 dark:text-slate-500">6 bulan terakhir · Aktif pada akhir periode</p>
-              </div>
-              <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-[#18181b] px-2 py-0.5 rounded-md">
-                Headcount
-              </span>
-            </div>
-
-            {/* Vertical Bar Chart */}
-            <div className="h-44 flex items-end justify-between gap-3 pt-6 pb-2 px-2">
-              {monthlyTrend.map(t => {
-                const maxVal = Math.max(...monthlyTrend.map(x => x.count), 1);
-                const heightPercent = Math.max(15, Math.round((t.count / maxVal) * 100));
-                return (
-                  <div key={t.month} className="flex-1 flex flex-col items-center gap-2 h-full justify-end group">
-                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                      {t.count}
-                    </span>
-                    <div className="w-full max-w-[42px] bg-slate-100 dark:bg-[#1F1F24] rounded-t-lg h-full flex items-end">
-                      <div
-                        style={{ height: `${heightPercent}%` }}
-                        className={`w-full rounded-t-lg transition-all duration-500 ${
-                          t.isCurrent ? 'bg-[#b45309] dark:bg-amber-500' : 'bg-[#1e3a8a] hover:bg-[#1e40af] dark:bg-blue-600 dark:hover:bg-blue-500'
-                        }`}
-                      />
-                    </div>
-                    <span className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 mt-1">
-                      {t.month}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Bottom movement stats */}
-            <div className="grid grid-cols-3 gap-2 mt-6 pt-4 border-t border-slate-100 dark:border-slate-800/80 text-center">
-              <div>
-                <span className="text-[11px] text-slate-400 dark:text-slate-500 block mb-1">Masuk bulan ini</span>
-                <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400 block">+{newHires}</span>
-              </div>
-              <div>
-                <span className="text-[11px] text-slate-400 dark:text-slate-500 block mb-1">Keluar bulan ini</span>
-                <span className="text-2xl font-black text-slate-900 dark:text-white block">{resignations}</span>
-              </div>
-              <div>
-                <span className="text-[11px] text-slate-400 dark:text-slate-500 block mb-1">Perubahan bersih</span>
-                <span className="text-2xl font-black text-slate-900 dark:text-white block">
-                  {newHires - resignations >= 0 ? `+${newHires - resignations}` : newHires - resignations}
-                </span>
-              </div>
-            </div>
-
-            <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-3">
-              *Bulan terakhir sampai tanggal snapshot. Turnover = keluar ÷ headcount awal bulan × 100%.
-            </p>
-          </div>
-        </div>
-
-        {/* Perlu Perhatian HR (Action Center) */}
-        <div className="bg-white dark:bg-[#131316] border border-slate-200/80 dark:border-[#222225] rounded-2xl p-6 shadow-xs flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-sm font-bold text-slate-900 dark:text-white">Perlu perhatian HR</h3>
-                <p className="text-[11px] text-slate-400 dark:text-slate-500">Indikator untuk tindak lanjut</p>
-              </div>
-              <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-md uppercase border border-amber-200/50 dark:border-amber-900/40">
-                Action center
-              </span>
-            </div>
-
-            <div className="space-y-4 mt-4">
-              {/* Row 1: Kontrak Berakhir */}
-              <div
-                onClick={() => openDrilldown('Kontrak Berakhir ≤30 Hari', 'Tinjau Kontrak', expiringContracts)}
-                className="flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-[#18181b] transition-colors cursor-pointer border border-transparent hover:border-slate-200 dark:hover:border-slate-800"
-              >
-                <div>
-                  <h4 className="text-xs font-bold text-slate-900 dark:text-white">Kontrak berakhir ≤30 hari</h4>
-                  <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">Tinjau perpanjangan atau akhir hubungan kerja</p>
-                </div>
-                <div className="flex items-center gap-1.5 text-xs font-black text-amber-600 dark:text-amber-400">
-                  <span className="px-2 py-0.5 bg-amber-50 dark:bg-amber-950/40 rounded-lg">{expiringContracts.length}</span>
-                  <ArrowRight className="h-3.5 w-3.5 text-slate-400" />
-                </div>
-              </div>
-
-              {/* Row 2: Usia >= 55 Tahun */}
-              <div
-                onClick={() => openDrilldown('Usia ≥55 Tahun', 'Monitoring Masa Pensiun', seniorEmployees)}
-                className="flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-[#18181b] transition-colors cursor-pointer border border-transparent hover:border-slate-200 dark:hover:border-slate-800"
-              >
-                <div>
-                  <h4 className="text-xs font-bold text-slate-900 dark:text-white">Usia ≥55 tahun</h4>
-                  <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">Kelompok pemantauan usia, bukan penetapan pensiun</p>
-                </div>
-                <div className="flex items-center gap-1.5 text-xs font-black text-slate-700 dark:text-slate-300">
-                  <span className="px-2 py-0.5 bg-slate-100 dark:bg-[#18181b] rounded-lg">{seniorEmployees.length}</span>
-                  <ArrowRight className="h-3.5 w-3.5 text-slate-400" />
-                </div>
-              </div>
-
-              {/* Row 3: Karyawan Probation */}
-              <div
-                onClick={() => openDrilldown('Karyawan Probation', 'Evaluasi Masa Percobaan', probationEmployees)}
-                className="flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-[#18181b] transition-colors cursor-pointer border border-transparent hover:border-slate-200 dark:hover:border-slate-800"
-              >
-                <div>
-                  <h4 className="text-xs font-bold text-slate-900 dark:text-white">Karyawan probation</h4>
-                  <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">Pastikan evaluasi dan keputusan terdokumentasi</p>
-                </div>
-                <div className="flex items-center gap-1.5 text-xs font-black text-slate-700 dark:text-slate-300">
-                  <span className="px-2 py-0.5 bg-slate-100 dark:bg-[#18181b] rounded-lg">{probationEmployees.length}</span>
-                  <ArrowRight className="h-3.5 w-3.5 text-slate-400" />
-                </div>
-              </div>
-
-              {/* Row 4: Data Pendidikan Belum Lengkap */}
-              <div
-                onClick={() => openDrilldown('Data Pendidikan Belum Lengkap', 'Kelengkapan Profil', incompleteEducationEmployees)}
-                className="flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-[#18181b] transition-colors cursor-pointer border border-transparent hover:border-slate-200 dark:hover:border-slate-800"
-              >
-                <div>
-                  <h4 className="text-xs font-bold text-slate-900 dark:text-white">Data pendidikan belum lengkap</h4>
-                  <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">Lengkapi profil untuk meningkatkan kualitas analitik</p>
-                </div>
-                <div className="flex items-center gap-1.5 text-xs font-black text-slate-700 dark:text-slate-300">
-                  <span className="px-2 py-0.5 bg-slate-100 dark:bg-[#18181b] rounded-lg">{incompleteEducationEmployees.length}</span>
-                  <ArrowRight className="h-3.5 w-3.5 text-slate-400" />
-                </div>
-              </div>
-            </div>
+          <div className="text-[10px] text-slate-400 dark:text-slate-500 pt-3 border-t border-slate-100 dark:border-slate-800/80">
+            Proporsi database gender
           </div>
         </div>
       </div>

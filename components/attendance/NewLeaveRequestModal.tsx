@@ -3,7 +3,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   Calendar, Award, Plus, Check, Clock, User, Building,
-  AlertCircle, ShieldCheck, X, Send, FileText, Info, AlertTriangle, Sparkles
+  AlertCircle, ShieldCheck, X, Send, FileText, Info, AlertTriangle, Sparkles,
+  Stethoscope, HeartHandshake, CreditCard
 } from '@/components/ui/icons';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -259,7 +260,7 @@ export const NewLeaveRequestModal: React.FC<NewLeaveRequestModalProps> = ({
                     : 'border-border bg-card text-foreground hover:bg-muted'
                 }`}
               >
-                <span className="block text-sm mb-0.5">🏖️</span>
+                <Calendar className="w-4 h-4 mb-1 text-primary" />
                 <span className="font-semibold block text-[11px]">Cuti Tahunan</span>
                 <span className="text-[10px] text-muted-foreground font-normal">Memotong Kuota</span>
               </button>
@@ -273,7 +274,7 @@ export const NewLeaveRequestModal: React.FC<NewLeaveRequestModalProps> = ({
                     : 'border-border bg-card text-foreground hover:bg-muted'
                 }`}
               >
-                <span className="block text-sm mb-0.5">📜</span>
+                <ShieldCheck className="w-4 h-4 mb-1 text-emerald-600 dark:text-emerald-400" />
                 <span className="font-semibold block text-[11px]">Izin Khusus (Pasal 22)</span>
                 <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-normal">Tetap Dapat Upah</span>
               </button>
@@ -287,7 +288,7 @@ export const NewLeaveRequestModal: React.FC<NewLeaveRequestModalProps> = ({
                     : 'border-border bg-card text-foreground hover:bg-muted'
                 }`}
               >
-                <span className="block text-sm mb-0.5">🤒</span>
+                <Stethoscope className="w-4 h-4 mb-1 text-rose-600 dark:text-rose-400" />
                 <span className="font-semibold block text-[11px]">Sakit</span>
                 <span className="text-[10px] text-muted-foreground font-normal">Surat Dokter</span>
               </button>
@@ -301,7 +302,7 @@ export const NewLeaveRequestModal: React.FC<NewLeaveRequestModalProps> = ({
                     : 'border-border bg-card text-foreground hover:bg-muted'
                 }`}
               >
-                <span className="block text-sm mb-0.5">📋</span>
+                <User className="w-4 h-4 mb-1 text-amber-600 dark:text-amber-400" />
                 <span className="font-semibold block text-[11px]">Izin Pribadi</span>
                 <span className="text-[10px] text-muted-foreground font-normal">Memotong Kuota</span>
               </button>
@@ -315,7 +316,7 @@ export const NewLeaveRequestModal: React.FC<NewLeaveRequestModalProps> = ({
                     : 'border-border bg-card text-foreground hover:bg-muted'
                 }`}
               >
-                <span className="block text-sm mb-0.5">👶</span>
+                <HeartHandshake className="w-4 h-4 mb-1 text-pink-600 dark:text-pink-400" />
                 <span className="font-semibold block text-[11px]">Cuti Melahirkan</span>
                 <span className="text-[10px] text-muted-foreground font-normal">3 Bulan Kalender</span>
               </button>
@@ -329,7 +330,7 @@ export const NewLeaveRequestModal: React.FC<NewLeaveRequestModalProps> = ({
                     : 'border-border bg-card text-foreground hover:bg-muted'
                 }`}
               >
-                <span className="block text-sm mb-0.5">💰</span>
+                <CreditCard className="w-4 h-4 mb-1 text-zinc-600 dark:text-zinc-400" />
                 <span className="font-semibold block text-[11px]">Cuti Tanpa Gaji</span>
                 <span className="text-[10px] text-muted-foreground font-normal">Potong Upah</span>
               </button>

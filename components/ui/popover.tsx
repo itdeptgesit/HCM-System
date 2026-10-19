@@ -1,83 +1,87 @@
-"use client"
-
 import * as React from "react"
-import {
-  Popover as RACPopover,
-  PopoverProps as RACPopoverProps,
-  OverlayArrow,
-  composeRenderProps,
-  Dialog,
-} from "react-aria-components"
-import { tv } from "tailwind-variants"
-import { twMerge } from "tailwind-merge"
+import { Popover as PopoverPrimitive } from "@base-ui/react/popover"
+import { cn } from "@/lib/utils"
 
-const popoverVariants = tv({
-  base: "z-50 min-w-80 rounded-xl bg-popover text-popover-foreground shadow-2xl ring-1 ring-foreground/5 dark:ring-white/10 outline-none",
-  variants: {
-    isEntering: {
-      true: "animate-in fade-in zoom-in-95 duration-200 ease-out",
-    },
-    isExiting: {
-      true: "animate-out fade-out zoom-out-95 duration-150 ease-in",
-    },
-    placement: {
-      top: "mb-2",
-      bottom: "mt-2",
-      left: "mr-2",
-      right: "ml-2",
-      "bottom start": "mt-2",
-      "bottom end": "mt-2",
-      "top start": "mb-2",
-      "top end": "mb-2",
-      "left start": "mr-2",
-      "left end": "mr-2",
-      "right start": "ml-2",
-      "right end": "ml-2",
-      center: "",
-    },
-  },
-})
-
-export interface PopoverProps extends Omit<RACPopoverProps, "children"> {
-  showArrow?: boolean
-  className?: string
-  children: React.ReactNode
+function Popover({ ...props }: PopoverPrimitive.Root.Props) {
+  return <PopoverPrimitive.Root data-slot="popover" {...props} />
 }
 
-export function Popover({
+function PopoverTrigger({ ...props }: PopoverPrimitive.Trigger.Props) {
+  return <PopoverPrimitive.Trigger data-slot="popover-trigger" {...props} />
+}
+
+function PopoverContent({
   className,
-  showArrow,
-  children,
+  align = "center",
+  alignOffset = 0,
+  side = "bottom",
+  sideOffset = 4,
   ...props
-}: PopoverProps) {
+}: PopoverPrimitive.Popup.Props &
+  Pick<
+    PopoverPrimitive.Positioner.Props,
+    "align" | "alignOffset" | "side" | "sideOffset"
+  >) {
   return (
-    <RACPopover
-      {...props}
-      className={composeRenderProps(className, (className, renderProps) =>
-        popoverVariants({
-          ...renderProps,
-          placement: renderProps.placement || undefined,
-          className,
-        })
-      )}
-    >
-      {showArrow && (
-        <OverlayArrow className="group">
-          <svg
-            width={12}
-            height={12}
-            viewBox="0 0 12 12"
-            className="block fill-popover stroke-border stroke-1"
-          >
-            <path d="M0 0 L6 6 L12 0" />
-          </svg>
-        </OverlayArrow>
-      )}
-      <Dialog className="outline-none">
-        {children}
-      </Dialog>
-    </RACPopover>
+    <PopoverPrimitive.Portal>
+      <PopoverPrimitive.Positioner
+        align={align}
+        alignOffset={alignOffset}
+        side={side}
+        sideOffset={sideOffset}
+        className="isolate z-50"
+      >
+        <PopoverPrimitive.Popup
+          data-slot="popover-content"
+          className={cn(
+            "z-50 flex w-72 origin-(--transform-origin) flex-col gap-2.5 rounded-lg bg-popover p-2.5 text-sm text-popover-foreground shadow-md ring-1 ring-foreground/10 outline-hidden duration-100 data-[side=bottom]:slide-in-from-top-2 data-[side=inline-end]:slide-in-from-left-2 data-[side=inline-start]:slide-in-from-right-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+            className
+          )}
+          {...props}
+        />
+      </PopoverPrimitive.Positioner>
+    </PopoverPrimitive.Portal>
   )
 }
 
-export { Popover as PopoverContent }
+function PopoverHeader({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="popover-header"
+      className={cn("flex flex-col gap-0.5 text-sm", className)}
+      {...props}
+    />
+  )
+}
+
+function PopoverTitle({ className, ...props }: PopoverPrimitive.Title.Props) {
+  return (
+    <PopoverPrimitive.Title
+      data-slot="popover-title"
+      className={cn("font-medium", className)}
+      {...props}
+    />
+  )
+}
+
+function PopoverDescription({
+  className,
+  ...props
+}: PopoverPrimitive.Description.Props) {
+  return (
+    <PopoverPrimitive.Description
+      data-slot="popover-description"
+      className={cn("text-muted-foreground", className)}
+      {...props}
+    />
+  )
+}
+
+export {
+  Popover,
+  PopoverContent,
+  PopoverDescription,
+  PopoverHeader,
+  PopoverTitle,
+  PopoverTrigger,
+}

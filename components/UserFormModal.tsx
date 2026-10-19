@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Check, ChevronLeft, ChevronRight, X, CheckCircle2, Info, GraduationCap, Upload, ExternalLink, FileText, Loader2, Camera, Trash2, Clock } from '@/components/ui/icons';
+import { Check, ChevronLeft, ChevronRight, X, CheckCircle2, Info, GraduationCap, Upload, ExternalLink, FileText, Loader2, Camera, Trash2, Clock, Lock } from '@/components/ui/icons';
 import { uploadFileToGoogleDrive } from '../lib/googleDriveUpload';
 import { UserAccount, UserGroup, Company, DocumentCategory } from '../types';
 import { supabase } from '../lib/supabaseClient';
@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { UserAvatar } from './UserAvatar';
 import { normalizeGender, normalizeReligion } from '../lib/utils';
+import { EmployeeAppointmentSKModal, getCompanyAbbr } from './hr/EmployeeAppointmentSKModal';
 
 interface UserFormModalProps {
   isOpen: boolean;
@@ -138,8 +139,9 @@ const DocUploadField: React.FC<DocUploadFieldProps> = ({
             </button>
           </div>
           {isGDrive && (
-            <p className="text-[10px] text-muted-foreground truncate">
-              🔒 <span className="font-semibold text-foreground/80">Restricted:</span> Akses dibuka untuk {targetEmail ? <b className="text-foreground">{targetEmail}</b> : 'email akun'} & HR.
+            <p className="text-[10px] text-muted-foreground truncate flex items-center gap-1">
+              <Lock size={11} className="shrink-0 text-muted-foreground" />
+              <span><span className="font-semibold text-foreground/80">Restricted:</span> Akses dibuka untuk {targetEmail ? <b className="text-foreground">{targetEmail}</b> : 'email akun'} & HR.</span>
             </p>
           )}
         </div>
@@ -213,6 +215,11 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [avatarError, setAvatarError] = useState('');
   const [schedules, setSchedules] = useState<{ id: number | string; name: string; work_start: string; work_end: string; is_flexible: boolean; grace_period_minutes: number }[]>([]);
+  const [existingBranches, setExistingBranches] = useState<string[]>([
+    'HQ',
+    'Non HQ'
+  ]);
+  const [skModalOpen, setSkModalOpen] = useState(false);
 
   const handleAvatarFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -306,8 +313,13 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
     setIsManualEmployeeId(Boolean(initialData?.employeeCode));
     if (initialData) {
       const type = initialData.contractType || initialData.employmentType || 'PKWT';
+      let branchValue = (initialData.branch || '').trim();
+      if (!branchValue || branchValue.toLowerCase().includes('city tower')) {
+        branchValue = 'HQ';
+      }
       setForm({
         ...initialData,
+        branch: branchValue,
         contractType: type,
         employmentType: type,
         nik: initialData.nik || '',
@@ -318,7 +330,7 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
     } else {
       setForm({
         fullName: '', nickname: '', nik: '', email: '', dateOfBirth: '', company: '', department: '',
-        employeeCode: '', joinDate: '', jobTitle: '', jobLevel: '', employmentType: 'PKWT', branch: '',
+        employeeCode: '', joinDate: '', jobTitle: '', jobLevel: '', employmentType: 'PKWT', branch: 'HQ',
         gradeClass: '', residentialAddress: '', contractType: 'PKWT', pkwtNumber: '', contractStartDate: '',
         contractEndDate: '', employmentStatus: 'Active', statusEffectiveDate: '', separationDate: '', separationReason: '', payrollStatus: '', taxStatus: '', bankName: '', bankAccountName: '',
         bankAccountNumber: '', bpjsTkNumber: '', bpjsHealthNumber: '', status: 'Active', avatarUrl: '',
@@ -331,16 +343,29 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
   useEffect(() => {
     if (!isOpen) return;
     const loadOptions = async () => {
-      const [{ data: companyRows }, { data: departmentRows }, { data: employeeRows }, { data: scheduleRows }] = await Promise.all([
+      const [{ data: companyRows }, { data: departmentRows }, { data: employeeRows }, { data: scheduleRows }, { data: branchRows }] = await Promise.all([
         supabase.from('companies').select('*').order('name'),
         supabase.from('departments').select('name').order('name'),
         supabase.from('user_accounts').select('employee_code').not('employee_code', 'is', null),
         supabase.from('attendance_schedules').select('*').eq('is_active', true).order('name'),
+        supabase.from('user_accounts').select('branch').not('branch', 'is', null),
       ]);
       if (companyRows) setCompanies(companyRows as Company[]);
       if (departmentRows) setDepartments(departmentRows as { name: string }[]);
       if (employeeRows) setExistingEmployeeIds(employeeRows.map((row: { employee_code: string | null }) => row.employee_code).filter((value): value is string => Boolean(value)));
       if (scheduleRows) setSchedules(scheduleRows as any[]);
+      if (branchRows) {
+        const uniqueBranches = Array.from(new Set(
+          [
+            'HQ',
+            'Non HQ',
+            ...branchRows
+              .map((r: any) => (r.branch || '').trim())
+              .filter((b: string) => b && !b.toLowerCase().includes('city tower'))
+          ]
+        ));
+        setExistingBranches(uniqueBranches);
+      }
     };
     void loadOptions();
   }, [isOpen]);
@@ -445,7 +470,8 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={open => !open && onClose()}>
+    <>
+      <Dialog open={isOpen} onOpenChange={open => !open && onClose()}>
       <DialogContent showCloseButton={false} className="flex max-h-[92vh] w-[95vw] sm:max-w-4xl md:max-w-5xl lg:max-w-6xl flex-col overflow-hidden rounded-3xl border border-border bg-card text-card-foreground p-0 shadow-2xl">
         <div className="flex items-start justify-between border-b border-border px-7 py-5 bg-card">
           <div>
@@ -935,32 +961,57 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
                 </div>
 
                 <label className="block">
-                  <span className={labelClass}>Branch Name</span>
+                  <span className={labelClass}>Perusahaan / Legal Entity <span className="text-rose-500">*</span></span>
                   <select
-                    className={inputClass}
+                    required
+                    className={`${inputClass} ${errors.company ? 'border-rose-500 ring-2 ring-rose-500/10' : ''}`}
                     value={String(form.company || '')}
                     onChange={e => setField('company', e.target.value)}
                   >
-                    <option value="">Pilih branch / company</option>
+                    <option value="">Pilih perusahaan / entitas</option>
                     {companies.map(company => (
                       <option key={company.id} value={company.name}>{company.name}</option>
                     ))}
                   </select>
+                  {errors.company && (
+                    <span className="mt-1 block text-xs font-medium text-rose-600">{errors.company}</span>
+                  )}
                 </label>
 
                 <label className="block">
-                  <span className={labelClass}>Organization *</span>
+                  <span className={labelClass}>Lokasi Kerja / Branch <span className="text-rose-500">*</span></span>
+                  <select
+                    className={inputClass}
+                    value={String(form.branch || 'HQ')}
+                    onChange={e => setField('branch', e.target.value)}
+                  >
+                    <option value="HQ">HQ</option>
+                    <option value="Non HQ">Non HQ</option>
+                    {existingBranches.filter(b => b !== 'HQ' && b !== 'Non HQ').map(b => (
+                      <option key={b} value={b}>{b}</option>
+                    ))}
+                  </select>
+                  <span className="mt-1 block text-[11px] text-muted-foreground">
+                    Penempatan kerja: <b>HQ</b> (Head Office / The City Tower) atau <b>Non HQ</b> (Site / Proyek / Cabang).
+                  </span>
+                </label>
+
+                <label className="block">
+                  <span className={labelClass}>Departemen / Organisasi <span className="text-rose-500">*</span></span>
                   <select
                     required
-                    className={inputClass}
+                    className={`${inputClass} ${errors.department ? 'border-rose-500 ring-2 ring-rose-500/10' : ''}`}
                     value={String(form.department || '')}
                     onChange={e => setField('department', e.target.value)}
                   >
-                    <option value="">Pilih organization / department</option>
+                    <option value="">Pilih departemen / divisi</option>
                     {departments.map(department => (
                       <option key={department.name} value={department.name}>{department.name}</option>
                     ))}
                   </select>
+                  {errors.department && (
+                    <span className="mt-1 block text-xs font-medium text-rose-600">{errors.department}</span>
+                  )}
                 </label>
 
                 <FormField
@@ -1157,6 +1208,12 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
                           clearError('contractEndDate');
                           clearError('pkwtNumber');
                           setField('contractEndDate', '');
+                          if (!form.pkwtNumber) {
+                            const compAbbr = getCompanyAbbr(form.company);
+                            const today = new Date();
+                            const romanMonth = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'][today.getMonth()];
+                            setField('pkwtNumber', `046/${compAbbr}/HR/SK/${romanMonth}/${today.getFullYear()}`);
+                          }
                         }
                       }}
                     >
@@ -1195,6 +1252,38 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
                     error={errors.pkwtNumber}
                     onChange={setField}
                   />
+
+                  {/* Banner Otomatis SK Pengangkatan jika PKWTT */}
+                  {isCurrentPKWTT && (
+                    <div className="sm:col-span-2 rounded-xl border border-blue-200/80 bg-blue-50/70 dark:bg-blue-950/20 dark:border-blue-900/40 p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                      <div className="flex items-start gap-2.5">
+                        <div className="p-1.5 rounded-lg bg-[#12346a] text-white shrink-0 mt-0.5">
+                          <CheckCircle2 className="size-4" />
+                        </div>
+                        <div>
+                          <div className="text-xs font-bold text-slate-900 dark:text-zinc-100 flex items-center gap-1.5">
+                            <span>Pengangkatan Karyawan Tetap (PKWTT)</span>
+                            <span className="text-[10px] font-semibold text-blue-700 dark:text-blue-400 bg-blue-100/70 dark:bg-blue-900/40 px-2 py-0.5 rounded-md">
+                              SK Otomatis
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-500 dark:text-zinc-400 mt-0.5">
+                            Surat Keputusan (SK) resmi pengangkatan dapat langsung digenerate, dipratinjau, dan dicetak dalam format A4 standar manajemen Gesit.
+                          </p>
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setSkModalOpen(true)}
+                        className="text-xs h-8 rounded-lg bg-white dark:bg-zinc-900 border-blue-200 dark:border-blue-800 text-[#12346a] dark:text-blue-400 hover:bg-blue-50 font-semibold shrink-0 shadow-2xs"
+                      >
+                        <FileText className="size-3.5 mr-1.5" />
+                        Buat & Pratinjau SK
+                      </Button>
+                    </div>
+                  )}
 
                   <div className="sm:col-span-2">
                     <DocUploadField
@@ -1466,6 +1555,36 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
         </form>
       </DialogContent>
     </Dialog>
+
+    {/* Modal Pratinjau & Cetak SK Pengangkatan Karyawan Tetap */}
+    <EmployeeAppointmentSKModal
+      open={skModalOpen}
+      onOpenChange={setSkModalOpen}
+      employee={{
+        id: initialData?.id || 'temp',
+        fullName: form.fullName || '',
+        email: form.email || initialData?.email || '',
+        employeeCode: form.employeeCode || '',
+        nik: form.nik || '',
+        gender: form.gender || '',
+        company: form.company || '',
+        department: form.department || '',
+        jobTitle: form.jobTitle || '',
+        joinDate: form.joinDate || '',
+        contractStartDate: form.contractStartDate || form.joinDate || '',
+        contractEndDate: form.contractEndDate || '',
+        contractType: form.contractType || 'PKWTT',
+      }}
+      onSaved={(updated) => {
+        if (updated.pkwtNumber) {
+          setField('pkwtNumber', updated.pkwtNumber);
+        }
+        if (updated.skFileUrl) {
+          setField('skFileUrl', updated.skFileUrl);
+        }
+      }}
+    />
+  </>
   );
 };
 

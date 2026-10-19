@@ -39,11 +39,27 @@ export function normalizeRequest<T extends { status?: string; approval_status?: 
 export function normalizeAttendance(row: any) {
   const aliases: Record<string, string> = { 'on leave': 'leave', 'half day': 'half_day', sick: 'sick', permission: 'permission' };
   const raw = String(row.status || 'present').toLowerCase();
+  const cin = row.clock_in || row.check_in_time || null;
+  const cout = row.clock_out || row.check_out_time || null;
+
+  let workMins = Number(row.total_work_minutes ?? row.work_duration_minutes ?? 0);
+  // Auto-calculate if 0 or null but both cin and cout exist
+  if ((!workMins || workMins <= 0) && cin && cout) {
+    const diff = (new Date(cout).getTime() - new Date(cin).getTime()) / 60000;
+    if (diff > 0) {
+      workMins = Math.round(diff);
+    }
+  }
+  // Sanity check: cap extreme runaway checkouts (>14 hours / 840 mins) to standard shift
+  if (workMins > 840) {
+    workMins = 540; // 9 hours
+  }
+
   return {
     ...row, user_id: String(row.user_id), status: aliases[raw] || raw,
-    clock_in: row.clock_in || row.check_in_time || null,
-    clock_out: row.clock_out || row.check_out_time || null,
-    total_work_minutes: Number(row.total_work_minutes ?? row.work_duration_minutes ?? 0),
+    clock_in: cin,
+    clock_out: cout,
+    total_work_minutes: workMins,
     total_overtime_minutes: Number(row.total_overtime_minutes ?? 0),
     clock_in_lat: row.clock_in_lat ?? row.check_in_lat ?? null,
     clock_in_lng: row.clock_in_lng ?? row.check_in_lng ?? null,

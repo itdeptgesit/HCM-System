@@ -51,7 +51,7 @@ function DialogContent({
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-lg bg-background shadow-2xl outline-none sm:max-w-lg data-open:animate-modal-in data-closed:animate-modal-out border border-border/50",
+          "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-2xl bg-card text-card-foreground shadow-2xl outline-none sm:max-w-lg data-open:animate-modal-in data-closed:animate-modal-out border border-border/70",
           className
         )}
         {...props}
@@ -63,12 +63,12 @@ function DialogContent({
             render={
               <Button
                 variant="ghost"
-                className="absolute top-6 right-6 text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                className="absolute top-4 right-4 text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-xl"
                 size="icon-sm"
               />
             }
           >
-            <XIcon className="size-5" />
+            <XIcon className="size-4" />
             <span className="sr-only">Close</span>
           </DialogPrimitive.Close>
         )}
@@ -81,7 +81,7 @@ function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="dialog-header"
-      className={cn("flex flex-col gap-2 p-9 pb-7 border-b border-border/40 bg-background", className)}
+      className={cn("flex flex-col gap-1.5 p-6 pb-4 border-b border-border/40 bg-card", className)}
       {...props}
     />
   )
@@ -99,14 +99,14 @@ function DialogFooter({
     <div
       data-slot="dialog-footer"
       className={cn(
-        "flex flex-col-reverse gap-3 sm:flex-row sm:justify-end p-9 pt-7 border-t border-border/40 bg-muted/20",
+        "flex flex-col-reverse gap-2 sm:flex-row sm:justify-end p-6 pt-4 border-t border-border/40 bg-muted/20",
         className
       )}
       {...props}
     >
       {children}
       {showCloseButton && (
-        <DialogPrimitive.Close render={<Button variant="outline" className="" />}>
+        <DialogPrimitive.Close render={<Button variant="outline" className="rounded-xl text-xs font-semibold" />}>
           Close
         </DialogPrimitive.Close>
       )}
@@ -119,7 +119,7 @@ function DialogTitle({ className, ...props }: DialogPrimitive.Title.Props) {
     <DialogPrimitive.Title
       data-slot="dialog-title"
       className={cn(
-        "text-2xl font-black tracking-tight leading-none",
+        "text-lg font-bold tracking-tight text-foreground leading-snug",
         className
       )}
       {...props}
@@ -135,7 +135,7 @@ function DialogDescription({
     <DialogPrimitive.Description
       data-slot="dialog-description"
       className={cn(
-        "text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground mt-1.5",
+        "text-xs text-muted-foreground font-normal leading-relaxed",
         className
       )}
       {...props}

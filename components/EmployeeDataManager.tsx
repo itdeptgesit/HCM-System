@@ -7,8 +7,17 @@ import {
   Building2, Briefcase, Calendar, ShieldCheck, Mail, Phone, MapPin,
   Clock, ArrowUpRight, CheckCircle2, XCircle, ArrowRightLeft,
   ChevronLeft, ChevronRight, Filter, ShieldAlert, Award, Upload, GraduationCap,
-  X, Loader2
+  X, Loader2, Grid, List, MoreHorizontal
 } from '@/components/ui/icons';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu';
 import { supabase, supabaseAdmin, ensureAuthUserWithPassword } from '../lib/supabaseClient';
 import { UserAccount, UserGroup, EmployeeContractHistory } from '../types';
 import { uploadFileToGoogleDrive } from '../lib/googleDriveUpload';
@@ -36,6 +45,7 @@ import { AccessDenied } from './AccessDenied';
 import { RestrictedDocViewer } from './ui/RestrictedDocViewer';
 import { EmployeeImportModal } from './EmployeeImportModal';
 import { EmployeeExportModal } from './EmployeeExportModal';
+import { EmployeeAppointmentSKModal } from './hr/EmployeeAppointmentSKModal';
 
 interface EmployeeDataManagerProps {
   currentUser: UserAccount | null;
@@ -52,14 +62,16 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
   const [employees, setEmployees] = useState<UserAccount[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'directory' | 'contracts' | 'payroll' | 'transfers'>('directory');
+  const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
 
   // Search & Filter state
   const [searchTerm, setSearchTerm] = useState('');
   const [companyFilter, setCompanyFilter] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('');
   const [employmentFilter, setEmploymentFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'Active' | 'Disabled' | 'Inactive' | 'Resigned'>('all');
-  const [contractAlertFilter, setContractAlertFilter] = useState<'all' | 'expiring' | 'expired'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'Active' | 'Disabled' | 'Inactive' | 'Resigned'>('Active');
+  const [branchFilter, setBranchFilter] = useState<'all' | 'HQ' | 'Non HQ'>('all');
+  const [contractAlertFilter, setContractAlertFilter] = useState<'all' | 'expiring' | 'expired' | 'safe'>('all');
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -75,6 +87,8 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
   const [transferEmployee, setTransferEmployee] = useState<UserAccount | null>(null);
   const [deleteEmployee, setDeleteEmployee] = useState<UserAccount | null>(null);
   const [resetPasswordEmployee, setResetPasswordEmployee] = useState<UserAccount | null>(null);
+  const [skModalOpen, setSkModalOpen] = useState(false);
+  const [selectedEmployeeForSK, setSelectedEmployeeForSK] = useState<UserAccount | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
   // Transfer Form state
@@ -120,12 +134,35 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
     isAdminOrSuperAdmin || isHR;
   const canDelete = isSuperAdmin || hasPermission(currentUser?.role, 'Data Karyawan', 'delete');
 
-  // Filter out system technical accounts
+  // Filter out system technical accounts (admin system & testing accounts)
   const isTechnicalAccount = (u: any) => {
-    const email = (u.email || '').toLowerCase();
-    const uname = (u.username || '').toLowerCase();
-    return /(admin@gesit|testing|test|developer|dev|demo|staging|sandbox)/i.test(email) ||
-      /(developer|dev|demo|staging|sandbox)/i.test(uname);
+    const email = (u.email || '').toLowerCase().trim();
+    const uname = (u.username || '').toLowerCase().trim();
+    const fullName = (u.fullName || u.full_name || '').toLowerCase().trim();
+
+    // Explicit system administrative accounts (leaves real employees intact)
+    if (
+      uname === 'admin' ||
+      uname === 'administrator' ||
+      uname === 'superadmin' ||
+      email === 'it-admin@gesit.co.id' ||
+      email === 'admin@gesit.co.id' ||
+      email === 'superadmin@gesit.co.id' ||
+      fullName === 'administrator' ||
+      fullName === 'admin system'
+    ) {
+      return true;
+    }
+
+    // Exact matches for testing/dummy bot accounts
+    if (/^(admin|administrator|superadmin|tester|testing|developer|demo|staging|sandbox)$/i.test(uname)) {
+      return true;
+    }
+    if (/(test|demo|staging|sandbox)@/i.test(email)) {
+      return true;
+    }
+
+    return false;
   };
 
   // Fetch employees
@@ -302,7 +339,7 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
 
     if (diffDays < 0) {
       return { status: 'expired', label: `Expired (${Math.abs(diffDays)} hari lalu)`, daysLeft: diffDays, daysRemaining: diffDays, isExpiring: false, isExpired: true };
-    } else if (diffDays <= 60) {
+    } else if (diffDays <= 30) {
       return { status: 'expiring', label: `Sisa ${diffDays} hari`, daysLeft: diffDays, daysRemaining: diffDays, isExpiring: true, isExpired: false };
     } else {
       return { status: 'active', label: `Aktif (${diffDays} hari lagi)`, daysLeft: diffDays, daysRemaining: diffDays, isExpiring: false, isExpired: false };
@@ -311,8 +348,24 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
 
   // KPI Calculations
   const stats = useMemo(() => {
-    const total = employees.length;
-    const activeEmployees = employees.filter(e => (e.employmentStatus || e.status || 'Active').toLowerCase() === 'active');
+    // Exclude technical admin accounts to only count real employees
+    const realEmployees = employees.filter(e => !isTechnicalAccount(e));
+    const total = realEmployees.length;
+    const activeEmployees = realEmployees.filter(e => (e.employmentStatus || e.status || 'Active').toLowerCase() === 'active');
+
+    // HQ vs Non-HQ Breakdown among active employees
+    let hqCount = 0;
+    let nonHqCount = 0;
+
+    activeEmployees.forEach(e => {
+      const b = (e.branch || '').toLowerCase().trim();
+      if (b.includes('non') || b.includes('site') || b.includes('cabang') || b.includes('field') || b.includes('proyek')) {
+        nonHqCount++;
+      } else {
+        hqCount++;
+      }
+    });
+
     const pkwtList = activeEmployees.filter(e => {
       const t = `${e.contractType || ''} ${e.employmentType || ''}`.toLowerCase();
       return (t.includes('pkwt') || t.includes('contract')) && !t.includes('pkwtt');
@@ -320,6 +373,10 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
     const pkwttList = activeEmployees.filter(e => {
       const t = `${e.contractType || ''} ${e.employmentType || ''}`.toLowerCase();
       return t.includes('tetap') || t.includes('pkwtt') || t.includes('permanent');
+    });
+    const probationList = activeEmployees.filter(e => {
+      const t = `${e.contractType || ''} ${e.employmentType || ''}`.toLowerCase();
+      return t.includes('probation') || t.includes('percobaan');
     });
 
     let expiringCount = 0;
@@ -334,8 +391,11 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
     return {
       total: total,
       active: activeEmployees.length,
+      hq: hqCount,
+      nonHq: nonHqCount,
       pkwt: pkwtList.length,
       pkwtt: pkwttList.length,
+      probation: probationList.length,
       expiring: expiringCount,
       expired: expiredCount
     };
@@ -362,6 +422,7 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
         (emp.department || '').toLowerCase().includes(query) ||
         (emp.company || '').toLowerCase().includes(query) ||
         (emp.jobTitle || '').toLowerCase().includes(query) ||
+        (emp.branch || '').toLowerCase().includes(query) ||
         (emp.pkwtNumber || '').toLowerCase().includes(query);
 
       // Filters
@@ -400,17 +461,30 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
         }
       }
 
+      // Branch filter (HQ vs Non-HQ)
+      let matchesBranch = true;
+      if (branchFilter !== 'all') {
+        const b = (emp.branch || '').toLowerCase().trim();
+        const isNonHq = b.includes('non') || b.includes('site') || b.includes('cabang') || b.includes('field') || b.includes('proyek');
+        if (branchFilter === 'Non HQ') {
+          matchesBranch = isNonHq;
+        } else if (branchFilter === 'HQ') {
+          matchesBranch = !isNonHq;
+        }
+      }
+
       // Contract alert filter
       let matchesContractAlert = true;
       if (contractAlertFilter !== 'all') {
         const meta = getContractMeta(emp);
         if (contractAlertFilter === 'expiring') matchesContractAlert = meta.isExpiring;
         if (contractAlertFilter === 'expired') matchesContractAlert = meta.isExpired;
+        if (contractAlertFilter === 'safe') matchesContractAlert = !meta.isExpiring && !meta.isExpired && meta.status === 'active';
       }
 
-      return matchesSearch && matchesCompany && matchesDept && matchesEmployment && matchesStatus && matchesContractAlert;
+      return matchesSearch && matchesCompany && matchesDept && matchesEmployment && matchesStatus && matchesBranch && matchesContractAlert;
     });
-  }, [employees, searchTerm, companyFilter, departmentFilter, employmentFilter, statusFilter, contractAlertFilter]);
+  }, [employees, searchTerm, companyFilter, departmentFilter, employmentFilter, statusFilter, branchFilter, contractAlertFilter]);
 
   // Pagination
   const totalPages = Math.ceil(filteredEmployees.length / itemsPerPage) || 1;
@@ -421,7 +495,7 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, companyFilter, departmentFilter, employmentFilter, statusFilter, contractAlertFilter, activeTab]);
+  }, [searchTerm, companyFilter, departmentFilter, employmentFilter, statusFilter, branchFilter, contractAlertFilter, activeTab]);
 
   // Export to Excel handler
   const handleExportExcel = () => {
@@ -492,7 +566,8 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
     setCompanyFilter('');
     setDepartmentFilter('');
     setEmploymentFilter('');
-    setStatusFilter('all');
+    setStatusFilter('Active');
+    setBranchFilter('all');
     setContractAlertFilter('all');
   };
 
@@ -959,91 +1034,230 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
         </div>
       </PageHeader>
 
-      {/* KPI STAT CARDS */}
+      {/* NEXORA STYLE KPI STAT CARDS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Total Employees */}
-        <Card className="border-border/60 shadow-sm relative overflow-hidden group">
-          <CardContent className="p-5">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Total Karyawan</p>
-                <h3 className="text-3xl font-black text-foreground mt-1.5 tracking-tight">{stats.total}</h3>
-                <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1 font-medium">
-                  <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
-                  {stats.active} Karyawan Aktif
-                </p>
-              </div>
-              <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-500 shrink-0">
-                <Users size={20} />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* PKWT (Contract) */}
-        <Card className="border-border/60 shadow-sm relative overflow-hidden group">
-          <CardContent className="p-5">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Karyawan PKWT</p>
-                <h3 className="text-3xl font-black text-foreground mt-1.5 tracking-tight">{stats.pkwt}</h3>
-                <p className="text-xs text-muted-foreground mt-1 font-medium">
-                  {stats.total > 0 ? Math.round((stats.pkwt / stats.total) * 100) : 0}% dari total tenaga kerja
-                </p>
-              </div>
-              <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-500 shrink-0">
-                <FileText size={20} />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* PKWTT (Permanent) */}
-        <Card className="border-border/60 shadow-sm relative overflow-hidden group">
-          <CardContent className="p-5">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Karyawan PKWTT</p>
-                <h3 className="text-3xl font-black text-foreground mt-1.5 tracking-tight">{stats.pkwtt}</h3>
-                <p className="text-xs text-muted-foreground mt-1 font-medium">
-                  Karyawan Tetap (Permanent)
-                </p>
-              </div>
-              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500 shrink-0">
-                <UserCheck size={20} />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Expiring Contracts Reminder */}
+        {/* Card 1: Total Karyawan Aktif & HQ / Non-HQ Info */}
         <Card
-          className={`border-border/60 shadow-sm relative overflow-hidden group cursor-pointer transition-colors ${
-            stats.expiring > 0 ? 'bg-amber-50/20 dark:bg-amber-950/20 border-amber-500/30' : ''
+          className="relative overflow-hidden bg-card/80 backdrop-blur-sm bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] dark:bg-[radial-gradient(#1f2937_1px,transparent_1px)] [background-size:16px_16px] border border-border/80 rounded-2xl shadow-sm hover:shadow-md transition-all cursor-pointer group"
+          onClick={() => {
+            setActiveTab('directory');
+            setStatusFilter('Active');
+          }}
+        >
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Total Karyawan Aktif
+            </CardTitle>
+
+            {/* Gradient Squircle Icon Box */}
+            <div className="flex size-10 items-center justify-center rounded-xl border border-border/80 bg-background/60 p-0.5 shadow-xs group-hover:scale-105 transition-transform">
+              <div className="flex size-full items-center justify-center rounded-lg text-white bg-gradient-to-br from-cyan-500 to-blue-600 dark:from-cyan-400 dark:to-blue-500 shadow-sm">
+                <Users className="size-5" />
+              </div>
+            </div>
+          </CardHeader>
+
+          <CardContent className="pt-0">
+            <div className="flex items-baseline gap-2">
+              <span className="text-3xl font-black tracking-tight text-foreground">{stats.active}</span>
+              <span className="text-xs text-muted-foreground font-medium">dari {stats.total} terdaftar</span>
+            </div>
+
+            <div className="mt-3 flex items-center gap-1.5 text-xs flex-wrap">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setBranchFilter(prev => prev === 'HQ' ? 'all' : 'HQ');
+                }}
+                className="transition-transform hover:scale-105 cursor-pointer"
+                title="Klik untuk filter Karyawan HQ"
+              >
+                <Badge
+                  variant="outline"
+                  className={`rounded-md px-2 py-0.5 text-xs font-bold transition-all ${
+                    branchFilter === 'HQ'
+                      ? 'border-blue-500 bg-blue-600 text-white shadow-xs'
+                      : 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-900/60 dark:bg-blue-950/50 dark:text-blue-300'
+                  }`}
+                >
+                  HQ: {stats.hq}
+                </Badge>
+              </button>
+
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setBranchFilter(prev => prev === 'Non HQ' ? 'all' : 'Non HQ');
+                }}
+                className="transition-transform hover:scale-105 cursor-pointer"
+                title="Klik untuk filter Karyawan Non-HQ"
+              >
+                <Badge
+                  variant="outline"
+                  className={`rounded-md px-2 py-0.5 text-xs font-bold transition-all ${
+                    branchFilter === 'Non HQ'
+                      ? 'border-purple-500 bg-purple-600 text-white shadow-xs'
+                      : 'border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100 dark:border-purple-900/60 dark:bg-purple-950/50 dark:text-purple-300'
+                  }`}
+                >
+                  Non-HQ: {stats.nonHq}
+                </Badge>
+              </button>
+
+              {branchFilter !== 'all' && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setBranchFilter('all');
+                  }}
+                  className="text-[10px] text-rose-500 hover:underline font-semibold ml-1 cursor-pointer"
+                >
+                  Reset Penempatan
+                </button>
+              )}
+
+              <span className="text-[11px] text-muted-foreground ml-auto font-medium">
+                {stats.total > 0 ? Math.round((stats.active / stats.total) * 100) : 0}% aktif
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Card 2: Karyawan PKWT (Kontrak) */}
+        <Card
+          className="relative overflow-hidden bg-card/80 backdrop-blur-sm bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] dark:bg-[radial-gradient(#1f2937_1px,transparent_1px)] [background-size:16px_16px] border border-border/80 rounded-2xl shadow-sm hover:shadow-md transition-all cursor-pointer group"
+          onClick={() => {
+            setActiveTab('directory');
+            setEmploymentFilter('PKWT');
+          }}
+        >
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Karyawan PKWT
+            </CardTitle>
+
+            <div className="flex size-10 items-center justify-center rounded-xl border border-border/80 bg-background/60 p-0.5 shadow-xs group-hover:scale-105 transition-transform">
+              <div className="flex size-full items-center justify-center rounded-lg text-white bg-gradient-to-br from-amber-500 to-orange-600 dark:from-amber-400 dark:to-orange-500 shadow-sm">
+                <FileText className="size-5" />
+              </div>
+            </div>
+          </CardHeader>
+
+          <CardContent className="pt-0">
+            <div className="flex items-baseline gap-2">
+              <span className="text-3xl font-black tracking-tight text-foreground">{stats.pkwt}</span>
+              <span className="text-xs text-muted-foreground font-medium">karyawan kontrak</span>
+            </div>
+
+            <div className="mt-3 flex items-center gap-1.5 text-xs">
+              <Badge
+                variant="outline"
+                className="rounded-md px-2 py-0.5 text-xs font-bold border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/50 dark:text-amber-400"
+              >
+                {stats.active > 0 ? Math.round((stats.pkwt / stats.active) * 100) : 0}% tenaga kerja
+              </Badge>
+              <span className="text-[11px] text-muted-foreground truncate">
+                {stats.expiring > 0 ? `${stats.expiring} perlu perpanjang · ${Math.max(0, stats.pkwt - stats.expiring)} aman` : 'Semua kontrak aman'}
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Card 3: Karyawan PKWTT (Tetap) */}
+        <Card
+          className="relative overflow-hidden bg-card/80 backdrop-blur-sm bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] dark:bg-[radial-gradient(#1f2937_1px,transparent_1px)] [background-size:16px_16px] border border-border/80 rounded-2xl shadow-sm hover:shadow-md transition-all cursor-pointer group"
+          onClick={() => {
+            setActiveTab('directory');
+            setEmploymentFilter('PKWTT');
+          }}
+        >
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Karyawan PKWTT
+            </CardTitle>
+
+            <div className="flex size-10 items-center justify-center rounded-xl border border-border/80 bg-background/60 p-0.5 shadow-xs group-hover:scale-105 transition-transform">
+              <div className="flex size-full items-center justify-center rounded-lg text-white bg-gradient-to-br from-emerald-500 to-teal-600 dark:from-emerald-400 dark:to-teal-500 shadow-sm">
+                <UserCheck className="size-5" />
+              </div>
+            </div>
+          </CardHeader>
+
+          <CardContent className="pt-0">
+            <div className="flex items-baseline gap-2">
+              <span className="text-3xl font-black tracking-tight text-foreground">{stats.pkwtt}</span>
+              <span className="text-xs text-muted-foreground font-medium">karyawan tetap</span>
+            </div>
+
+            <div className="mt-3 flex items-center gap-1.5 text-xs">
+              <Badge
+                variant="outline"
+                className="rounded-md px-2 py-0.5 text-xs font-bold border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/50 dark:text-emerald-400"
+              >
+                {stats.active > 0 ? Math.round((stats.pkwtt / stats.active) * 100) : 0}% tenaga kerja
+              </Badge>
+              <span className="text-[11px] text-muted-foreground truncate">
+                PKWTT Tetap (Permanent)
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Card 4: Kontrak Jatuh Tempo (≤ 60 hari) */}
+        <Card
+          className={`relative overflow-hidden bg-card/80 backdrop-blur-sm bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] dark:bg-[radial-gradient(#1f2937_1px,transparent_1px)] [background-size:16px_16px] border border-border/80 rounded-2xl shadow-sm hover:shadow-md transition-all cursor-pointer group ${
+            stats.expiring > 0 ? 'border-rose-300 dark:border-rose-800' : ''
           }`}
           onClick={() => {
             setActiveTab('contracts');
+            setEmploymentFilter('');
+            setBranchFilter('all');
             setContractAlertFilter(stats.expiring > 0 ? 'expiring' : 'all');
           }}
         >
-          <CardContent className="p-5">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
-                  Kontrak Jatuh Tempo
-                </p>
-                <h3 className={`text-3xl font-black mt-1.5 tracking-tight ${stats.expiring > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-foreground'}`}>
-                  {stats.expiring}
-                </h3>
-                <p className="text-xs text-muted-foreground mt-1 font-medium">
-                  {stats.expiring > 0 ? 'Berakhir dalam ≤ 60 hari' : 'Tidak ada kontrak segera berakhir'}
-                </p>
-              </div>
-              <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                stats.expiring > 0 ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400 animate-pulse' : 'bg-muted text-muted-foreground'
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Kontrak Jatuh Tempo
+            </CardTitle>
+
+            <div className="flex size-10 items-center justify-center rounded-xl border border-border/80 bg-background/60 p-0.5 shadow-xs group-hover:scale-105 transition-transform">
+              <div className={`flex size-full items-center justify-center rounded-lg text-white shadow-sm ${
+                stats.expiring > 0
+                  ? 'bg-gradient-to-br from-rose-500 to-red-600 animate-pulse'
+                  : 'bg-gradient-to-br from-slate-500 to-zinc-600'
               }`}>
-                <Clock size={20} />
+                <Clock className="size-5" />
               </div>
+            </div>
+          </CardHeader>
+
+          <CardContent className="pt-0">
+            <div className="flex items-baseline gap-2">
+              <span className={`text-3xl font-black tracking-tight ${
+                stats.expiring > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-foreground'
+              }`}>
+                {stats.expiring}
+              </span>
+              <span className="text-xs text-muted-foreground font-medium">kontrak</span>
+            </div>
+
+            <div className="mt-3 flex items-center gap-1.5 text-xs">
+              <Badge
+                variant="outline"
+                className={`rounded-md px-2 py-0.5 text-xs font-bold ${
+                  stats.expiring > 0
+                    ? 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/50 dark:text-rose-400'
+                    : 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/50 dark:text-emerald-400'
+                }`}
+              >
+                {stats.expiring > 0 ? '< 30 Hari' : 'Status Aman'}
+              </Badge>
+              <span className="text-[11px] text-muted-foreground truncate">
+                {stats.expiring > 0 ? '1 dari 4 PKWT perlu perpanjang' : 'Tidak ada jatuh tempo'}
+              </span>
             </div>
           </CardContent>
         </Card>
@@ -1076,9 +1290,42 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
               </TabsList>
             </Tabs>
 
-            {/* Quick Count Info */}
-            <div className="text-xs text-muted-foreground font-medium flex items-center gap-2">
-              <span>Menampilkan <b>{filteredEmployees.length}</b> dari <b>{employees.length}</b> employee</span>
+            {/* Quick Count Info & View Toggle */}
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-muted-foreground font-medium hidden sm:inline">
+                Menampilkan <b>{filteredEmployees.length}</b> dari <b>{employees.length}</b> employee
+              </span>
+
+              {activeTab === 'directory' && (
+                <div className="flex items-center p-0.5 rounded-lg border border-border bg-muted/60">
+                  <button
+                    type="button"
+                    onClick={() => setViewMode('table')}
+                    className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold transition-colors cursor-pointer ${
+                      viewMode === 'table'
+                        ? 'bg-background shadow-2xs text-foreground'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                    title="Tampilan Tabel"
+                  >
+                    <List size={13} />
+                    <span className="hidden md:inline">Tabel</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setViewMode('grid')}
+                    className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold transition-colors cursor-pointer ${
+                      viewMode === 'grid'
+                        ? 'bg-background shadow-2xs text-foreground'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                    title="Tampilan Kartu"
+                  >
+                    <Grid size={13} />
+                    <span className="hidden md:inline">Kartu</span>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </CardHeader>
@@ -1139,10 +1386,10 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
               onChange={(e) => setStatusFilter(e.target.value as any)}
               className="h-9 rounded-lg border border-border bg-background px-3 text-xs font-medium text-foreground outline-none transition focus:border-primary focus:ring-1 focus:ring-primary/20"
             >
-              <option value="all">Semua Status Akun</option>
-              <option value="Active">🟢 Karyawan Aktif</option>
-              <option value="Resigned">⚪ Karyawan Resign</option>
-              <option value="Disabled">🔴 Karyawan Non-Aktif</option>
+              <option value="Active">Karyawan Aktif</option>
+              <option value="all">Semua Status</option>
+              <option value="Resigned">Karyawan Resign</option>
+              <option value="Disabled">Karyawan Non-Aktif</option>
             </select>
 
             {/* Filter Contract Alert (Visible in contracts tab) */}
@@ -1153,13 +1400,14 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
                 className="h-9 rounded-lg border border-border bg-background px-3 text-xs font-semibold text-foreground outline-none transition focus:border-primary focus:ring-1 focus:ring-primary/20"
               >
                 <option value="all">Semua Masa Kontrak</option>
-                <option value="expiring">⚠️ Jatuh Tempo (≤ 60 hari)</option>
-                <option value="expired">❌ Telah Berakhir</option>
+                <option value="expiring">Perlu Perpanjangan &lt; 30 hari ({stats.expiring})</option>
+                <option value="safe">Masa Kontrak Aman ({Math.max(0, stats.pkwt - stats.expiring - stats.expired)})</option>
+                <option value="expired">Telah Berakhir ({stats.expired})</option>
               </select>
             )}
 
             {/* Reset Filters button */}
-            {(searchTerm || companyFilter || departmentFilter || employmentFilter || statusFilter !== 'all' || contractAlertFilter !== 'all') && (
+            {(searchTerm || companyFilter || departmentFilter || employmentFilter || statusFilter !== 'Active' || contractAlertFilter !== 'all') && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -1175,7 +1423,199 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
 
       {/* DATA TABLE CONTAINER */}
       <Card className="border-border/60 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+        {activeTab === 'directory' && viewMode === 'grid' ? (
+          <div className="p-4 sm:p-6">
+            {isLoading ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                {Array.from({ length: 6 }).map((_, idx) => (
+                  <div key={idx} className="rounded-xl border border-border/70 p-4 space-y-3">
+                    <div className="flex items-center gap-3">
+                      <Skeleton className="h-12 w-12 rounded-full" />
+                      <div className="space-y-1.5 flex-1">
+                        <Skeleton className="h-4 w-32" />
+                        <Skeleton className="h-3 w-20" />
+                      </div>
+                    </div>
+                    <Skeleton className="h-14 w-full rounded-lg" />
+                    <Skeleton className="h-8 w-full" />
+                  </div>
+                ))}
+              </div>
+            ) : paginatedEmployees.length === 0 ? (
+              <div className="py-16 text-center text-muted-foreground flex flex-col items-center justify-center gap-2">
+                <Users size={32} className="text-muted-foreground/40" />
+                <p className="font-semibold text-foreground">Tidak ada data employee ditemukan</p>
+                <p className="text-xs text-muted-foreground">Silakan sesuaikan filter atau kata kunci pencarian Anda</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                {paginatedEmployees.map((emp) => {
+                  const statusRaw = (emp.employmentStatus || emp.status || 'Active').toLowerCase();
+                  const isActive = statusRaw === 'active';
+                  const isResigned = statusRaw === 'resigned';
+                  const isMuted = !isActive;
+
+                  const contractStr = `${emp.contractType || ''} ${emp.employmentType || ''}`.toLowerCase();
+                  const isProbation = contractStr.includes('probation') || contractStr.includes('percobaan');
+                  const isIntern = contractStr.includes('magang') || contractStr.includes('intern');
+                  const isPermanent = contractStr.includes('pkwtt') || contractStr.includes('tetap') || contractStr.includes('permanent');
+
+                  return (
+                    <Card
+                      key={emp.id}
+                      className={`relative gap-0 border-border/70 p-0 shadow-2xs transition-all duration-200 hover:border-border hover:shadow-md ${
+                        isMuted ? 'opacity-70 bg-muted/20' : 'bg-card'
+                      }`}
+                    >
+                      <div className="space-y-3.5 p-4">
+                        {/* Identity & Status */}
+                        <div className="flex items-start gap-3">
+                          <UserAvatar name={emp.fullName} url={emp.avatarUrl} size="md" />
+
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <h3 className="truncate text-sm font-bold text-foreground leading-tight">
+                                {emp.fullName}
+                              </h3>
+                              {emp.nickname && emp.nickname !== emp.fullName && (
+                                <span className="text-[11px] text-muted-foreground">({emp.nickname})</span>
+                              )}
+                            </div>
+                            <p className="mt-0.5 truncate text-xs font-medium text-foreground/80">
+                              {emp.jobTitle || emp.department || 'Employee'}
+                            </p>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="text-[11px] font-semibold text-primary font-mono">
+                                {emp.employeeCode || 'Belum ada NIK'}
+                              </span>
+                              <span className="text-[11px] text-muted-foreground">
+                                {emp.jobLevel || 'Staff'}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Account Status Badge */}
+                          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold shrink-0 ${
+                            isActive
+                              ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                              : isResigned
+                              ? 'bg-slate-100 text-slate-600 dark:bg-zinc-800 dark:text-zinc-400'
+                              : 'bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400'
+                          }`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${
+                              isActive ? 'bg-emerald-500' : isResigned ? 'bg-slate-400' : 'bg-rose-500'
+                            }`} />
+                            {isActive ? 'Aktif' : isResigned ? 'Resigned' : 'Non-Aktif'}
+                          </span>
+                        </div>
+
+                        {/* Badges: Department & Employment Type */}
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <Badge variant="secondary" className="text-[11px] font-normal gap-1 bg-muted/60 text-muted-foreground">
+                            <Building2 size={11} className="shrink-0" />
+                            <span className="truncate max-w-[120px]">{emp.company || 'GESIT'}</span>
+                          </Badge>
+                          {emp.department && (
+                            <Badge variant="secondary" className="text-[11px] font-normal gap-1 bg-muted/60 text-muted-foreground">
+                              <Briefcase size={11} className="shrink-0" />
+                              <span className="truncate max-w-[130px]">{emp.department}</span>
+                            </Badge>
+                          )}
+                          {isProbation ? (
+                            <Badge variant="outline" className="text-[10px] py-0 px-1.5 border-purple-500/30 bg-purple-500/10 text-purple-700 dark:text-purple-400 font-semibold">
+                              Probation
+                            </Badge>
+                          ) : isIntern ? (
+                            <Badge variant="outline" className="text-[10px] py-0 px-1.5 border-cyan-500/30 bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 font-semibold">
+                              Magang
+                            </Badge>
+                          ) : isPermanent ? (
+                            <Badge variant="outline" className="text-[10px] py-0 px-1.5 border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-semibold">
+                              PKWTT
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-[10px] py-0 px-1.5 border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400 font-semibold">
+                              PKWT
+                            </Badge>
+                          )}
+                        </div>
+
+                        {/* Contact details */}
+                        <div className="space-y-1 rounded-lg bg-muted/30 p-2.5 text-xs text-muted-foreground">
+                          <div className="flex items-center gap-2 truncate">
+                            <Mail size={12} className="shrink-0 text-muted-foreground/70" />
+                            <span className="truncate">{emp.email || '—'}</span>
+                          </div>
+                          {emp.phone && (
+                            <div className="flex items-center gap-2 truncate">
+                              <Phone size={12} className="shrink-0 text-muted-foreground/70" />
+                              <span>{emp.phone}</span>
+                            </div>
+                          )}
+                          {emp.branch && (
+                            <div className="flex items-center gap-2 truncate text-[11px]">
+                              <MapPin size={12} className="shrink-0 text-muted-foreground/70" />
+                              <span>{emp.branch}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Card Footer: Quick Actions */}
+                      <div className="flex items-center justify-between border-t border-border/60 bg-muted/20 px-4 py-2 text-xs">
+                        <span className="text-[11px] text-muted-foreground">
+                          {emp.joinDate ? `Gabung ${formatDateDDMMYYYY(emp.joinDate)}` : 'Tanggal gabung —'}
+                        </span>
+
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                            onClick={() => {
+                              setViewingEmployee(emp);
+                              setDetailActiveTab('profile');
+                            }}
+                          >
+                            <Eye size={13} className="mr-1" /> Detail
+                          </Button>
+
+                          {canManage && (
+                            <Button
+                              variant="ghost"
+                              size="icon-xs"
+                              className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                              onClick={() => {
+                                setEditingEmployee(emp);
+                                setIsFormModalOpen(true);
+                              }}
+                              title="Edit Data"
+                            >
+                              <Pencil size={13} />
+                            </Button>
+                          )}
+
+                          {canManage && (
+                            <Button
+                              variant="ghost"
+                              size="icon-xs"
+                              className="h-7 w-7 text-muted-foreground hover:text-blue-600"
+                              onClick={() => openTransferModal(emp)}
+                              title="Mutasi / Transfer"
+                            >
+                              <ArrowRightLeft size={13} />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
           <Table className="w-full">
             <TableHeader>
               <TableRow className="bg-muted/40 hover:bg-transparent border-b border-border/60">
@@ -1313,9 +1753,25 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
                               const s = `${emp.contractType || ''} ${emp.employmentType || ''}`.toLowerCase();
                               if (s.includes('probation') || s.includes('percobaan')) {
                                 return (
-                                  <Badge variant="outline" className="text-xs font-semibold border-purple-500/30 bg-purple-500/10 text-purple-700 dark:text-purple-400">
-                                    Probation
-                                  </Badge>
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <Badge variant="outline" className="text-xs font-semibold border-purple-500/30 bg-purple-500/10 text-purple-700 dark:text-purple-400">
+                                      Probation
+                                    </Badge>
+                                    {canManage && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setSelectedEmployeeForSK(emp);
+                                          setSkModalOpen(true);
+                                        }}
+                                        title="Buat SK Pengangkatan Karyawan Tetap (PKWTT)"
+                                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 hover:bg-blue-100 text-[#12346a] dark:bg-blue-950/60 dark:text-blue-300 dark:hover:bg-blue-900 border border-blue-200/80 dark:border-blue-800 transition-colors cursor-pointer"
+                                      >
+                                        <span>Angkat SK</span>
+                                      </button>
+                                    )}
+                                  </div>
                                 );
                               }
                               if (s.includes('magang') || s.includes('intern')) {
@@ -1509,7 +1965,7 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
                               setDetailActiveTab('profile');
                             }}
                             title="Lihat Detail Profil"
-                            className="text-muted-foreground hover:text-foreground hover:bg-muted"
+                            className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg"
                           >
                             <Eye size={15} />
                           </Button>
@@ -1524,62 +1980,85 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
                                 setIsFormModalOpen(true);
                               }}
                               title="Edit Data Employee"
-                              className="text-muted-foreground hover:text-foreground hover:bg-muted"
+                              className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg"
                             >
                               <Pencil size={15} />
                             </Button>
                           )}
 
-                          {/* Contract Transition Button */}
-                          {canManage && (
-                            <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              onClick={() => openContractTransitionModal(emp)}
-                              title="Perbarui Status Kontrak / SK (Probation ➔ PKWT ➔ Tetap)"
-                              className="text-muted-foreground hover:text-emerald-600 hover:bg-emerald-500/10"
-                            >
-                              <FileText size={15} />
-                            </Button>
-                          )}
+                          {/* More Actions Dropdown */}
+                          {(canManage || isSuperAdmin || canDelete) && (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger
+                                className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted outline-none transition-colors"
+                                title="Menu Aksi Lainnya"
+                              >
+                                <MoreHorizontal size={15} />
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-56 p-1.5 rounded-xl shadow-xl border border-border/80 bg-popover text-popover-foreground">
+                                <DropdownMenuGroup>
+                                  <DropdownMenuLabel className="text-[11px] font-semibold text-muted-foreground px-2 py-1">
+                                    Aksi Tambahan
+                                  </DropdownMenuLabel>
+                                  
+                                  {canManage && (
+                                    <>
+                                      <DropdownMenuItem
+                                        onClick={() => {
+                                          setSelectedEmployeeForSK(emp);
+                                          setSkModalOpen(true);
+                                        }}
+                                        className="gap-2.5 text-xs py-2 px-2.5 rounded-lg cursor-pointer hover:bg-muted"
+                                      >
+                                        <Award size={14} className="text-[#12346a] dark:text-blue-400" />
+                                        <span>Buat SK Pengangkatan</span>
+                                      </DropdownMenuItem>
 
-                          {/* Transfer Button */}
-                          {canManage && activeTab !== 'transfers' && (
-                            <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              onClick={() => openTransferModal(emp)}
-                              title="Transfer / Mutasi Employee"
-                              className="text-muted-foreground hover:text-blue-600 hover:bg-blue-500/10"
-                            >
-                              <ArrowRightLeft size={15} />
-                            </Button>
-                          )}
+                                      <DropdownMenuItem
+                                        onClick={() => openContractTransitionModal(emp)}
+                                        className="gap-2.5 text-xs py-2 px-2.5 rounded-lg cursor-pointer hover:bg-muted"
+                                      >
+                                        <FileText size={14} className="text-emerald-600 dark:text-emerald-400" />
+                                        <span>Perbarui Kontrak & SK</span>
+                                      </DropdownMenuItem>
 
-                          {/* Reset Password Button (Super Admin Only) */}
-                          {isSuperAdmin && (
-                            <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              onClick={() => setResetPasswordEmployee(emp)}
-                              title="Reset Password Akun"
-                              className="text-muted-foreground hover:text-amber-500 hover:bg-amber-500/10"
-                            >
-                              <KeyRound size={15} />
-                            </Button>
-                          )}
+                                      {activeTab !== 'transfers' && (
+                                        <DropdownMenuItem
+                                          onClick={() => openTransferModal(emp)}
+                                          className="gap-2.5 text-xs py-2 px-2.5 rounded-lg cursor-pointer hover:bg-muted"
+                                        >
+                                          <ArrowRightLeft size={14} className="text-blue-600 dark:text-blue-400" />
+                                          <span>Mutasi / Transfer</span>
+                                        </DropdownMenuItem>
+                                      )}
+                                    </>
+                                  )}
 
-                          {/* Delete Button (Super Admin or Permitted) */}
-                          {canDelete && (
-                            <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              onClick={() => setDeleteEmployee(emp)}
-                              title="Hapus Data Employee"
-                              className="text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10"
-                            >
-                              <Trash2 size={15} />
-                            </Button>
+                                  {isSuperAdmin && (
+                                    <DropdownMenuItem
+                                      onClick={() => setResetPasswordEmployee(emp)}
+                                      className="gap-2.5 text-xs py-2 px-2.5 rounded-lg cursor-pointer hover:bg-muted"
+                                    >
+                                      <KeyRound size={14} className="text-amber-600 dark:text-amber-400" />
+                                      <span>Reset Passcode Akun</span>
+                                    </DropdownMenuItem>
+                                  )}
+                                </DropdownMenuGroup>
+
+                                {canDelete && (
+                                  <>
+                                    <DropdownMenuSeparator className="my-1 border-border/60" />
+                                    <DropdownMenuItem
+                                      onClick={() => setDeleteEmployee(emp)}
+                                      className="gap-2.5 text-xs py-2 px-2.5 rounded-lg text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 focus:bg-rose-500/10 cursor-pointer"
+                                    >
+                                      <Trash2 size={14} />
+                                      <span>Hapus Karyawan</span>
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           )}
                         </div>
                       </TableCell>
@@ -1590,6 +2069,7 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
             </TableBody>
           </Table>
         </div>
+        )}
 
         {/* PAGINATION FOOTER */}
         <div className="px-6 py-4 bg-muted/20 border-t border-border/60 flex items-center justify-between shrink-0">
@@ -1619,7 +2099,7 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
 
       {/* QUICK VIEW EMPLOYEE DETAIL MODAL (AUTHENTIC SHADCN UI SYSTEM - LARGE & SPACIOUS) */}
       <Dialog open={!!viewingEmployee} onOpenChange={(open) => !open && setViewingEmployee(null)}>
-        <DialogContent className="sm:max-w-5xl lg:max-w-6xl w-[94vw] max-w-[94vw] max-h-[92vh] flex flex-col p-0 overflow-hidden border border-border bg-background shadow-2xl rounded-xl">
+        <DialogContent showCloseButton={false} className="sm:max-w-5xl lg:max-w-6xl w-[94vw] max-w-[94vw] max-h-[92vh] flex flex-col p-0 overflow-hidden border border-border bg-background shadow-2xl rounded-xl">
           {viewingEmployee && (
             <>
               {/* Header Profile ala Shadcn UI */}
@@ -1650,6 +2130,15 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
                           <>
                             <span>•</span>
                             <span>{viewingEmployee.company}</span>
+                          </>
+                        )}
+                        {viewingEmployee.branch && (
+                          <>
+                            <span>•</span>
+                            <span className="text-primary font-medium flex items-center gap-1">
+                              <MapPin size={13} className="shrink-0" />
+                              {viewingEmployee.branch}
+                            </span>
                           </>
                         )}
                       </p>
@@ -1820,17 +2309,55 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
                         </div>
 
                         {canManage && (
-                          <Button
-                            size="sm"
-                            onClick={() => openContractTransitionModal(viewingEmployee)}
-                            className="text-xs font-semibold gap-1.5"
-                          >
-                            <FileText size={14} />
-                            <span>Perbarui Status & SK</span>
-                          </Button>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setSelectedEmployeeForSK(viewingEmployee);
+                                setSkModalOpen(true);
+                              }}
+                              className="text-xs font-semibold gap-1.5 border-blue-200 dark:border-blue-900 text-[#12346a] dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40"
+                            >
+                              <Award size={14} />
+                              <span>Buat / Cetak SK</span>
+                            </Button>
+                            <Button
+                              size="sm"
+                              onClick={() => openContractTransitionModal(viewingEmployee)}
+                              className="text-xs font-semibold gap-1.5"
+                            >
+                              <FileText size={14} />
+                              <span>Perbarui Status & SK</span>
+                            </Button>
+                          </div>
                         )}
                       </CardHeader>
-                      <CardContent className="p-5 pt-0">
+                      <CardContent className="p-5 pt-0 space-y-4">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs pb-4 border-b border-border/60">
+                          <div>
+                            <span className="text-muted-foreground font-medium">Perusahaan / Legal Entity</span>
+                            <p className="font-semibold text-foreground mt-1">{viewingEmployee.company || '—'}</p>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground font-medium">Lokasi Kerja / Branch</span>
+                            <p className="font-semibold text-primary mt-1 flex items-center gap-1">
+                              <MapPin size={12} className="shrink-0" />
+                              {viewingEmployee.branch || '—'}
+                            </p>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground font-medium">Departemen</span>
+                            <p className="font-semibold text-foreground mt-1">{viewingEmployee.department || '—'}</p>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground font-medium">Jabatan & Level</span>
+                            <p className="font-semibold text-foreground mt-1">
+                              {viewingEmployee.jobTitle || 'Staff'} {viewingEmployee.jobLevel ? `(${viewingEmployee.jobLevel})` : ''}
+                            </p>
+                          </div>
+                        </div>
+
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
                           <div>
                             <span className="text-muted-foreground font-medium">Nomor SK / PKWT</span>
@@ -2250,19 +2777,30 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
                 </label>
                 {([
                   ['company', 'Company / Entitas'],
-                  ['branch', 'Branch / Cabang'],
+                  ['branch', 'Branch / Lokasi Kerja'],
                   ['department', 'Department'],
                   ['jobTitle', 'Jabatan / Job Position'],
                   ['jobLevel', 'Job Level']
                 ] as const).map(([key, label]) => (
                   <label key={key} className="space-y-1.5 text-xs font-semibold text-foreground">
                     {label}
-                    <Input
-                      value={transferForm[key]}
-                      onChange={(e) => setTransferForm((f) => ({ ...f, [key]: e.target.value }))}
-                      placeholder={`Masukkan ${label.toLowerCase()}`}
-                      className="text-xs h-9 mt-1"
-                    />
+                    {key === 'branch' ? (
+                      <select
+                        value={transferForm.branch || 'HQ'}
+                        onChange={(e) => setTransferForm((f) => ({ ...f, branch: e.target.value }))}
+                        className="text-xs h-9 mt-1 w-full rounded-md border border-input bg-background px-3 py-1 shadow-xs text-foreground outline-none focus:border-primary"
+                      >
+                        <option value="HQ">HQ</option>
+                        <option value="Non HQ">Non HQ</option>
+                      </select>
+                    ) : (
+                      <Input
+                        value={transferForm[key]}
+                        onChange={(e) => setTransferForm((f) => ({ ...f, [key]: e.target.value }))}
+                        placeholder={`Masukkan ${label.toLowerCase()}`}
+                        className="text-xs h-9 mt-1"
+                      />
+                    )}
                   </label>
                 ))}
               </div>
@@ -2648,6 +3186,34 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
         filteredEmployees={filteredEmployees}
         activeTab={activeTab}
         getContractMeta={getContractMeta}
+      />
+
+      {/* SK PENGANGKATAN KARYAWAN TETAP MODAL */}
+      <EmployeeAppointmentSKModal
+        open={skModalOpen}
+        onOpenChange={setSkModalOpen}
+        employee={selectedEmployeeForSK ? {
+          id: selectedEmployeeForSK.id,
+          fullName: selectedEmployeeForSK.fullName,
+          email: selectedEmployeeForSK.email,
+          employeeCode: selectedEmployeeForSK.employeeCode,
+          nik: selectedEmployeeForSK.nik,
+          gender: selectedEmployeeForSK.gender,
+          company: selectedEmployeeForSK.company,
+          department: selectedEmployeeForSK.department,
+          jobTitle: selectedEmployeeForSK.jobTitle,
+          joinDate: selectedEmployeeForSK.joinDate,
+          contractStartDate: selectedEmployeeForSK.contractStartDate || selectedEmployeeForSK.joinDate,
+          contractEndDate: selectedEmployeeForSK.contractEndDate,
+          contractType: selectedEmployeeForSK.contractType,
+        } : null}
+        currentUser={currentUser}
+        onSaved={() => {
+          fetchEmployees();
+          if (viewingEmployee && selectedEmployeeForSK && viewingEmployee.id === selectedEmployeeForSK.id) {
+            setViewingEmployee((prev: any) => prev ? { ...prev, contractType: 'PKWTT', employmentType: 'PKWTT' } : null);
+          }
+        }}
       />
     </div>
   );

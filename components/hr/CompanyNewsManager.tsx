@@ -948,9 +948,9 @@ create policy "Allow all on company_news" on public.company_news for all using (
                     onChange={e => setCategory(e.target.value as NewsCategory)}
                     className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2.5 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#12346a]/20 focus:border-[#12346a]"
                   >
-                    <option value="info">📢 Informasi HR</option>
-                    <option value="holiday">🏖️ Libur / SKB (Tanggal Merah)</option>
-                    <option value="event">🎯 Event Kantor / Kegiatan</option>
+                    <option value="info">Informasi HR</option>
+                    <option value="holiday">Libur / SKB (Tanggal Merah)</option>
+                    <option value="event">Event Kantor / Kegiatan</option>
                   </select>
                 </div>
 

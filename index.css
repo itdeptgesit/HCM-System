@@ -1,248 +1,176 @@
-﻿@import "tailwindcss";
+@import "tailwindcss";
 
 @custom-variant dark (&:is(.dark *));
 
 :root {
-    /* =========================
-       GESIT BRAND
-       ========================= */
-    --brand-navy: #103065;
-    --brand-gold: #BC9C33;
+  --card: #fafafa;
+  --ring: #2e6aff;
+  --input: #cccccc;
+  --muted: #ffffff;
+  --accent: #ffffff;
+  --border: #e7e4e4;
+  --radius: 1.3rem;
+  --chart-1: #2e67ff;
+  --chart-2: #00cdcc;
+  --chart-3: #f9ff40;
+  --chart-4: #00eeba;
+  --chart-5: #ff2822;
+  --popover: #ffffff;
+  --primary: #2e67ff;
+  --sidebar: #fafafa;
+  --spacing: 0.25rem;
+  --font-mono: Menlo, monospace;
+  --font-sans: 'Open Sans', 'Inter', sans-serif;
+  --secondary: #0e142b;
+  --background: #fcfcfc;
+  --font-serif: Georgia, serif;
+  --foreground: #0e142b;
+  --destructive: #ff6c35;
+  --shadow-blur: 0px;
+  --shadow-color: #2e6aff;
+  --sidebar-ring: #2e6aff;
+  --shadow-spread: -50px;
+  --letter-spacing: 0em;
+  --shadow-opacity: 0;
+  --sidebar-accent: #ffffff;
+  --sidebar-border: #ffffff;
+  --card-foreground: #0e142b;
+  --shadow-offset-x: -50px;
+  --shadow-offset-y: 2px;
+  --sidebar-primary: #2e67ff;
+  --muted-foreground: #0e142b;
+  --accent-foreground: #2e67ff;
+  --popover-foreground: #0e142b;
+  --primary-foreground: #ffffff;
+  --sidebar-foreground: #0e142b;
+  --secondary-foreground: #ffffff;
+  --destructive-foreground: #ffffff;
+  --sidebar-accent-foreground: #2e67ff;
+  --sidebar-primary-foreground: #ffffff;
 
-    /* =========================
-       BASE
-       ========================= */
-    --background: #F5F5F5;
-    --foreground: #171717;
-
-    --card: #FFFFFF;
-    --card-foreground: #171717;
-
-    --popover: #FFFFFF;
-    --popover-foreground: #171717;
-
-    /* =========================
-       ACTIONS
-       ========================= */
-    --primary: #103065;
-    --primary-foreground: #FFFFFF;
-
-    --secondary: #F0F0F0;
-    --secondary-foreground: #171717;
-
-    --muted: #F0F0F0;
-    --muted-foreground: #737373;
-
-    --accent: #E8EEF7;
-    --accent-foreground: #103065;
-
-    --destructive: #DC2626;
-    --destructive-foreground: #FFFFFF;
-
-    /* =========================
-       SYSTEM
-       ========================= */
-    --border: #E0E0E0;
-    --input: #E0E0E0;
-    --ring: #103065;
-
-    /* =========================
-       SIDEBAR
-       ========================= */
-    --sidebar: #FFFFFF;
-    --sidebar-foreground: #404040;
-
-    --sidebar-primary: #103065;
-    --sidebar-primary-foreground: #FFFFFF;
-
-    --sidebar-accent: #F5F5F5;
-    --sidebar-accent-foreground: #103065;
-
-    --sidebar-border: #E5E5E5;
-    --sidebar-ring: #BC9C33;
-
-    /* =========================
-       TYPOGRAPHY
-       ========================= */
-    --app-font-sans:
-        'Inter',
-        'Plus Jakarta Sans',
-        ui-sans-serif,
-        system-ui,
-        sans-serif;
-
-    --app-font-mono:
-        'IBM Plex Mono',
-        monospace;
-
-    /* =========================
-       RADIUS
-       ========================= */
-    --radius: 0.375rem;
-
-    /* =========================
-       SHADOW
-       ========================= */
-    --shadow-2xs:
-        0 1px 2px 0 hsl(0 0% 0% / 0.04);
-
-    --shadow-xs:
-        0 1px 2px 0 hsl(0 0% 0% / 0.05);
-
-    --shadow-sm:
-        0 1px 3px 0 hsl(0 0% 0% / 0.08),
-        0 1px 2px -1px hsl(0 0% 0% / 0.06);
-
-    --shadow:
-        0 2px 4px 0 hsl(0 0% 0% / 0.08),
-        0 1px 2px -1px hsl(0 0% 0% / 0.06);
-
-    --shadow-md:
-        0 4px 6px -1px hsl(0 0% 0% / 0.08),
-        0 2px 4px -2px hsl(0 0% 0% / 0.06);
-
-    --shadow-lg:
-        0 8px 16px -4px hsl(0 0% 0% / 0.08),
-        0 4px 6px -2px hsl(0 0% 0% / 0.04);
-
-    /* =========================
-       CHARTS
-       ========================= */
-    --chart-1: #103065;
-    --chart-2: #BC9C33;
-    --chart-3: #3B82F6;
-    --chart-4: #16A34A;
-    --chart-5: #D97706;
+  /* Brand and shadow fallbacks */
+  --brand-navy: #103065;
+  --brand-gold: #BC9C33;
+  --shadow-2xs: 0 1px 2px 0 hsl(0 0% 0% / 0.04);
+  --shadow-xs: 0 1px 2px 0 hsl(0 0% 0% / 0.05);
+  --shadow-sm: 0 1px 3px 0 hsl(0 0% 0% / 0.08), 0 1px 2px -1px hsl(0 0% 0% / 0.06);
+  --shadow: 0 2px 4px 0 hsl(0 0% 0% / 0.08), 0 1px 2px -1px hsl(0 0% 0% / 0.06);
+  --shadow-md: 0 4px 6px -1px hsl(0 0% 0% / 0.08), 0 2px 4px -2px hsl(0 0% 0% / 0.06);
+  --shadow-lg: 0 8px 16px -4px hsl(0 0% 0% / 0.08), 0 4px 6px -2px hsl(0 0% 0% / 0.04);
 }
 
 .dark {
-    /* =========================
-       BASE — Linear-inspired layered depth
-       ========================= */
-    --background: #09090B;
-    --foreground: #FAFAFA;
+  --card: #0f0f0f;
+  --ring: #2e6aff;
+  --input: #162151;
+  --muted: #181818;
+  --accent: #000e39;
+  --border: #26272e;
+  --radius: 1.3rem;
+  --chart-1: #2e67ff;
+  --chart-2: #00cdcc;
+  --chart-3: #f9ff40;
+  --chart-4: #00eeba;
+  --chart-5: #ff2822;
+  --popover: #000000;
+  --primary: #2b65ff;
+  --sidebar: #0f0f0f;
+  --spacing: 0.25rem;
+  --font-mono: Menlo, monospace;
+  --font-sans: 'Open Sans', 'Inter', sans-serif;
+  --secondary: #ffffff;
+  --background: #000000;
+  --font-serif: Georgia, serif;
+  --foreground: #ffffff;
+  --destructive: #ff6c35;
+  --shadow-blur: 0px;
+  --shadow-color: #2e6aff;
+  --sidebar-ring: #2e6aff;
+  --shadow-spread: -50px;
+  --letter-spacing: 0em;
+  --shadow-opacity: 0;
+  --sidebar-accent: #000e39;
+  --sidebar-border: #323e62;
+  --card-foreground: #d9d9d9;
+  --shadow-offset-x: -50px;
+  --shadow-offset-y: 2px;
+  --sidebar-primary: #2e6aff;
+  --muted-foreground: #7b7e8c;
+  --accent-foreground: #2b65ff;
+  --popover-foreground: #ffffff;
+  --primary-foreground: #ffffff;
+  --sidebar-foreground: #d9d9d9;
+  --secondary-foreground: #0e142b;
+  --destructive-foreground: #ffffff;
+  --sidebar-accent-foreground: #2b65ff;
+  --sidebar-primary-foreground: #ffffff;
 
-    --card: #131316;
-    --card-foreground: #FAFAFA;
-
-    --popover: #18181B;
-    --popover-foreground: #FAFAFA;
-
-    /* =========================
-       ACTIONS
-       ========================= */
-    --primary: #5B7FCC;
-    --primary-foreground: #FFFFFF;
-
-    --secondary: #1C1C20;
-    --secondary-foreground: #E4E4E7;
-
-    --muted: #1C1C20;
-    --muted-foreground: #71717A;
-
-    --accent: #1A2744;
-    --accent-foreground: #93B4E0;
-
-    --destructive: #DC2626;
-    --destructive-foreground: #FFFFFF;
-
-    /* =========================
-       SYSTEM — subtle, almost invisible borders
-       ========================= */
-    --border: #222225;
-    --input: #222225;
-    --ring: #5B7FCC;
-
-    /* =========================
-       SIDEBAR — Linear-style: flat, minimal, left accent
-       ========================= */
-    --sidebar: #09090B;
-    --sidebar-foreground: #71717A;
-
-    --sidebar-primary: #FAFAFA;
-    --sidebar-primary-foreground: #09090B;
-
-    --sidebar-accent: #141416;
-    --sidebar-accent-foreground: #FAFAFA;
-
-    --sidebar-border: transparent;
-    --sidebar-ring: #5B7FCC;
-
-    /* =========================
-       SHADOWS — very subtle
-       ========================= */
-    --shadow-2xs: 0 1px 2px 0 rgb(0 0 0 / 0.3);
-    --shadow-xs: 0 1px 3px 0 rgb(0 0 0 / 0.4);
-    --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.4), 0 1px 2px -1px rgb(0 0 0 / 0.3);
-    --shadow: 0 2px 4px 0 rgb(0 0 0 / 0.4), 0 1px 2px -1px rgb(0 0 0 / 0.3);
-    --shadow-md: 0 4px 8px -2px rgb(0 0 0 / 0.5), 0 2px 4px -2px rgb(0 0 0 / 0.3);
-    --shadow-lg: 0 8px 24px -4px rgb(0 0 0 / 0.5), 0 4px 8px -2px rgb(0 0 0 / 0.3);
-
-    /* =========================
-       CHARTS
-       ========================= */
-    --chart-1: #5B7FCC;
-    --chart-2: #BC9C33;
-    --chart-3: #60A5FA;
-    --chart-4: #34D399;
-    --chart-5: #FBBF24;
+  --shadow-2xs: 0 1px 2px 0 rgb(0 0 0 / 0.3);
+  --shadow-xs: 0 1px 3px 0 rgb(0 0 0 / 0.4);
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.4), 0 1px 2px -1px rgb(0 0 0 / 0.3);
+  --shadow: 0 2px 4px 0 rgb(0 0 0 / 0.4), 0 1px 2px -1px rgb(0 0 0 / 0.3);
+  --shadow-md: 0 4px 8px -2px rgb(0 0 0 / 0.5), 0 2px 4px -2px rgb(0 0 0 / 0.3);
+  --shadow-lg: 0 8px 24px -4px rgb(0 0 0 / 0.5), 0 4px 8px -2px rgb(0 0 0 / 0.3);
 }
 
 @theme inline {
-    --color-background: var(--background);
-    --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-border: var(--border);
+  --color-radius: var(--radius);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-popover: var(--popover);
+  --color-primary: var(--primary);
+  --color-sidebar: var(--sidebar);
+  --color-spacing: var(--spacing);
+  --color-font-mono: var(--font-mono);
+  --color-font-sans: var(--font-sans);
+  --color-secondary: var(--secondary);
+  --color-background: var(--background);
+  --color-font-serif: var(--font-serif);
+  --color-foreground: var(--foreground);
+  --color-destructive: var(--destructive);
+  --color-shadow-blur: var(--shadow-blur);
+  --color-shadow-color: var(--shadow-color);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-shadow-spread: var(--shadow-spread);
+  --color-letter-spacing: var(--letter-spacing);
+  --color-shadow-opacity: var(--shadow-opacity);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-card-foreground: var(--card-foreground);
+  --color-shadow-offset-x: var(--shadow-offset-x);
+  --color-shadow-offset-y: var(--shadow-offset-y);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
 
-    --color-card: var(--card);
-    --color-card-foreground: var(--card-foreground);
+  /* Typography & Radius mapping for Tailwind utilities */
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+  --font-serif: var(--font-serif);
 
-    --color-popover: var(--popover);
-    --color-popover-foreground: var(--popover-foreground);
+  --radius-sm: calc(var(--radius) - 6px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+  --radius-xl: calc(var(--radius) + 6px);
 
-    --color-primary: var(--primary);
-    --color-primary-foreground: var(--primary-foreground);
-
-    --color-secondary: var(--secondary);
-    --color-secondary-foreground: var(--secondary-foreground);
-
-    --color-muted: var(--muted);
-    --color-muted-foreground: var(--muted-foreground);
-
-    --color-accent: var(--accent);
-    --color-accent-foreground: var(--accent-foreground);
-
-    --color-destructive: var(--destructive);
-    --color-destructive-foreground: var(--destructive-foreground);
-
-    --color-border: var(--border);
-    --color-input: var(--input);
-    --color-ring: var(--ring);
-
-    --color-sidebar: var(--sidebar);
-    --color-sidebar-foreground: var(--sidebar-foreground);
-    --color-sidebar-primary: var(--sidebar-primary);
-    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-    --color-sidebar-accent: var(--sidebar-accent);
-    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-    --color-sidebar-border: var(--sidebar-border);
-    --color-sidebar-ring: var(--sidebar-ring);
-
-    --color-brand-navy: var(--brand-navy);
-    --color-brand-gold: var(--brand-gold);
-
-    --font-sans: var(--app-font-sans);
-    --font-mono: var(--app-font-mono);
-
-    --radius-sm: calc(var(--radius) - 2px);
-    --radius-md: var(--radius);
-    --radius-lg: calc(var(--radius) + 2px);
-    --radius-xl: calc(var(--radius) + 4px);
-
-    --shadow-2xs: var(--shadow-2xs);
-    --shadow-xs: var(--shadow-xs);
-    --shadow-sm: var(--shadow-sm);
-    --shadow: var(--shadow);
-    --shadow-md: var(--shadow-md);
-    --shadow-lg: var(--shadow-lg);
+  --color-brand-navy: var(--brand-navy);
+  --color-brand-gold: var(--brand-gold);
 }
 
 @layer base {
@@ -264,7 +192,7 @@
 
     body {
         @apply bg-background text-foreground;
-        font-family: var(--app-font-sans);
+        font-family: var(--font-sans);
         font-feature-settings: 'rlig' 1, 'calt' 1;
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
@@ -367,4 +295,46 @@
     to {
         opacity: 1;
     }
+}
+
+/* =========================
+   LEAFLET CARTO DARK THEME STYLING
+   ========================= */
+.dark .leaflet-popup-content-wrapper,
+.dark .leaflet-popup-tip {
+    background-color: #131316 !important;
+    color: #FAFAFA !important;
+    border: 1px solid #26272e !important;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.7) !important;
+}
+
+.dark .leaflet-popup-content {
+    color: #FAFAFA !important;
+}
+
+.dark .leaflet-container {
+    background-color: #0f0f0f !important;
+}
+
+.dark .leaflet-bar a {
+    background-color: #18181b !important;
+    color: #fafafa !important;
+    border-bottom: 1px solid #27272a !important;
+}
+
+.dark .leaflet-bar a:hover {
+    background-color: #27272a !important;
+}
+
+/* ========================================================
+   100% FREE DARK MAP (NO API KEY, NO WATERMARK)
+   Transforms OpenStreetMap tiles into a sleek Dark Mode map
+   ======================================================== */
+.map-theme-dark .leaflet-tile-pane {
+    filter: brightness(0.6) invert(1) contrast(3) hue-rotate(200deg) saturate(0.25) brightness(0.75);
+}
+
+.map-theme-light .leaflet-tile-pane,
+.map-theme-satellite .leaflet-tile-pane {
+    filter: none !important;
 }

@@ -1,6 +1,7 @@
 import React from 'react';
 import {
-  Stethoscope, Gift, Receipt
+  Stethoscope, Gift, Receipt,
+  Calendar, ShieldCheck, User, HeartHandshake, CreditCard, FileText, Award
 } from '@/components/ui/icons';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -281,13 +282,13 @@ export type DashboardSubTab = 'overview' | 'riwayat';
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 export const LEAVE_TYPES = [
-  { id: 'annual', label: 'Cuti Tahunan', icon: '🏖️', badge: 'bg-blue-600/10 text-blue-600 border-blue-600/20', selected: 'border-blue-600 bg-blue-600/10 text-blue-600 font-bold', textDefault: 'text-slate-600 font-medium' },
-  { id: 'sick', label: 'Sakit', icon: '🤒', badge: 'bg-red-600/10 text-red-600 border-red-600/20', selected: 'border-red-600 bg-red-600/10 text-red-600 font-bold', textDefault: 'text-slate-600 font-medium' },
-  { id: 'personal', label: 'Izin Pribadi', icon: '📋', badge: 'bg-amber-600/10 text-amber-600 border-amber-600/20', selected: 'border-amber-600 bg-amber-600/10 text-amber-600 font-bold', textDefault: 'text-slate-600 font-medium' },
-  { id: 'maternity', label: 'Cuti Melahirkan', icon: '👶', badge: 'bg-pink-600/10 text-pink-600 border-pink-600/20', selected: 'border-pink-600 bg-pink-600/10 text-pink-600 font-bold', textDefault: 'text-slate-600 font-medium' },
-  { id: 'paternity', label: 'Cuti Ayah', icon: '👨‍🍼', badge: 'bg-violet-600/10 text-violet-600 border-violet-600/20', selected: 'border-violet-600 bg-violet-600/10 text-violet-600 font-bold', textDefault: 'text-slate-600 font-medium' },
-  { id: 'unpaid', label: 'Cuti Tanpa Gaji', icon: '💰', badge: 'bg-slate-600/10 text-slate-600 border-slate-600/20', selected: 'border-slate-600 bg-slate-600/10 text-slate-600 font-bold', textDefault: 'text-slate-600 font-medium' },
-  { id: 'other', label: 'Lainnya', icon: '📝', badge: 'bg-emerald-600/10 text-emerald-600 border-emerald-600/20', selected: 'border-emerald-600 bg-emerald-600/10 text-emerald-600 font-bold', textDefault: 'text-slate-600 font-medium' },
+  { id: 'annual', label: 'Cuti Tahunan', icon: <Calendar className="w-3.5 h-3.5" />, badge: 'bg-blue-600/10 text-blue-600 border-blue-600/20', selected: 'border-blue-600 bg-blue-600/10 text-blue-600 font-bold', textDefault: 'text-slate-600 font-medium' },
+  { id: 'sick', label: 'Sakit', icon: <Stethoscope className="w-3.5 h-3.5" />, badge: 'bg-red-600/10 text-red-600 border-red-600/20', selected: 'border-red-600 bg-red-600/10 text-red-600 font-bold', textDefault: 'text-slate-600 font-medium' },
+  { id: 'personal', label: 'Izin Pribadi', icon: <User className="w-3.5 h-3.5" />, badge: 'bg-amber-600/10 text-amber-600 border-amber-600/20', selected: 'border-amber-600 bg-amber-600/10 text-amber-600 font-bold', textDefault: 'text-slate-600 font-medium' },
+  { id: 'maternity', label: 'Cuti Melahirkan', icon: <HeartHandshake className="w-3.5 h-3.5" />, badge: 'bg-pink-600/10 text-pink-600 border-pink-600/20', selected: 'border-pink-600 bg-pink-600/10 text-pink-600 font-bold', textDefault: 'text-slate-600 font-medium' },
+  { id: 'paternity', label: 'Cuti Ayah', icon: <Award className="w-3.5 h-3.5" />, badge: 'bg-violet-600/10 text-violet-600 border-violet-600/20', selected: 'border-violet-600 bg-violet-600/10 text-violet-600 font-bold', textDefault: 'text-slate-600 font-medium' },
+  { id: 'unpaid', label: 'Cuti Tanpa Gaji', icon: <CreditCard className="w-3.5 h-3.5" />, badge: 'bg-slate-600/10 text-slate-600 border-slate-600/20', selected: 'border-slate-600 bg-slate-600/10 text-slate-600 font-bold', textDefault: 'text-slate-600 font-medium' },
+  { id: 'other', label: 'Lainnya', icon: <FileText className="w-3.5 h-3.5" />, badge: 'bg-emerald-600/10 text-emerald-600 border-emerald-600/20', selected: 'border-emerald-600 bg-emerald-600/10 text-emerald-600 font-bold', textDefault: 'text-slate-600 font-medium' },
 ];
 
 export const STATUS_CONFIG: Record<string, { label: string; badge: string; dot: string }> = {

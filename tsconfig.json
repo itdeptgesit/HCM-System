@@ -23,7 +23,12 @@
     "jsx": "react-jsx",
     "jsxImportSource": "react",
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./*"],
+      "@workspace/ui/components/*": ["./components/ui/*"],
+      "@workspace/ui/lib/*": ["./lib/*"],
+      "@workspace/ui/*": ["./components/ui/*"],
+      "@tanstack/react-router": ["./lib/router-shim.ts"],
+      "motion/react": ["./node_modules/framer-motion"]
     },
     "allowImportingTsExtensions": true,
     "noEmit": true

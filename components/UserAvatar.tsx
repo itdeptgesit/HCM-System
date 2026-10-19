@@ -39,7 +39,13 @@ export const formatAvatarImageUrl = (url?: string | null): string | null => {
 
 export const UserAvatar: React.FC<UserAvatarProps> = ({ name, url, size = 'sm', className = '' }) => {
     const fallbackColor = getAvatarColor(name);
-    const initial = (name || 'S').trim().charAt(0).toUpperCase();
+    const initials = React.useMemo(() => {
+        const parts = (name || 'User').trim().split(/\s+/).filter(Boolean);
+        if (parts.length >= 2) {
+            return (parts[0][0] + parts[1][0]).toUpperCase();
+        }
+        return (parts[0]?.[0] || 'U').toUpperCase();
+    }, [name]);
     const [hasError, setHasError] = React.useState(false);
 
     React.useEffect(() => {
@@ -59,16 +65,18 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({ name, url, size = 'sm', 
     const showImage = Boolean(resolvedUrl && !hasError);
 
     return (
-        <div className={`${sizeClasses[size]} rounded-full flex items-center justify-center font-bold text-white shadow-sm overflow-hidden border border-white/10 ring-2 ring-slate-100/50 dark:ring-white/5 shrink-0 ${showImage ? 'bg-slate-100' : fallbackColor} ${className}`}>
+        <div className={`${sizeClasses[size]} rounded-full flex items-center justify-center font-bold text-white shadow-sm overflow-hidden border border-white/10 shrink-0 ${showImage ? 'bg-slate-100 dark:bg-zinc-800' : fallbackColor} ${className}`}>
             {showImage ? (
                 <img 
                     src={resolvedUrl!} 
                     alt={name || 'Avatar'} 
                     aria-hidden="true" 
                     className="w-full h-full object-cover" 
+                    referrerPolicy="no-referrer"
+                    loading="lazy"
                     onError={() => setHasError(true)}
                 />
-            ) : initial}
+            ) : initials}
         </div>
     );
 };

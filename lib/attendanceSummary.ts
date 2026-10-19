@@ -32,11 +32,50 @@ export function summarizeEmployee(user: any, records: any[], leaves: any[], star
   const late = recs.filter(row => row.status === 'late').length;
   const absent = recs.filter(row => row.status === 'absent').length;
   const missing = scheduled.filter(date => date < today && !recordedDates.has(date) && !leaveDates.has(date)).length;
+  const missingCheckout = recs.filter(row => Boolean(row.clock_in) && !row.clock_out).length;
+
+  let totalWork = 0;
+  let totalOT = 0;
+  for (const row of recs) {
+    let wm = Number(row.total_work_minutes ?? row.work_duration_minutes ?? 0);
+    if ((!wm || wm <= 0) && row.clock_in && row.clock_out) {
+      const diff = (new Date(row.clock_out).getTime() - new Date(row.clock_in).getTime()) / 60000;
+      if (diff > 0) wm = Math.round(diff);
+    }
+    if (wm > 840) wm = 540; // cap extreme runaway checkouts
+    totalWork += wm;
+    totalOT += Number(row.total_overtime_minutes || 0);
+  }
+
+  const attendedDays = present + late;
+  const scheduledDays = scheduled.length;
+  const approvedLeaveDays = leaveDates.size;
+  
+  // Tingkat Kehadiran Adil: Karyawan yang cuti resmi tidak dianggap mangkir/penalti
+  // Total hari evaluasi = Hari Kerja Wajib terjadwal
+  const attendanceRate = scheduledDays > 0
+    ? Math.min(100, Math.round(((attendedDays + approvedLeaveDays) / scheduledDays) * 100))
+    : (attendedDays > 0 ? 100 : 0);
+
+  // Rata-rata jam kerja saat hadir
+  const avgDailyWorkMinutes = attendedDays > 0 ? Math.round(totalWork / attendedDays) : 0;
+
   return {
-    user, present, late, absent, missing, leave: leaveDates.size,
+    user,
+    present,
+    late,
+    absent,
+    missing,
+    missingCheckout,
+    leave: approvedLeaveDays,
     holiday: recs.filter(row => row.status === 'holiday').length,
-    totalWork: recs.reduce((sum, row) => sum + Number(row.total_work_minutes || 0), 0),
-    totalOT: recs.reduce((sum, row) => sum + Number(row.total_overtime_minutes || 0), 0),
-    onTime: present, total: recs.length,
+    scheduledDays,
+    attendedDays,
+    attendanceRate,
+    totalWork,
+    avgDailyWorkMinutes,
+    totalOT,
+    onTime: present,
+    total: recs.length,
   };
 }
