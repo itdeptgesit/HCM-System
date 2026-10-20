@@ -5,7 +5,6 @@ import {
   Calendar,
   Clock,
   TrendingUp,
-  BarChart2,
   Download,
   RotateCcw,
   ArrowRight,
@@ -25,10 +24,7 @@ import {
   ExternalLink,
   Sparkles,
   Activity,
-  MoreHorizontal,
-  Target,
-  Layers,
-  ShieldCheck
+  Layers
 } from '@/components/ui/icons';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -44,8 +40,11 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { supabase } from '../../lib/supabaseClient';
 import { fetchAllRows, loadWorkforceAccounts, normalizeAttendance } from '../../lib/workforceData';
-import { isActiveEmployee, isHRAccount, jakartaDate, resolveApprovalStatus } from '../../lib/workforce-contract';
+import { isActiveEmployee, isEmployeeAccount, isHRAccount, jakartaDate, resolveApprovalStatus } from '../../lib/workforce-contract';
 import { UserAvatar } from '../UserAvatar';
+import { dashboardAttendance } from '../../lib/dashboardAttendance';
+import { loadWorkCalendarDates } from '../../lib/holidayDates';
+import { dashboardWorkbook } from '../../lib/dashboardWorkbook';
 
 interface LiveHRDashboardProps {
   currentUser?: any;
@@ -62,6 +61,8 @@ interface DemographicGroup {
 interface EmployeeDemographicGroup extends DemographicGroup {
   employees: any[];
 }
+
+type EmployeeDateField = 'date_of_birth' | 'join_date' | 'separation_date' | 'contract_end_date';
 
 // Helpers for calculations
 function calculateAge(dobStr?: string | null): number | null {
@@ -103,6 +104,11 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
   const [selectedCompany, setSelectedCompany] = useState<string>('all');
   const [selectedDepartment, setSelectedDepartment] = useState<string>('all');
   const [snapshotDate, setSnapshotDate] = useState<string>(() => jakartaDate());
+  const [clockNow, setClockNow] = useState(() => new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setClockNow(new Date()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Real Database State
   const [accounts, setAccounts] = useState<any[]>([]);
@@ -111,6 +117,11 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
   const [records, setRecords] = useState<any[]>([]);
   const [requests, setRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [loadError, setLoadError] = useState('');
+  const [attendanceContext, setAttendanceContext] = useState<{
+    schedules: any[]; settings: any; holidays: Set<string>; workingDates: Set<string>; error: string;
+  }>({ schedules: [], settings: null, holidays: new Set(), workingDates: new Set(), error: '' });
+  const loadVersionRef = useRef(0);
   const [exporting, setExporting] = useState<boolean>(false);
 
   // Drilldown Modal State with Search
@@ -119,6 +130,7 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
     title: string;
     subtitle?: string;
     employees: any[];
+    dateField?: EmployeeDateField;
   }>({
     open: false,
     title: '',
@@ -140,26 +152,44 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
 
   // Load Real Data from Supabase
   const loadData = useCallback(async () => {
+    const version = ++loadVersionRef.current;
     setLoading(true);
+    setLoadError('');
     try {
       const monthPrefix = snapshotDate.slice(0, 7);
-      const [users, companies, depts, attendance, leaves, overtime, reimb, corrections] = await Promise.all([
-        (async () => { try { return await loadWorkforceAccounts(); } catch { return []; } })(),
-        (async () => { try { const r = await supabase.from('companies').select('*').order('name'); return r.data || []; } catch { return []; } })(),
-        (async () => { try { const r = await supabase.from('departments').select('*').order('name'); return r.data || []; } catch { return []; } })(),
-        (async () => { try { return await fetchAllRows((from, to) => supabase.from('attendance_records').select('*').gte('date', `${monthPrefix}-01`).order('id').range(from, to)); } catch { return []; } })(),
-        (async () => { try { return await fetchAllRows((from, to) => supabase.from('leave_requests').select('*').order('id').range(from, to)); } catch { return []; } })(),
-        (async () => { try { return await fetchAllRows((from, to) => supabase.from('overtime_requests').select('*').order('id').range(from, to)); } catch { return []; } })(),
-        (async () => { try { return await fetchAllRows((from, to) => supabase.from('reimbursements').select('*').order('id').range(from, to)); } catch { return []; } })(),
-        (async () => { try { return await fetchAllRows((from, to) => supabase.from('attendance_correction_requests').select('*').order('id').range(from, to)); } catch { return []; } })(),
+      const [users, companies, depts, attendance, leaves, overtime, reimb, corrections, context] = await Promise.all([
+        loadWorkforceAccounts({ includeSystemAccounts: true }),
+        fetchAllRows((from, to) => supabase.from('companies').select('*').order('id').range(from, to)),
+        fetchAllRows((from, to) => supabase.from('departments').select('*').order('id').range(from, to)),
+        fetchAllRows((from, to) => supabase.from('attendance_records').select('*').gte('date', `${monthPrefix}-01`).lte('date', snapshotDate).order('id').range(from, to)),
+        fetchAllRows((from, to) => supabase.from('leave_requests').select('*').order('id').range(from, to)),
+        fetchAllRows((from, to) => supabase.from('overtime_requests').select('*').order('id').range(from, to)),
+        fetchAllRows((from, to) => supabase.from('reimbursements').select('*').order('id').range(from, to)),
+        fetchAllRows((from, to) => supabase.from('attendance_correction_requests').select('*').order('id').range(from, to)),
+        (async () => {
+          try {
+            const [schedules, settings, calendar] = await Promise.all([
+              fetchAllRows((from, to) => supabase.from('attendance_schedules').select('*').eq('is_active', true).order('id').range(from, to)),
+              supabase.from('attendance_settings').select('*').limit(1).maybeSingle(),
+              loadWorkCalendarDates(snapshotDate, snapshotDate),
+            ]);
+            if (settings.error) throw settings.error;
+            return { schedules, settings: settings.data, ...calendar, error: '' };
+          } catch {
+            return { schedules: [], settings: null, holidays: new Set<string>(), workingDates: new Set<string>(), error: 'Jadwal atau kalender kerja belum berhasil dimuat. Muat ulang untuk melihat presensi terjadwal.' };
+          }
+        })(),
       ]);
+      if (version !== loadVersionRef.current) return;
 
-      setAccounts(users || []);
+      const systemAccountIds = new Set(users.filter(user => !isEmployeeAccount(user)).map(user => String(user.id)));
+      setAccounts(users.filter(isEmployeeAccount));
       setCompaniesList(companies || []);
       setDepartmentsList(depts || []);
-      setRecords((attendance || []).map(normalizeAttendance));
+      setRecords((attendance || []).filter(record => !systemAccountIds.has(String(record.user_id))).map(normalizeAttendance));
+      setAttendanceContext(context);
 
-      const tagged = (rows: any[], type: string) => rows.map(r => ({ ...r, type }));
+      const tagged = (rows: any[], type: string) => rows.filter(row => !systemAccountIds.has(String(row.user_id))).map(r => ({ ...r, type }));
       setRequests([
         ...tagged(leaves || [], 'leave'),
         ...tagged(overtime || [], 'overtime'),
@@ -167,9 +197,11 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
         ...tagged(corrections || [], 'correction'),
       ]);
     } catch (err) {
+      if (version !== loadVersionRef.current) return;
       console.warn('Dashboard load error:', err);
+      setLoadError('Data dashboard belum berhasil dimuat. Silakan muat ulang.');
     } finally {
-      setLoading(false);
+      if (version === loadVersionRef.current) setLoading(false);
     }
   }, [snapshotDate]);
 
@@ -202,12 +234,8 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
     return Array.from(set).sort();
   }, [departmentsList, accounts]);
 
-  // Filtered Real Employees
-  const filteredEmployees = useMemo(() => {
+  const scopedEmployees = useMemo(() => {
     return accounts.filter(a => {
-      const statusLower = String(a.status || a.employment_status || 'active').toLowerCase();
-      if (['inactive', 'suspended', 'terminated', 'resigned'].includes(statusLower)) return false;
-
       if (selectedCompany !== 'all') {
         const comp = (a.company || a.company_name || '').trim();
         if (comp !== selectedCompany) return false;
@@ -222,26 +250,38 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
     });
   }, [accounts, selectedCompany, selectedDepartment]);
 
+  // Filtered Real Employees
+  const filteredEmployees = useMemo(() => scopedEmployees.filter(a => {
+    const status = String(a.status || a.employment_status || 'active').toLowerCase();
+    return !['inactive', 'suspended', 'terminated', 'resigned'].includes(status);
+  }), [scopedEmployees]);
+
   const totalHeadcount = filteredEmployees.length;
+  const scopedEmployeeIds = useMemo(() => new Set(scopedEmployees.map(employee => String(employee.id))), [scopedEmployees]);
+  const scopedRequests = useMemo(() => requests.filter(request =>
+    (selectedCompany === 'all' && selectedDepartment === 'all') || scopedEmployeeIds.has(String(request.user_id)),
+  ), [requests, scopedEmployeeIds, selectedCompany, selectedDepartment]);
 
   // New Hires this month
   const currentMonthStr = snapshotDate.slice(0, 7);
+  const currentMonthLabel = new Date(`${currentMonthStr}-01T12:00:00`).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
   const newHiresList = useMemo(() => {
-    return filteredEmployees.filter(a => a.join_date && String(a.join_date).startsWith(currentMonthStr));
-  }, [filteredEmployees, currentMonthStr]);
+    return scopedEmployees.filter(a => a.join_date && String(a.join_date).startsWith(currentMonthStr));
+  }, [scopedEmployees, currentMonthStr]);
   const newHires = newHiresList.length;
 
   // Resignations this month
   const resignationsList = useMemo(() => {
-    return accounts.filter(a => {
+    return scopedEmployees.filter(a => {
       const sep = a.separation_date;
       if (!sep || !String(sep).startsWith(currentMonthStr)) return false;
-      if (selectedCompany !== 'all' && (a.company || a.company_name) !== selectedCompany) return false;
-      if (selectedDepartment !== 'all' && (a.department || a.department_name) !== selectedDepartment) return false;
       return true;
     });
-  }, [accounts, currentMonthStr, selectedCompany, selectedDepartment]);
+  }, [scopedEmployees, currentMonthStr]);
   const resignations = resignationsList.length;
+  const netHeadcountChange = newHires - resignations;
+  const previousMonthStr = new Date(Date.UTC(Number(currentMonthStr.slice(0, 4)), Number(currentMonthStr.slice(5, 7)) - 2, 1)).toISOString().slice(0, 7);
+  const previousMonthExits = scopedEmployees.filter(employee => employee.separation_date?.startsWith(previousMonthStr)).length;
 
   // Average Age Calculation
   const agesWithData = useMemo(() => {
@@ -294,24 +334,18 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
     return records.filter(r => r.date === snapshotDate && filteredEmployeeIds.has(String(r.user_id)));
   }, [records, snapshotDate, filteredEmployeeIds]);
 
-  const onTimeCount = useMemo(() => {
-    return todayAttendance.filter(r => ['present', 'tepat_waktu'].includes(String(r.status).toLowerCase())).length;
-  }, [todayAttendance]);
-
-  const lateCount = useMemo(() => {
-    return todayAttendance.filter(r => ['late', 'terlambat'].includes(String(r.status).toLowerCase())).length;
-  }, [todayAttendance]);
-
-  const leaveCount = useMemo(() => {
-    return todayAttendance.filter(r => ['leave', 'cuti', 'izin', 'sick', 'sakit'].includes(String(r.status).toLowerCase())).length;
-  }, [todayAttendance]);
-
-  const checkedInCount = onTimeCount + lateCount;
-  const notCheckedInCount = Math.max(0, totalHeadcount - checkedInCount - leaveCount);
-  const attendanceRate = useMemo(() => {
-    if (totalHeadcount === 0) return '0,0';
-    return ((checkedInCount / totalHeadcount) * 100).toFixed(1).replace('.', ',');
-  }, [checkedInCount, totalHeadcount]);
+  const attendanceSnapshot = useMemo(() => dashboardAttendance({
+    employees: filteredEmployees, records: todayAttendance,
+    leaves: requests.filter(request => request.type === 'leave'),
+    schedules: attendanceContext.schedules, settings: attendanceContext.settings,
+    holidays: attendanceContext.holidays, workingDates: attendanceContext.workingDates, date: snapshotDate, now: clockNow,
+  }), [filteredEmployees, todayAttendance, requests, attendanceContext, snapshotDate, clockNow]);
+  const onTimeCount = attendanceSnapshot.onTime.length;
+  const lateCount = attendanceSnapshot.late.length;
+  const leaveCount = attendanceSnapshot.leave.length;
+  const checkedInCount = attendanceSnapshot.checkedIn;
+  const notCheckedInCount = attendanceSnapshot.pending.length;
+  const attendanceRate = attendanceContext.error || loadError ? '-' : attendanceSnapshot.rate ?? '-';
 
   // Real Leave Requests
   const filteredLeaves = useMemo(() => {
@@ -324,8 +358,8 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
   const rejectedLeaves = filteredLeaves.filter(r => resolveApprovalStatus(r) === 'rejected').length;
 
   const totalPendingRequestsCount = useMemo(() => {
-    return requests.filter(r => resolveApprovalStatus(r) === 'pending').length;
-  }, [requests]);
+    return scopedRequests.filter(r => resolveApprovalStatus(r).startsWith('pending')).length;
+  }, [scopedRequests]);
 
   const onMetricsUpdateRef = useRef(onMetricsUpdate);
   onMetricsUpdateRef.current = onMetricsUpdate;
@@ -523,41 +557,40 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
   }, [filteredEmployees, totalHeadcount]);
 
   // Status Kepegawaian (Donut)
-  const { statusPermanent, statusContract, statusProbation, statusIntern } = useMemo(() => {
-    let perm = 0;
-    let cont = 0;
-    let prob = 0;
-    let intern = 0;
+  const statusEmployees = useMemo(() => {
+    const groups: Record<string, any[]> = { PKWTT: [], PKWT: [], Probation: [], Magang: [] };
 
     filteredEmployees.forEach(emp => {
       const type = `${emp.contract_type || ''} ${emp.employment_type || ''}`.toLowerCase();
-      if (type.includes('probation') || type.includes('percobaan')) prob++;
-      else if (type.includes('magang') || type.includes('intern')) intern++;
-      else if (type.includes('pkwtt') || type.includes('tetap') || type.includes('permanent')) perm++;
-      else if (type.includes('pkwt') || type.includes('kontrak') || type.includes('contract')) cont++;
-      else perm++;
+      if (type.includes('probation') || type.includes('percobaan')) groups.Probation.push(emp);
+      else if (type.includes('magang') || type.includes('intern')) groups.Magang.push(emp);
+      else if (type.includes('pkwtt') || type.includes('tetap') || type.includes('permanent')) groups.PKWTT.push(emp);
+      else if (type.includes('pkwt') || type.includes('kontrak') || type.includes('contract')) groups.PKWT.push(emp);
+      else groups.PKWTT.push(emp);
     });
 
-    return { statusPermanent: perm, statusContract: cont, statusProbation: prob, statusIntern: intern };
+    return groups;
   }, [filteredEmployees]);
+  const statusPermanent = statusEmployees.PKWTT.length;
+  const statusContract = statusEmployees.PKWT.length;
+  const statusProbation = statusEmployees.Probation.length;
+  const statusIntern = statusEmployees.Magang.length;
 
   // Department Distribution
-  const departmentDistribution: DemographicGroup[] = useMemo(() => {
-    const map = new Map<string, number>();
+  const departmentDistribution: EmployeeDemographicGroup[] = useMemo(() => {
+    const map = new Map<string, any[]>();
     filteredEmployees.forEach(emp => {
-      const d = (emp.department || emp.department_name || 'Lainnya').trim();
-      map.set(d, (map.get(d) || 0) + 1);
+      const d = (emp.department || emp.department_name || '').trim() || 'Belum tercatat';
+      if (!map.has(d)) map.set(d, []);
+      map.get(d)!.push(emp);
     });
 
-    if (map.size === 0) {
-      map.set('General', 0);
-    }
-
-    const arr = Array.from(map.entries()).map(([label, count]) => ({ label, count }));
+    const arr = Array.from(map.entries()).map(([label, employees]) => ({ label, employees, count: employees.length }));
     const maxCount = Math.max(...arr.map(x => x.count), 1);
 
     return arr.map(item => ({
       label: item.label,
+      employees: item.employees,
       count: item.count,
       percentage: totalHeadcount > 0 ? Number(((item.count / totalHeadcount) * 100).toFixed(1)) : 0,
       isHighlight: item.count === maxCount && item.count > 0,
@@ -565,20 +598,20 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
   }, [filteredEmployees, totalHeadcount]);
 
   // Gender Composition
-  const { maleCount, femaleCount, unspecifiedGenderCount } = useMemo(() => {
-    let m = 0;
-    let f = 0;
-    let un = 0;
+  const genderEmployees = useMemo(() => {
+    const groups: Record<string, any[]> = { 'Laki-laki': [], Perempuan: [], 'Belum diisi': [] };
 
     filteredEmployees.forEach(emp => {
-      const g = String(emp.gender || '').toLowerCase();
-      if (g.includes('laki') || g.includes('male') || g.includes('pria')) m++;
-      else if (g.includes('perempuan') || g.includes('female') || g.includes('wanita')) f++;
-      else un++;
+      const g = String(emp.gender || '').toLowerCase().trim();
+      if (['perempuan', 'female', 'wanita', 'p', 'f'].includes(g)) groups.Perempuan.push(emp);
+      else if (['laki-laki', 'laki laki', 'laki', 'male', 'pria', 'l', 'm'].includes(g)) groups['Laki-laki'].push(emp);
+      else groups['Belum diisi'].push(emp);
     });
 
-    return { maleCount: m, femaleCount: f, unspecifiedGenderCount: un };
+    return groups;
   }, [filteredEmployees]);
+  const maleCount = genderEmployees['Laki-laki'].length;
+  const femaleCount = genderEmployees.Perempuan.length;
 
   // Monthly Headcount Movement Trend (Last 6 Months)
   const monthlyTrend = useMemo(() => {
@@ -687,11 +720,10 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
   const probPct = totalHeadcount > 0 ? Math.round((statusProbation / totalHeadcount) * 100) : 0;
   const internPct = totalHeadcount > 0 ? Math.max(0, 100 - permPct - contPct - probPct) : 0;
 
-  const retentionRate = useMemo(() => {
-    if (totalHeadcount === 0) return '100.0';
-    const num = Number(String(turnoverRate || '0').replace(',', '.'));
-    return (100 - num).toFixed(1);
-  }, [totalHeadcount, turnoverRate]);
+  const largestAgeGroup = ageDistribution.filter(group => group.label !== 'Belum tercatat' && group.count > 0)
+    .sort((a, b) => b.count - a.count)[0];
+  const overFiveYearsPercentage = totalHeadcount > 0
+    ? (overFiveYearsEmployees.length / totalHeadcount * 100).toFixed(1).replace('.', ',') : '0';
 
   // Nexora UI: Top Companies for Deal-style List Card with Colorized Company Logos
   const topCompanies = useMemo(() => {
@@ -790,7 +822,10 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
   }, [companySummaryRows, totalHeadcount]);
 
   // Helper to open drilldown list with real data
-  const openDrilldown = (groupName: string, category: string, employeeList?: any[]) => {
+  const openDrilldown = (groupName: string, category: string, employeeList?: any[], options?: {
+    subtitle?: string;
+    dateField?: EmployeeDateField;
+  }) => {
     drilldownTriggerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     let list = employeeList;
     if (!list) {
@@ -805,8 +840,9 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
     setDrilldownModal({
       open: true,
       title: `${category}: ${groupName}`,
-      subtitle: `Daftar karyawan aktif (${list.length} orang) berdasarkan filter terpilih`,
+      subtitle: options?.subtitle ?? `Daftar karyawan aktif (${list.length} orang) berdasarkan filter terpilih`,
       employees: list,
+      dateField: options?.dateField,
     });
   };
 
@@ -824,41 +860,27 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
     });
   }, [drilldownModal.employees, drilldownSearch]);
 
-  // Helper to calculate auto-fit column widths in worksheet
-  const autoFitCols = (data: Record<string, any>[]) => {
-    if (!data || data.length === 0) return [];
-    const widths: { [key: string]: number } = {};
-    Object.keys(data[0]).forEach(key => {
-      widths[key] = Math.max(key.length, 10);
-    });
-    data.forEach(row => {
-      Object.keys(row).forEach(key => {
-        const val = row[key] !== null && row[key] !== undefined ? String(row[key]) : '';
-        widths[key] = Math.max(widths[key] || 10, Math.min(val.length + 3, 50));
-      });
-    });
-    return Object.values(widths).map(wch => ({ wch }));
-  };
-
   // Helper to map an employee to a full Excel row
   const mapEmployeeToMasterRow = (emp: any, index: number) => {
-    const branchLower = String(emp.branch || '').toLowerCase().trim();
+    const branchLower = String(emp.branch || emp.work_location || '').toLowerCase().trim();
     const isNonHq = branchLower.includes('non') || branchLower.includes('site') || branchLower.includes('cabang') || branchLower.includes('field') || branchLower.includes('proyek');
-    const placementType = isNonHq ? 'Non-HQ (Site / Lapangan)' : 'HQ (Headquarter)';
+    const placementType = !branchLower ? '-' : isNonHq ? 'Non-HQ (Site / Lapangan)' : branchLower === 'hq' || branchLower.includes('headquarter') ? 'HQ (Headquarter)' : emp.branch || emp.work_location;
 
     const age = calculateAge(emp.date_of_birth);
     const tenure = calculateTenureYears(emp.join_date);
 
     let contractRemainingDays: number | string = '-';
-    let contractStatusAlert = 'Aman / Tetap';
+    let contractStatusAlert = 'Tanggal kontrak belum tercatat';
     if (emp.contract_end_date) {
       const end = new Date(emp.contract_end_date);
       if (!isNaN(end.getTime())) {
         const todayDate = new Date();
         const diff = Math.ceil((end.getTime() - todayDate.getTime()) / (1000 * 60 * 60 * 24));
         contractRemainingDays = diff >= 0 ? diff : 0;
-        if (diff <= 30) {
-          contractStatusAlert = '⚠️ Perlu Perpanjangan (≤ 30 Hari)';
+        if (diff < 0) {
+          contractStatusAlert = 'Tanggal kontrak telah lewat';
+        } else if (diff <= 30) {
+          contractStatusAlert = 'Perlu evaluasi (≤30 hari)';
         } else if (diff <= 60) {
           contractStatusAlert = 'Mendekati Jatuh Tempo (≤ 60 Hari)';
         } else {
@@ -869,17 +891,21 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
 
     return {
       'No': index + 1,
-      'NIK / Employee ID': emp.employee_code || emp.nik || '-',
+      'ID Karyawan': String(emp.id),
+      'NIK / Employee ID': String(emp.employee_code || emp.nik || '-'),
       'Nama Lengkap': emp.full_name || emp.name || '-',
       'Perusahaan / Entitas': emp.company || emp.company_name || '-',
       'Departemen': emp.department || emp.department_name || '-',
       'Jabatan / Posisi': emp.job_title || emp.position || '-',
-      'Level / Golongan': emp.level || emp.grade || '-',
+      'Level / Golongan': emp.job_level || emp.level || emp.grade || '-',
+      'Grade / Class': emp.grade_class || '-',
       'Tipe Penempatan': placementType,
-      'Lokasi Kantor / Cabang': emp.branch || emp.work_location || 'Jakarta (HQ)',
-      'Status Kepegawaian': emp.contract_type || emp.employment_type || 'PKWTT',
+      'Lokasi Kantor / Cabang': emp.branch || emp.work_location || '-',
+      'Status Kepegawaian': emp.contract_type || emp.employment_type || '-',
       'Status Akun': emp.status || 'Active',
       'Tanggal Bergabung': emp.join_date || '-',
+      'Tanggal Keluar': emp.separation_date || '-',
+      'Alasan Keluar': emp.separation_reason || '-',
       'Masa Kerja (Tahun)': tenure !== null ? tenure : '-',
       'Nomor Kontrak / SK': emp.pkwt_number || emp.contract_number || '-',
       'Mulai Kontrak': emp.contract_start_date || '-',
@@ -897,20 +923,25 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
       'Pendidikan Terakhir': emp.last_education || '-',
       'Nama Institusi / Kampus': emp.institution_name || '-',
       'Jurusan': emp.major || '-',
+      'Alamat': emp.residential_address || emp.address || '-',
+      'Mode Jadwal': emp.work_schedule_type || 'default',
+      'ID Shift': emp.schedule_id != null ? String(emp.schedule_id) : '-',
+      'Nama Shift': attendanceContext.schedules.find(schedule => String(schedule.id) === String(emp.schedule_id))?.name || '-',
       'Bank Payroll': emp.bank_name || '-',
-      'Nomor Rekening': emp.bank_account_number || '-',
+      'Nomor Rekening': String(emp.bank_account_number || '-'),
       'Atas Nama Rekening': emp.bank_account_name || '-',
-      'NPWP': emp.npwp || '-',
+      'NPWP': String(emp.npwp || '-'),
       'BPJS Ketenagakerjaan': emp.bpjs_tk_number || '-',
       'BPJS Kesehatan': emp.bpjs_health_number || '-'
     };
   };
 
-  // 1. Ekspor Keseluruhan (Full Comprehensive Workbook - 4 Sheets)
+  // Every export uses the loaded snapshot, never the truncated on-screen lists.
   const handleExportFullExcel = () => {
     try {
+      if (loading || exporting) return;
+      if (attendanceContext.error) throw new Error('Ekspor lengkap dibatalkan: jadwal atau kalender belum berhasil dimuat. Muat ulang dashboard terlebih dahulu.');
       setExporting(true);
-      const wb = XLSX.utils.book_new();
 
       // Sheet 1: Ringkasan Eksekutif & KPI
       const kpiOverviewRows = [
@@ -923,35 +954,34 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
         { 'Kategori': 'KOMPOSISI SDM', 'Indikator': 'Karyawan Baru (Bulan Ini)', 'Nilai': `+${newHires} Orang`, 'Catatan / Detail': `Periode ${currentMonthStr}` },
         { 'Kategori': 'KOMPOSISI SDM', 'Indikator': 'Karyawan Keluar (Turnover)', 'Nilai': `${resignations} Orang (${turnoverRate}%)`, 'Catatan / Detail': 'Turnover bulan berjalan' },
         { 'Kategori': 'KOMPOSISI SDM', 'Indikator': 'Rata-Rata Usia', 'Nilai': `${avgAge} Tahun`, 'Catatan / Detail': ageRangeStr },
-        { 'Kategori': 'KOMPOSISI SDM', 'Indikator': 'Rata-Rata Masa Kerja', 'Nilai': `${avgTenure} Tahun`, 'Catatan / Detail': `${overFiveYearsEmployees.length} karyawan masa kerja > 5 tahun` },
+        { 'Kategori': 'KOMPOSISI SDM', 'Indikator': 'Rata-Rata Masa Kerja', 'Nilai': `${avgTenure} Tahun`, 'Catatan / Detail': `${overFiveYearsEmployees.length} karyawan masa kerja ≥5 tahun (${overFiveYearsPercentage}%)` },
         { 'Kategori': 'KOMPOSISI SDM', 'Indikator': 'Karyawan Tetap (PKWTT)', 'Nilai': `${statusPermanent} Orang`, 'Catatan / Detail': `${totalHeadcount > 0 ? ((statusPermanent / totalHeadcount) * 100).toFixed(1) : 0}% dari total` },
         { 'Kategori': 'KOMPOSISI SDM', 'Indikator': 'Karyawan Kontrak (PKWT)', 'Nilai': `${statusContract} Orang`, 'Catatan / Detail': `${totalHeadcount > 0 ? ((statusContract / totalHeadcount) * 100).toFixed(1) : 0}% dari total` },
         { 'Kategori': 'KOMPOSISI SDM', 'Indikator': 'Probation & Magang', 'Nilai': `${statusProbation + statusIntern} Orang`, 'Catatan / Detail': `Probation: ${statusProbation}, Magang: ${statusIntern}` },
         { 'Kategori': '', 'Indikator': '', 'Nilai': '', 'Catatan / Detail': '' },
 
-        { 'Kategori': 'PRESENSI & KEHADIRAN', 'Indikator': 'Tingkat Kehadiran', 'Nilai': `${attendanceRate}%`, 'Catatan / Detail': `Snapshot tanggal ${snapshotDate}` },
+        { 'Kategori': 'PRESENSI & KEHADIRAN', 'Indikator': 'Tingkat Kehadiran', 'Nilai': attendanceRate === '-' ? '-' : `${attendanceRate}%`, 'Catatan / Detail': `${checkedInCount} check-in / ${attendanceSnapshot.required} wajib hadir pada ${snapshotDate}; cuti dan hari libur dikecualikan` },
         { 'Kategori': 'PRESENSI & KEHADIRAN', 'Indikator': 'Hadir Tepat Waktu', 'Nilai': `${onTimeCount} Orang`, 'Catatan / Detail': 'Check-in sebelum batas toleransi' },
         { 'Kategori': 'PRESENSI & KEHADIRAN', 'Indikator': 'Terlambat Masuk', 'Nilai': `${lateCount} Orang`, 'Catatan / Detail': 'Check-in melewati jam shift kerja' },
         { 'Kategori': 'PRESENSI & KEHADIRAN', 'Indikator': 'Cuti / Izin / Sakit', 'Nilai': `${leaveCount} Orang`, 'Catatan / Detail': 'Pengajuan permohonan disetujui' },
-        { 'Kategori': 'PRESENSI & KEHADIRAN', 'Indikator': 'Belum / Lupa Check-In', 'Nilai': `${notCheckedInCount} Orang`, 'Catatan / Detail': 'Belum melakukan absensi' },
+        { 'Kategori': 'PRESENSI & KEHADIRAN', 'Indikator': 'Belum Check-In', 'Nilai': `${notCheckedInCount} Orang`, 'Catatan / Detail': 'Waktu masuk telah lewat, bukan penetapan mangkir' },
+        { 'Kategori': 'PRESENSI & KEHADIRAN', 'Indikator': 'Masih Dalam Waktu Masuk', 'Nilai': `${attendanceSnapshot.upcoming.length} Orang`, 'Catatan / Detail': 'Berdasarkan jam masuk shift atau batas fleksibel' },
+        { 'Kategori': 'PRESENSI & KEHADIRAN', 'Indikator': 'Tidak Dijadwalkan', 'Nilai': `${attendanceSnapshot.offDuty.length} Orang`, 'Catatan / Detail': 'Hari libur atau di luar masa kerja' },
+        { 'Kategori': 'PRESENSI & KEHADIRAN', 'Indikator': 'Jadwal Belum Lengkap', 'Nilai': `${attendanceSnapshot.unknown.length} Orang`, 'Catatan / Detail': 'Tidak diasumsikan belum check-in' },
+        { 'Kategori': 'KELENGKAPAN DATA', 'Indikator': 'Tanggal Lahir Valid', 'Nilai': `${agesWithData.length} dari ${totalHeadcount}`, 'Catatan / Detail': 'Dasar perhitungan rata-rata usia' },
+        { 'Kategori': 'KELENGKAPAN DATA', 'Indikator': 'Tanggal Masuk Tercatat', 'Nilai': `${tenuresWithData.length} dari ${totalHeadcount}`, 'Catatan / Detail': 'Dasar perhitungan rata-rata masa kerja' },
         { 'Kategori': '', 'Indikator': '', 'Nilai': '', 'Catatan / Detail': '' },
 
         { 'Kategori': 'KEPATUHAN & MONITORING', 'Indikator': 'Kontrak Berakhir ≤ 30 Hari', 'Nilai': `${expiringContracts.length} Orang`, 'Catatan / Detail': 'Mendesak: butuh evaluasi perpanjangan PKWT / SK' },
         { 'Kategori': 'KEPATUHAN & MONITORING', 'Indikator': 'Mendekati Pensiun (≥ 55 Thn)', 'Nilai': `${seniorEmployees.length} Orang`, 'Catatan / Detail': 'Perlu persiapan suksesi talenta' },
         { 'Kategori': 'KEPATUHAN & MONITORING', 'Indikator': 'Permohonan Pending Approval', 'Nilai': `${totalPendingRequestsCount} Pengajuan`, 'Catatan / Detail': 'Menunggu persetujuan atasan / HR' },
       ];
-      const sheet1 = XLSX.utils.json_to_sheet(kpiOverviewRows);
-      sheet1['!cols'] = autoFitCols(kpiOverviewRows);
-      XLSX.utils.book_append_sheet(wb, sheet1, '1. Ringkasan Eksekutif & KPI');
 
       // Sheet 2: Master Data Seluruh Karyawan
       const employeeRows = filteredEmployees.map(mapEmployeeToMasterRow);
-      const sheet2 = XLSX.utils.json_to_sheet(employeeRows);
-      sheet2['!cols'] = autoFitCols(employeeRows);
-      XLSX.utils.book_append_sheet(wb, sheet2, '2. Master Data Karyawan');
 
       // Sheet 3: Monitoring Kontrak PKWT
-      const contractRows = expiringContracts.length > 0 ? expiringContracts.map((emp, i) => {
+      const contractRows = expiringContracts.map((emp, i) => {
         let days = '-';
         if (emp.contract_end_date) {
           const end = new Date(emp.contract_end_date);
@@ -968,70 +998,99 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
           'Mulai Kontrak': emp.contract_start_date || '-',
           'Selesai Kontrak': emp.contract_end_date || '-',
           'Sisa Hari Menuju Jatuh Tempo': days,
-          'Status Evaluasi': '⚠️ JATUH TEMPO ≤ 30 HARI',
+          'Status Evaluasi': 'Jatuh tempo ≤30 hari',
           'Rekomendasi Tindakan HR': 'Perpanjangan PKWT / Evaluasi Pengangkatan PKWTT / Persiapan Surat Pengakhiran',
           'Email Karyawan': emp.email || '-',
           'No. Telp / WA': emp.phone_number || emp.phone || '-'
         };
-      }) : [
-        {
-          'No': 1,
-          'NIK': '-',
-          'Nama Lengkap': 'Tidak ada kontrak PKWT yang jatuh tempo dalam 30 hari ke depan',
-          'Perusahaan': '-',
-          'Departemen': '-',
-          'Jabatan': '-',
-          'Nomor Kontrak / SK': '-',
-          'Mulai Kontrak': '-',
-          'Selesai Kontrak': '-',
-          'Sisa Hari Menuju Jatuh Tempo': '-',
-          'Status Evaluasi': 'Aman',
-          'Rekomendasi Tindakan HR': 'Semua kontrak dalam kondisi aktif dan aman',
-          'Email Karyawan': '-',
-          'No. Telp / WA': '-'
-        }
-      ];
-      const sheet3 = XLSX.utils.json_to_sheet(contractRows);
-      sheet3['!cols'] = autoFitCols(contractRows);
-      XLSX.utils.book_append_sheet(wb, sheet3, '3. Evaluasi Kontrak PKWT');
+      });
 
       // Sheet 4: Rekap Presensi & Kehadiran Hari Ini
-      const attendanceRows = todayAttendance.length > 0 ? todayAttendance.map((rec, i) => {
-        const emp = accounts.find(a => String(a.id) === String(rec.user_id));
+      const presenceLabels = new Map<string, string>();
+      for (const [label, list] of [
+        ['Tepat waktu', attendanceSnapshot.onTime], ['Terlambat', attendanceSnapshot.late],
+        ['Cuti / izin / sakit', attendanceSnapshot.leave], ['Belum check-in', attendanceSnapshot.pending],
+        ['Masih dalam waktu masuk', attendanceSnapshot.upcoming], ['Tidak dijadwalkan', attendanceSnapshot.offDuty],
+        ['Jadwal belum lengkap', attendanceSnapshot.unknown],
+      ] as [string, any[]][]) list.forEach(employee => presenceLabels.set(String(employee.id), label));
+      const formatExportTime = (value: string | null | undefined) => value ? new Date(value).toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' }) : '-';
+      const attendanceRows = filteredEmployees.map((emp, i) => {
+        const rec = todayAttendance.find(record => String(record.user_id) === String(emp.id));
         return {
           'No': i + 1,
-          'Tanggal': rec.date,
-          'NIK': emp?.employee_code || emp?.nik || '-',
-          'Nama Karyawan': emp?.full_name || emp?.name || rec.user_name || '-',
-          'Perusahaan': emp?.company || emp?.company_name || '-',
-          'Departemen': emp?.department || emp?.department_name || '-',
-          'Status Kehadiran': rec.status === 'present' ? 'Hadir Tepat Waktu' : rec.status === 'late' ? 'Terlambat' : rec.status === 'leave' ? 'Cuti / Izin' : rec.status,
-          'Jam Masuk (Clock In)': rec.clock_in ? new Date(rec.clock_in).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-',
-          'Jam Pulang (Clock Out)': rec.clock_out ? new Date(rec.clock_out).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-',
-          'Durasi Kerja (Menit)': rec.total_work_minutes || '-',
-          'Verifikasi Geofence': rec.geofence_verified ? 'Terverifikasi GPS' : 'Manual / Bypass'
+          'ID Karyawan': String(emp.id), 'Tanggal': snapshotDate,
+          'NIK': String(emp.employee_code || emp.nik || '-'),
+          'Nama Karyawan': emp.full_name || emp.name || '-',
+          'Perusahaan': emp.company || emp.company_name || '-',
+          'Departemen': emp.department || emp.department_name || '-',
+          'Status Kehadiran': presenceLabels.get(String(emp.id)) || 'Belum terklasifikasi',
+          'Jam Masuk (Clock In)': formatExportTime(rec?.clock_in),
+          'Jam Pulang (Clock Out)': formatExportTime(rec?.clock_out),
+          'Durasi Kerja (Menit)': rec?.total_work_minutes ?? '-',
+          'Verifikasi Geofence': rec?.geofence_verified == null ? 'Belum tercatat' : rec.geofence_verified ? 'Terverifikasi GPS' : 'Tidak terverifikasi',
         };
-      }) : [
-        {
-          'No': 1,
-          'Tanggal': snapshotDate,
-          'NIK': '-',
-          'Nama Karyawan': 'Belum ada catatan presensi untuk tanggal ini',
-          'Perusahaan': '-',
-          'Departemen': '-',
-          'Status Kehadiran': '-',
-          'Jam Masuk (Clock In)': '-',
-          'Jam Pulang (Clock Out)': '-',
-          'Durasi Kerja (Menit)': '-',
-          'Verifikasi Geofence': '-'
-        }
+      });
+      const demographicGroups = [
+        { category: 'Usia', groups: ageDistribution },
+        { category: 'Pendidikan', groups: educationDistribution },
+        { category: 'Masa kerja', groups: tenureDistribution },
+        { category: 'Departemen', groups: departmentDistribution },
+        { category: 'Status kepegawaian', groups: Object.entries(statusEmployees).map(([label, employees]) => ({ label, employees, count: employees.length })) },
+        { category: 'Gender', groups: Object.entries(genderEmployees).map(([label, employees]) => ({ label, employees, count: employees.length })) },
       ];
-      const sheet4 = XLSX.utils.json_to_sheet(attendanceRows);
-      sheet4['!cols'] = autoFitCols(attendanceRows);
-      XLSX.utils.book_append_sheet(wb, sheet4, '4. Rekap Presensi Harian');
+      const groupRows = demographicGroups.flatMap(({ category, groups }) => groups.map(group => ({
+        'Kategori': category, 'Kelompok': group.label, 'Jumlah Karyawan': group.count,
+        'Persentase (%)': totalHeadcount > 0 ? Number((group.count / totalHeadcount * 100).toFixed(1)) : 0,
+      })));
+      const groupMembers = demographicGroups.flatMap(({ category, groups }) => groups.flatMap(group => group.employees.map(employee => ({
+        'Kategori': category, 'Kelompok': group.label, 'ID Karyawan': String(employee.id),
+        'NIK': String(employee.employee_code || employee.nik || '-'), 'Nama Karyawan': employee.full_name || employee.name || '-',
+        'Perusahaan': employee.company || employee.company_name || '-', 'Departemen': employee.department || employee.department_name || '-',
+      }))));
+      const accountMap = new Map(accounts.map(employee => [String(employee.id), employee]));
+      const periodLogs = records.filter(record => record.date >= `${currentMonthStr}-01` && record.date <= snapshotDate &&
+        ((selectedCompany === 'all' && selectedDepartment === 'all') || scopedEmployeeIds.has(String(record.user_id)))).map(record => {
+        const employee = accountMap.get(String(record.user_id));
+        return {
+          'ID Log': String(record.id), 'ID Karyawan': String(record.user_id), 'Tanggal': record.date,
+          'NIK': String(employee?.employee_code || employee?.nik || '-'), 'Nama Karyawan': employee?.full_name || employee?.name || '-',
+          'Perusahaan': employee?.company || employee?.company_name || '-', 'Departemen': employee?.department || employee?.department_name || '-',
+          'Status': record.status, 'Jam Masuk (WIB)': formatExportTime(record.clock_in), 'Jam Pulang (WIB)': formatExportTime(record.clock_out),
+          'Durasi Kerja (Menit)': record.total_work_minutes ?? 0, 'Lembur (Menit)': record.total_overtime_minutes ?? 0,
+          'Lokasi Masuk': record.clock_in_office_name || '-', 'Lokasi Pulang': record.clock_out_office_name || '-',
+          'Catatan': record.notes || '-',
+        };
+      });
+      const requestRows = scopedRequests.map(request => {
+        const employee = accountMap.get(String(request.user_id));
+        return {
+          'ID Pengajuan': String(request.id), 'Jenis': request.type, 'ID Karyawan': String(request.user_id),
+          'NIK': String(employee?.employee_code || employee?.nik || '-'), 'Nama Karyawan': employee?.full_name || employee?.name || '-',
+          'Perusahaan': employee?.company || employee?.company_name || '-', 'Departemen': employee?.department || employee?.department_name || '-',
+          'Status': resolveApprovalStatus(request), 'Tahap Approval': request.current_approval_level ?? '-',
+          'Tanggal Pengajuan': request.created_at || '-', 'Tanggal Mulai': request.start_date || request.date || '-', 'Tanggal Selesai': request.end_date || '-',
+          'Tipe Cuti': request.leave_type || '-', 'Nominal': request.amount ?? '-', 'Durasi (Jam)': request.duration_hours ?? '-',
+          'Keterangan': request.reason || request.notes || request.description || '-',
+        };
+      });
+      const masterHeaders = Object.keys(mapEmployeeToMasterRow({}, 0));
+      const wb = dashboardWorkbook({ snapshotDate, company: selectedCompany, department: selectedDepartment, sections: [
+        { name: '1. Ringkasan Eksekutif & KPI', rows: kpiOverviewRows, headers: ['Kategori', 'Indikator', 'Nilai', 'Catatan / Detail'], scope: 'Seluruh indikator dashboard sesuai filter. Usia dan masa kerja dihitung saat data dimuat; status karyawan adalah status akun saat ini.' },
+        { name: '2. Master Data Karyawan', rows: employeeRows, headers: masterHeaders, scope: 'Seluruh karyawan aktif sesuai filter, tanpa batas daftar tampilan.' },
+        { name: '3. Evaluasi Kontrak PKWT', rows: contractRows, headers: ['No', 'NIK', 'Nama Lengkap', 'Perusahaan', 'Departemen', 'Selesai Kontrak'], scope: 'Seluruh kontrak karyawan aktif yang berakhir dalam 30 hari dari hari ini.' },
+        { name: '4. Rekap Presensi Harian', rows: attendanceRows, headers: ['ID Karyawan', 'Tanggal', 'NIK', 'Nama Karyawan', 'Status Kehadiran'], scope: 'Satu baris per karyawan aktif, termasuk yang belum memiliki log presensi.' },
+        { name: '5. Log Presensi Bulan', rows: periodLogs, headers: ['ID Log', 'ID Karyawan', 'Tanggal', 'NIK', 'Nama Karyawan', 'Status'], scope: `${currentMonthStr}-01 sampai ${snapshotDate}, termasuk log milik karyawan nonaktif yang sesuai filter.` },
+        { name: '6. Distribusi Demografi', rows: groupRows, headers: ['Kategori', 'Kelompok', 'Jumlah Karyawan', 'Persentase (%)'], scope: 'Usia, pendidikan, masa kerja, departemen, status kepegawaian, dan gender.' },
+        { name: '7. Anggota Kelompok', rows: groupMembers, headers: ['Kategori', 'Kelompok', 'ID Karyawan', 'NIK', 'Nama Karyawan', 'Perusahaan', 'Departemen'], scope: 'Seluruh anggota tiap kelompok; satu karyawan muncul sekali per kategori.' },
+        { name: '8. Ringkasan Perusahaan', rows: companySummaryRows.map(company => ({ 'Perusahaan': company.company, 'Karyawan Aktif': company.employees, 'Persentase (%)': totalHeadcount > 0 ? Number((company.employees / totalHeadcount * 100).toFixed(1)) : 0, 'Rata-rata Usia': company.avgAge, 'Rata-rata Masa Kerja': company.tenure, 'Tetap - Kontrak - Probation': company.breakdown, 'Kontrak Berakhir ≤30 Hari': company.rawExpiring })), headers: ['Perusahaan', 'Karyawan Aktif', 'Persentase (%)'], scope: 'Seluruh perusahaan pada ringkasan dashboard, bukan hanya 5 teratas.' },
+        { name: '9. Karyawan Masuk', rows: newHiresList.map(mapEmployeeToMasterRow), headers: masterHeaders, scope: `Tanggal bergabung pada ${currentMonthLabel}, termasuk yang kini nonaktif.` },
+        { name: '10. Karyawan Keluar', rows: resignationsList.map(mapEmployeeToMasterRow), headers: masterHeaders, scope: `Tanggal keluar pada ${currentMonthLabel}, dasar perhitungan turnover.` },
+        { name: '11. Pengajuan', rows: requestRows, headers: ['ID Pengajuan', 'Jenis', 'ID Karyawan', 'NIK', 'Nama Karyawan', 'Status'], scope: 'Seluruh periode pengajuan cuti, lembur, reimbursement, dan koreksi yang dimuat dashboard, sesuai filter.' },
+        { name: '12. Karyawan Nonaktif', rows: scopedEmployees.filter(employee => !filteredEmployeeIds.has(String(employee.id))).map(mapEmployeeToMasterRow), headers: masterHeaders, scope: 'Akun nonaktif dalam filter perusahaan/departemen; dipisahkan agar tidak tercampur dengan jumlah karyawan aktif.' },
+      ] });
 
       XLSX.writeFile(wb, `GESIT-HCM-Laporan-Keseluruhan-${snapshotDate}.xlsx`);
-      toast.success('Laporan Keseluruhan Excel (.xlsx) berhasil diunduh!');
+      toast.success(`Laporan lengkap ${wb.SheetNames.length} sheet berhasil diunduh, termasuk ${employeeRows.length} karyawan aktif.`);
     } catch (err: any) {
       console.error('Export Excel error:', err);
       toast.error('Gagal mengunduh file Excel: ' + (err?.message || 'Error'));
@@ -1043,12 +1102,13 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
   // 2. Ekspor Khusus Master Data Karyawan
   const handleExportEmployeeMasterExcel = () => {
     try {
+      if (loading || exporting) return;
+      if (attendanceContext.error) throw new Error('Data jadwal belum lengkap. Muat ulang sebelum ekspor.');
       setExporting(true);
-      const wb = XLSX.utils.book_new();
       const rows = filteredEmployees.map(mapEmployeeToMasterRow);
-      const sheet = XLSX.utils.json_to_sheet(rows);
-      sheet['!cols'] = autoFitCols(rows);
-      XLSX.utils.book_append_sheet(wb, sheet, 'Master Data Karyawan');
+      const wb = dashboardWorkbook({ snapshotDate, company: selectedCompany, department: selectedDepartment, sections: [{
+        name: 'Master Data Karyawan', rows, headers: Object.keys(mapEmployeeToMasterRow({}, 0)), scope: 'Seluruh karyawan aktif sesuai filter dashboard.',
+      }] });
       XLSX.writeFile(wb, `GESIT-HCM-Master-Data-Karyawan-${snapshotDate}.xlsx`);
       toast.success(`Master Data ${rows.length} Karyawan Excel (.xlsx) berhasil diunduh!`);
     } catch (err: any) {
@@ -1061,8 +1121,8 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
   // 3. Ekspor Khusus Kontrak PKWT
   const handleExportContractsExcel = () => {
     try {
+      if (loading || exporting) return;
       setExporting(true);
-      const wb = XLSX.utils.book_new();
       const rows = expiringContracts.map((emp, i) => {
         let days = '-';
         if (emp.contract_end_date) {
@@ -1071,7 +1131,7 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
         }
         return {
           'No': i + 1,
-          'NIK': emp.employee_code || emp.nik || '-',
+          'NIK': String(emp.employee_code || emp.nik || '-'),
           'Nama Lengkap': emp.full_name || emp.name || '-',
           'Perusahaan': emp.company || emp.company_name || '-',
           'Departemen': emp.department || emp.department_name || '-',
@@ -1080,13 +1140,13 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
           'Mulai Kontrak': emp.contract_start_date || '-',
           'Selesai Kontrak': emp.contract_end_date || '-',
           'Sisa Hari': days,
-          'Status Evaluasi': '⚠️ JATUH TEMPO ≤ 30 HARI',
+          'Status Evaluasi': 'Jatuh tempo ≤30 hari',
           'Rekomendasi Tindakan HR': 'Perpanjangan PKWT / Pengangkatan PKWTT / Surat Pengakhiran'
         };
       });
-      const sheet = XLSX.utils.json_to_sheet(rows.length > 0 ? rows : [{ Keterangan: 'Tidak ada kontrak yang jatuh tempo' }]);
-      sheet['!cols'] = autoFitCols(rows.length > 0 ? rows : [{ Keterangan: 'Tidak ada kontrak yang jatuh tempo' }]);
-      XLSX.utils.book_append_sheet(wb, sheet, 'Jatuh Tempo Kontrak');
+      const wb = dashboardWorkbook({ snapshotDate, company: selectedCompany, department: selectedDepartment, sections: [{
+        name: 'Jatuh Tempo Kontrak', rows, headers: ['No', 'NIK', 'Nama Lengkap', 'Perusahaan', 'Departemen', 'Jabatan', 'Nomor Kontrak / SK', 'Mulai Kontrak', 'Selesai Kontrak', 'Sisa Hari', 'Status Evaluasi', 'Rekomendasi Tindakan HR'], scope: 'Seluruh kontrak karyawan aktif yang berakhir dalam 30 hari dari hari ini, sesuai filter.',
+      }] });
       XLSX.writeFile(wb, `GESIT-HCM-Jatuh-Tempo-Kontrak-${snapshotDate}.xlsx`);
       toast.success('Data Monitoring Jatuh Tempo Kontrak Excel (.xlsx) berhasil diunduh!');
     } catch (err: any) {
@@ -1119,6 +1179,13 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
       return 'Monday, 19 October 2026';
     }
   }, []);
+
+  if (loadError) return (
+    <section role="alert" className="rounded-2xl border border-slate-200 bg-white p-6 text-slate-800 dark:border-slate-800 dark:bg-[#131316] dark:text-slate-200">
+      <p>{loadError}</p>
+      <Button className="mt-4" onClick={loadData}>Muat ulang dashboard</Button>
+    </section>
+  );
 
   return (
     <div className="w-full space-y-6 font-sans text-slate-800 dark:text-slate-100 transition-colors duration-200">
@@ -1175,7 +1242,7 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
                     </div>
                     <div className="flex flex-col">
                       <span className="font-semibold text-slate-900 dark:text-white">Laporan Keseluruhan (Full)</span>
-                      <span className="text-[10px] text-slate-500 dark:text-zinc-400">4 Sheet: KPI, Seluruh Karyawan, Kontrak & Presensi</span>
+                      <span className="text-[10px] text-slate-500 dark:text-zinc-400">13 sheet lengkap sesuai filter, termasuk demografi & pengajuan</span>
                     </div>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator className="my-1" />
@@ -1188,7 +1255,7 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
                     </div>
                     <div className="flex flex-col">
                       <span className="font-semibold text-slate-900 dark:text-white">Master Data Karyawan</span>
-                      <span className="text-[10px] text-slate-500 dark:text-zinc-400">{totalHeadcount} Karyawan dengan data lengkap & bank</span>
+                      <span className="text-[10px] text-slate-500 dark:text-zinc-400">{totalHeadcount} karyawan aktif sesuai filter, termasuk data bank</span>
                     </div>
                   </DropdownMenuItem>
                   <DropdownMenuItem
@@ -1379,95 +1446,99 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
 
       {/* ── 4 MAIN TOP KPI CARDS ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Card 1: Karyawan Aktif */}
-        <div className="bg-white dark:bg-[#131316] border border-slate-200/80 dark:border-[#222225] rounded-2xl p-5 shadow-xs hover:border-slate-300 dark:hover:border-slate-700 transition-all flex flex-col justify-between">
-          <div className="flex items-start justify-between">
-            <div>
-              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Karyawan aktif</span>
-              <div className="flex items-baseline gap-1.5 mt-2">
-                <span className="text-3xl sm:text-4xl font-black text-slate-900 dark:text-white tracking-tight">
-                  {totalHeadcount}
+        {([
+          {
+            title: 'Karyawan aktif',
+            value: totalHeadcount,
+            unit: 'orang',
+            employees: filteredEmployees,
+            description: `${newHires} masuk · ${resignations} keluar pada ${currentMonthLabel}`,
+            detail: `Perubahan bersih: ${netHeadcountChange > 0 ? '+' : ''}${netHeadcountChange} orang`,
+            subtitle: `Daftar karyawan aktif (${totalHeadcount} orang) berdasarkan filter terpilih`,
+            icon: Users,
+            iconClass: 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border-blue-100/50 dark:border-blue-900/40',
+          },
+          {
+            title: 'Rata-rata usia',
+            value: avgAge,
+            unit: 'tahun',
+            employees: agesWithData.map(({ emp }) => emp),
+            description: largestAgeGroup ? `Kelompok terbanyak: ${largestAgeGroup.label} (${largestAgeGroup.count} orang)` : 'Data usia belum tersedia',
+            detail: `${agesWithData.length} dari ${totalHeadcount} tanggal lahir valid · ${totalHeadcount - agesWithData.length} belum lengkap`,
+            subtitle: `Rata-rata ${avgAge} tahun dari ${agesWithData.length} karyawan aktif dengan tanggal lahir tercatat, berdasarkan filter terpilih`,
+            dateField: 'date_of_birth',
+            icon: Users,
+            iconClass: 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border-blue-100/50 dark:border-blue-900/40',
+          },
+          {
+            title: 'Rata-rata masa kerja',
+            value: avgTenure,
+            unit: 'tahun',
+            employees: tenuresWithData.map(({ emp }) => emp),
+            description: `${overFiveYearsEmployees.length} orang (${overFiveYearsPercentage}%) bekerja ≥5 tahun`,
+            detail: `${tenuresWithData.length} dari ${totalHeadcount} tanggal masuk tercatat`,
+            subtitle: `Rata-rata ${avgTenure} tahun dari ${tenuresWithData.length} karyawan aktif dengan tanggal masuk tercatat, berdasarkan filter terpilih`,
+            dateField: 'join_date',
+            icon: Calendar,
+            iconClass: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border-amber-100/50 dark:border-amber-900/40',
+          },
+          {
+            title: 'Turnover bulan berjalan',
+            value: turnoverRate,
+            unit: '%',
+            employees: resignationsList,
+            description: `${resignations} keluar / ${totalHeadcount} karyawan aktif · ${currentMonthLabel}`,
+            detail: `${previousMonthExits} karyawan keluar pada bulan sebelumnya`,
+            subtitle: `Karyawan keluar pada ${currentMonthLabel} (${resignations} orang). Turnover ${turnoverRate}% = karyawan keluar / (karyawan aktif + karyawan keluar) × 100, berdasarkan filter terpilih`,
+            dateField: 'separation_date',
+            icon: TrendingUp,
+            iconClass: 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border-blue-100/50 dark:border-blue-900/40',
+          },
+        ] satisfies {
+          title: string;
+          value: number | string;
+          unit: string;
+          employees: any[];
+          description: string;
+          detail: string;
+          subtitle: string;
+          dateField?: EmployeeDateField;
+          icon: typeof Users;
+          iconClass: string;
+        }[]).map(card => (
+          <button
+            key={card.title}
+            type="button"
+            aria-label={`Lihat ${card.title.toLowerCase()}: ${card.employees.length} orang`}
+            aria-haspopup="dialog"
+            disabled={loading}
+            onClick={() => openDrilldown(card.title, 'Ringkasan SDM', card.employees, {
+              subtitle: card.subtitle,
+              dateField: card.dateField,
+            })}
+            className="min-w-0 bg-white dark:bg-[#131316] border border-slate-200/80 dark:border-[#222225] rounded-2xl p-5 shadow-xs hover:border-slate-300 dark:hover:border-slate-700 hover:bg-slate-50 dark:hover:bg-[#18181b] transition-colors flex flex-col justify-between text-left cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 dark:focus-visible:outline-blue-400"
+          >
+            <span className="flex items-start justify-between gap-3 w-full">
+              <span className="min-w-0">
+                <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">{card.title}</span>
+                <span className="flex items-baseline gap-1.5 mt-2">
+                  <span className="text-3xl sm:text-4xl font-black text-slate-900 dark:text-white tracking-tight tabular-nums">
+                    {loading ? '...' : card.value}
+                  </span>
+                  <span className="text-xs font-medium text-slate-600 dark:text-slate-400">{card.unit}</span>
                 </span>
-                <span className="text-xs font-medium text-slate-500">orang</span>
-              </div>
-            </div>
-            <div className="p-2.5 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border border-blue-100/50 dark:border-blue-900/40">
-              <Users className="h-5 w-5" />
-            </div>
-          </div>
-          <div className="mt-4 flex items-center gap-2 text-xs">
-            <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 border border-emerald-200/50 dark:border-emerald-800/40 font-bold text-[11px]">
-              +{newHires} masuk
+              </span>
+              <span className={`shrink-0 p-2.5 rounded-xl border ${card.iconClass}`}>
+                <card.icon className="h-5 w-5" aria-hidden="true" />
+              </span>
             </span>
-            <span className="text-slate-300 dark:text-slate-700">·</span>
-            <span className="text-slate-500 dark:text-slate-400 text-[11px]">
-              {resignations} keluar bulan ini
+            <span className="mt-4 space-y-1 text-[11px] text-slate-600 dark:text-slate-400">
+              <span className="block">{loading ? 'Memuat data...' : card.description}</span>
+              <span className="block">{loading ? 'Mohon tunggu' : card.detail}</span>
             </span>
-          </div>
-        </div>
-
-        {/* Card 2: Rata-rata Usia */}
-        <div className="bg-white dark:bg-[#131316] border border-slate-200/80 dark:border-[#222225] rounded-2xl p-5 shadow-xs hover:border-slate-300 dark:hover:border-slate-700 transition-all flex flex-col justify-between">
-          <div className="flex items-start justify-between">
-            <div>
-              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Rata-rata usia</span>
-              <div className="flex items-baseline gap-1.5 mt-2">
-                <span className="text-3xl sm:text-4xl font-black text-slate-900 dark:text-white tracking-tight">
-                  {avgAge}
-                </span>
-                <span className="text-xs font-medium text-slate-500">tahun</span>
-              </div>
-            </div>
-            <div className="p-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border border-indigo-100/50 dark:border-indigo-900/40">
-              <Users className="h-5 w-5" />
-            </div>
-          </div>
-          <div className="mt-4 text-[11px] text-slate-500 dark:text-slate-400">
-            {ageRangeStr}
-          </div>
-        </div>
-
-        {/* Card 3: Rata-rata Masa Kerja */}
-        <div className="bg-white dark:bg-[#131316] border border-slate-200/80 dark:border-[#222225] rounded-2xl p-5 shadow-xs hover:border-slate-300 dark:hover:border-slate-700 transition-all flex flex-col justify-between">
-          <div className="flex items-start justify-between">
-            <div>
-              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Rata-rata masa kerja</span>
-              <div className="flex items-baseline gap-1.5 mt-2">
-                <span className="text-3xl sm:text-4xl font-black text-slate-900 dark:text-white tracking-tight">
-                  {avgTenure}
-                </span>
-                <span className="text-xs font-medium text-slate-500">tahun</span>
-              </div>
-            </div>
-            <div className="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border border-amber-100/50 dark:border-amber-900/40">
-              <Calendar className="h-5 w-5" />
-            </div>
-          </div>
-          <div className="mt-4 text-[11px] text-slate-500 dark:text-slate-400">
-            {overFiveYearsEmployees.length} karyawan bekerja &gt;5 tahun
-          </div>
-        </div>
-
-        {/* Card 4: Turnover Bulan Berjalan */}
-        <div className="bg-white dark:bg-[#131316] border border-slate-200/80 dark:border-[#222225] rounded-2xl p-5 shadow-xs hover:border-slate-300 dark:hover:border-slate-700 transition-all flex flex-col justify-between">
-          <div className="flex items-start justify-between">
-            <div>
-              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Turnover bulan berjalan</span>
-              <div className="flex items-baseline gap-1.5 mt-2">
-                <span className="text-3xl sm:text-4xl font-black text-slate-900 dark:text-white tracking-tight">
-                  {turnoverRate}
-                </span>
-                <span className="text-xs font-medium text-slate-500">%</span>
-              </div>
-            </div>
-            <div className="p-2.5 rounded-xl bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400 border border-sky-100/50 dark:border-sky-900/40">
-              <BarChart2 className="h-5 w-5" />
-            </div>
-          </div>
-          <div className="mt-4 text-[11px] text-slate-500 dark:text-slate-400">
-            {resignations} keluar / {totalHeadcount} karyawan aktif
-          </div>
-        </div>
+            <span className="mt-3 text-xs font-semibold text-blue-700 dark:text-blue-400">Lihat rincian</span>
+          </button>
+        ))}
       </div>
 
       {/* ── NEXORA ADAPTED ROW: WORKFORCE HEALTH & TOP ENTITAS PERUSAHAAN ── */}
@@ -1481,7 +1552,7 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
                 <Activity className="size-4.5" />
               </div>
               <h3 className="text-base font-bold text-slate-900 dark:text-white tracking-tight">
-                Kesehatan & Komposisi SDM
+                Komposisi & Kehadiran Karyawan
               </h3>
             </div>
 
@@ -1491,8 +1562,8 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
                 <span className="font-bold text-slate-900 dark:text-white">
                   Distribusi Status Kepegawaian
                 </span>
-                <span className="text-slate-400 dark:text-zinc-500 font-medium">
-                  100% dari {totalHeadcount} karyawan aktif
+                <span className="text-slate-500 dark:text-zinc-400 font-medium">
+                  {totalHeadcount} karyawan aktif
                 </span>
               </div>
 
@@ -1549,120 +1620,50 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
               </div>
             </div>
 
-            {/* Section 2: Presensi & Disiplin Hari Ini */}
-            <div className="mt-5 pt-4 border-t border-slate-100 dark:border-zinc-800/60">
-              <div className="flex items-center justify-between text-xs mb-2.5">
-                <span className="font-bold text-slate-900 dark:text-white">
-                  Monitoring Presensi Hari Ini
-                </span>
-                <span className="text-slate-400 dark:text-zinc-500 font-medium">
-                  {checkedInCount} check-in dari {totalHeadcount} karyawan
-                </span>
+            <section aria-label="Presensi berdasarkan jadwal" className="mt-5 pt-4 border-t border-slate-100 dark:border-zinc-800/60">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                <h4 className="font-bold text-slate-900 dark:text-white">Presensi {snapshotDate === today ? 'hari ini' : snapshotDate}</h4>
+                <span className="text-slate-600 dark:text-slate-400">{loading ? 'Memuat jadwal...' : attendanceContext.error ? 'Data jadwal belum tersedia' : `${checkedInCount} check-in / ${attendanceSnapshot.required} wajib hadir`}</span>
               </div>
-
-              {/* Attendance Segmented Bar */}
-              <div className="w-full h-2.5 bg-slate-100 dark:bg-zinc-800 rounded-full overflow-hidden flex gap-0.5 p-0.5">
-                <div
-                  style={{ width: `${totalHeadcount > 0 ? (onTimeCount / totalHeadcount) * 100 : 0}%` }}
-                  className="h-full bg-emerald-500 rounded-l-full transition-all duration-700 ease-out"
-                  title={`Tepat Waktu: ${onTimeCount}`}
-                />
-                <div
-                  style={{ width: `${totalHeadcount > 0 ? (lateCount / totalHeadcount) * 100 : 0}%` }}
-                  className="h-full bg-amber-500 transition-all duration-700 ease-out"
-                  title={`Terlambat: ${lateCount}`}
-                />
-                <div
-                  style={{ width: `${totalHeadcount > 0 ? (leaveCount / totalHeadcount) * 100 : 0}%` }}
-                  className="h-full bg-blue-500 transition-all duration-700 ease-out"
-                  title={`Cuti / Izin: ${leaveCount}`}
-                />
-                <div
-                  style={{ width: `${totalHeadcount > 0 ? (notCheckedInCount / totalHeadcount) * 100 : 0}%` }}
-                  className="h-full bg-slate-300 dark:bg-zinc-700 rounded-r-full transition-all duration-700 ease-out"
-                  title={`Belum Absen: ${notCheckedInCount}`}
-                />
-              </div>
-
-              {/* Attendance Legend */}
-              <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mt-3 text-xs">
-                <div className="flex items-center gap-1.5">
-                  <span className="size-2 rounded-full bg-emerald-500 shrink-0" />
-                  <span className="text-slate-600 dark:text-zinc-400 font-medium">
-                    Tepat Waktu <strong className="text-slate-900 dark:text-white font-bold">{onTimeCount}</strong>
-                  </span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="size-2 rounded-full bg-amber-500 shrink-0" />
-                  <span className="text-slate-600 dark:text-zinc-400 font-medium">
-                    Terlambat <strong className="text-slate-900 dark:text-white font-bold">{lateCount}</strong>
-                  </span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="size-2 rounded-full bg-blue-500 shrink-0" />
-                  <span className="text-slate-600 dark:text-zinc-400 font-medium">
-                    Cuti / Izin <strong className="text-slate-900 dark:text-white font-bold">{leaveCount}</strong>
-                  </span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="size-2 rounded-full bg-slate-400 dark:bg-zinc-500 shrink-0" />
-                  <span className="text-slate-600 dark:text-zinc-400 font-medium">
-                    Belum Absen <strong className="text-slate-900 dark:text-white font-bold">{notCheckedInCount}</strong>
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* 4 Bottom Sub-Cards matching Screenshot 2 */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5 pt-4 border-t border-slate-100 dark:border-zinc-800/80">
-              <div className="rounded-xl border border-slate-200/70 dark:border-zinc-800/80 bg-slate-50/50 dark:bg-zinc-900/40 p-3.5 flex flex-col justify-between">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-semibold text-slate-500 dark:text-zinc-400">
-                    Karyawan Tetap
-                  </span>
-                  <Users className="size-3.5 text-slate-400 dark:text-zinc-500" />
-                </div>
-                <div className="text-xl font-bold text-slate-900 dark:text-white tracking-tight mt-2">
-                  {statusPermanent} <span className="text-xs font-normal text-slate-400 dark:text-zinc-500">Orang</span>
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-slate-200/70 dark:border-zinc-800/80 bg-slate-50/50 dark:bg-zinc-900/40 p-3.5 flex flex-col justify-between">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-semibold text-slate-500 dark:text-zinc-400">
-                    Kehadiran
-                  </span>
-                  <Target className="size-3.5 text-slate-400 dark:text-zinc-500" />
-                </div>
-                <div className="text-xl font-bold text-slate-900 dark:text-white tracking-tight mt-2">
-                  {attendanceRate}%
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-slate-200/70 dark:border-zinc-800/80 bg-slate-50/50 dark:bg-zinc-900/40 p-3.5 flex flex-col justify-between">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-semibold text-slate-500 dark:text-zinc-400">
-                    Masa Kerja
-                  </span>
-                  <TrendingUp className="size-3.5 text-slate-400 dark:text-zinc-500" />
-                </div>
-                <div className="text-xl font-bold text-slate-900 dark:text-white tracking-tight mt-2">
-                  {avgTenure} <span className="text-xs font-normal text-slate-400 dark:text-zinc-500">Thn</span>
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-slate-200/70 dark:border-zinc-800/80 bg-slate-50/50 dark:bg-zinc-900/40 p-3.5 flex flex-col justify-between">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-semibold text-slate-500 dark:text-zinc-400">
-                    Retensi SDM
-                  </span>
-                  <ShieldCheck className="size-3.5 text-slate-400 dark:text-zinc-500" />
-                </div>
-                <div className="text-xl font-bold text-slate-900 dark:text-white tracking-tight mt-2">
-                  {retentionRate}%
-                </div>
-              </div>
-            </div>
+              {attendanceContext.error ? (
+                <p role="alert" className="mt-4 text-sm text-amber-800 dark:text-amber-300">{attendanceContext.error}</p>
+              ) : (
+                <>
+                  <div className="mt-4 flex h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-zinc-800" aria-hidden="true">
+                    {[
+                      { employees: attendanceSnapshot.onTime, color: 'bg-emerald-500' },
+                      { employees: attendanceSnapshot.late, color: 'bg-amber-500' },
+                      { employees: attendanceSnapshot.pending, color: 'bg-slate-400' },
+                      { employees: attendanceSnapshot.upcoming, color: 'bg-blue-400' },
+                    ].map((group, index) => <span key={index} className={group.color} style={{ width: `${attendanceSnapshot.required > 0 ? group.employees.length / attendanceSnapshot.required * 100 : 0}%` }} />)}
+                  </div>
+                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-1">
+                    {[
+                      { label: 'Tepat waktu', employees: attendanceSnapshot.onTime },
+                      { label: 'Terlambat', employees: attendanceSnapshot.late },
+                      { label: 'Belum check-in', employees: attendanceSnapshot.pending },
+                      { label: 'Masih dalam waktu masuk', employees: attendanceSnapshot.upcoming },
+                      { label: 'Cuti / izin / sakit', employees: attendanceSnapshot.leave },
+                      { label: 'Tidak dijadwalkan', employees: attendanceSnapshot.offDuty },
+                      { label: 'Jadwal belum lengkap', employees: attendanceSnapshot.unknown },
+                    ].map(group => (
+                      <button
+                        key={group.label} type="button" aria-haspopup="dialog"
+                        aria-label={`Lihat presensi ${group.label.toLowerCase()}: ${group.employees.length} orang`}
+                        onClick={() => openDrilldown(group.label, 'Presensi', group.employees, { subtitle: `Tanggal ${snapshotDate}, berdasarkan jadwal, kalender kerja, dan cuti yang disetujui` })}
+                        className="flex min-h-11 items-center justify-between gap-3 rounded-lg px-2 text-left text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-zinc-900 focus-visible:outline-2 focus-visible:outline-blue-600 dark:focus-visible:outline-blue-400"
+                      >
+                        <span>{group.label}</span><strong className="text-slate-900 dark:text-white tabular-nums">{group.employees.length}</strong>
+                      </button>
+                    ))}
+                  </div>
+                  <p className="mt-3 text-[11px] leading-relaxed text-slate-600 dark:text-slate-400">
+                    Wajib hadir tidak termasuk cuti yang disetujui dan hari libur. Belum check-in berarti waktu masuk telah lewat, bukan penetapan mangkir.
+                    {!attendanceContext.settings?.work_days && ' Hari kerja mengikuti Senin–Jumat jika belum dikonfigurasi.'}
+                  </p>
+                </>
+              )}
+            </section>
           </div>
         </div>
 
@@ -1681,15 +1682,8 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="rounded-full bg-slate-100 dark:bg-zinc-800 text-[11px] font-semibold text-slate-600 dark:text-zinc-300 px-2.5 py-0.5">
-                  {topCompanies.length} entitas
+                  {topCompanies.length} dari {companySummaryRows.filter(company => company.employees > 0).length} perusahaan
                 </span>
-                <button
-                  type="button"
-                  onClick={() => openDrilldown('Perusahaan', 'Entitas')}
-                  className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200 transition-colors"
-                >
-                  <MoreHorizontal className="size-4" />
-                </button>
               </div>
             </div>
 
@@ -1699,8 +1693,18 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
                 return (
                   <div
                     key={comp.company}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Lihat perusahaan ${comp.company}: ${comp.employees} orang`}
+                    aria-haspopup="dialog"
                     onClick={() => openDrilldown(comp.company, 'Perusahaan', comp.employeeList)}
-                    className="group rounded-xl border border-slate-100 dark:border-zinc-800/60 bg-white dark:bg-[#131316] p-3 sm:p-3.5 hover:border-slate-200 dark:hover:border-zinc-700 hover:bg-slate-50/60 dark:hover:bg-zinc-900/60 transition-all cursor-pointer flex items-center justify-between gap-3"
+                    onKeyDown={event => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        openDrilldown(comp.company, 'Perusahaan', comp.employeeList);
+                      }
+                    }}
+                    className="group rounded-xl border border-slate-100 dark:border-zinc-800/60 bg-white dark:bg-[#131316] p-3 sm:p-3.5 hover:border-slate-200 dark:hover:border-zinc-700 hover:bg-slate-50/60 dark:hover:bg-zinc-900/60 transition-all cursor-pointer flex items-center justify-between gap-3 focus-visible:outline-2 focus-visible:outline-blue-600 dark:focus-visible:outline-blue-400"
                   >
                     {/* Left: Clean Frameless Colorized Gesit Logo & Details */}
                     <div className="flex items-center gap-3.5 min-w-0">
@@ -1723,12 +1727,8 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
                           {comp.company}
                         </h4>
                         <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                          <span className="text-[11px] text-slate-400 dark:text-zinc-500">
-                            HQ
-                          </span>
-                          <span className="text-slate-300 dark:text-zinc-700">•</span>
-                          <span className={`inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-semibold border ${comp.color.badge}`}>
-                            {comp.color.label}
+                          <span className="text-[11px] text-slate-600 dark:text-slate-400">
+                            {new Set(comp.employeeList.map(employee => employee.department || employee.department_name).filter(Boolean)).size} departemen tercatat
                           </span>
                         </div>
                       </div>
@@ -1737,7 +1737,7 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
                     {/* Right: Value & Progress Bar */}
                     <div className="text-right shrink-0">
                       <div className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">
-                        {comp.employees} <span className="text-[11px] font-normal text-slate-400 dark:text-zinc-500">Orang</span>
+                        {comp.employees} <span className="text-[11px] font-normal text-slate-600 dark:text-slate-400">orang</span>
                       </div>
                       <div className="flex items-center gap-1.5 justify-end mt-1">
                         <div className="w-16 sm:w-20 h-1.5 rounded-full bg-slate-100 dark:bg-zinc-800 overflow-hidden">
@@ -1746,7 +1746,7 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
                             className={`h-full rounded-full ${comp.color.bar}`}
                           />
                         </div>
-                        <span className="text-[10px] font-mono font-medium text-slate-400 dark:text-zinc-500 min-w-6 text-right">
+                        <span className="text-[10px] font-medium text-slate-600 dark:text-slate-400 min-w-6 text-right">
                           {comp.percentage}%
                         </span>
                       </div>
@@ -1755,7 +1755,12 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
                 );
               })}
             </div>
+            {topCompanies.length === 0 && <p className="mt-4 text-sm text-slate-600 dark:text-slate-400">Belum ada penempatan karyawan sesuai filter.</p>}
+            <p className="mt-3 text-[11px] text-slate-600 dark:text-slate-400">Persentase dari seluruh karyawan aktif sesuai filter.</p>
           </div>
+          <a href="#ringkasan-perusahaan" className="mt-4 inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-200 px-3 text-xs font-semibold text-blue-700 dark:text-blue-400 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-zinc-900 focus-visible:outline-2 focus-visible:outline-blue-600">
+            Lihat semua perusahaan
+          </a>
         </div>
       </div>
 
@@ -1790,17 +1795,17 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
                   <span className="text-sm font-bold text-slate-500">%</span>
                 </div>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-                  {checkedInCount} check-in dari {totalHeadcount} karyawan
+                  {attendanceContext.error ? 'Jadwal kerja belum tersedia' : `${checkedInCount} check-in dari ${attendanceSnapshot.required} wajib hadir`}
                 </p>
               </div>
 
               <div className="text-right">
-                <span className="text-[11px] text-slate-400 dark:text-slate-500 block">Bulan berjalan</span>
+                <span className="text-[11px] text-slate-500 dark:text-slate-400 block">Masih dalam waktu masuk</span>
                 <span className="text-lg font-bold text-slate-800 dark:text-slate-200">
-                  {checkedInCount > 0 ? attendanceRate : '0,0'}%
+                  {attendanceContext.error ? '-' : attendanceSnapshot.upcoming.length} orang
                 </span>
                 <span className="text-[10px] text-slate-400 dark:text-slate-500 block mt-0.5">
-                  Harian realtime
+                  Berdasarkan batas masuk shift
                 </span>
               </div>
             </div>
@@ -1808,22 +1813,22 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
             {/* Stacked Progress Bar with smooth entry animation */}
             <div className="w-full h-3 bg-slate-100 dark:bg-[#1F1F24] rounded-full overflow-hidden flex gap-0.5 mt-6 p-0.5">
               <div
-                style={{ width: `${chartsReady && totalHeadcount > 0 ? (onTimeCount / totalHeadcount) * 100 : 0}%` }}
+                style={{ width: `${chartsReady && !attendanceContext.error && attendanceSnapshot.required > 0 ? (onTimeCount / attendanceSnapshot.required) * 100 : 0}%` }}
                 className="h-full bg-emerald-600 dark:bg-emerald-500 rounded-l-full transition-all duration-1000 ease-out"
                 title={`Tepat waktu (${onTimeCount})`}
               />
               <div
-                style={{ width: `${chartsReady && totalHeadcount > 0 ? (lateCount / totalHeadcount) * 100 : 0}%` }}
+                style={{ width: `${chartsReady && !attendanceContext.error && attendanceSnapshot.required > 0 ? (lateCount / attendanceSnapshot.required) * 100 : 0}%` }}
                 className="h-full bg-amber-500 dark:bg-amber-400 transition-all duration-1000 ease-out"
                 title={`Terlambat (${lateCount})`}
               />
               <div
-                style={{ width: `${chartsReady && totalHeadcount > 0 ? (leaveCount / totalHeadcount) * 100 : 0}%` }}
+                style={{ width: `${chartsReady && !attendanceContext.error && attendanceSnapshot.required > 0 ? (attendanceSnapshot.upcoming.length / attendanceSnapshot.required) * 100 : 0}%` }}
                 className="h-full bg-blue-500 dark:bg-blue-400 transition-all duration-1000 ease-out"
-                title={`Cuti / Izin (${leaveCount})`}
+                title={`Masih dalam waktu masuk (${attendanceSnapshot.upcoming.length})`}
               />
               <div
-                style={{ width: `${chartsReady && totalHeadcount > 0 ? (notCheckedInCount / totalHeadcount) * 100 : 0}%` }}
+                style={{ width: `${chartsReady && !attendanceContext.error && attendanceSnapshot.required > 0 ? (notCheckedInCount / attendanceSnapshot.required) * 100 : 0}%` }}
                 className="h-full bg-slate-300 dark:bg-slate-700 rounded-r-full transition-all duration-1000 ease-out"
                 title={`Belum check-in (${notCheckedInCount})`}
               />
@@ -1848,10 +1853,11 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="h-2 w-2 rounded-full bg-slate-400 dark:bg-slate-600 shrink-0" />
-                <span className="text-slate-500 dark:text-slate-400">Belum absen</span>
+                <span className="text-slate-500 dark:text-slate-400">Belum check-in</span>
                 <strong className="font-bold text-slate-900 dark:text-white ml-auto">{notCheckedInCount}</strong>
               </div>
             </div>
+            <p className="mt-3 text-[11px] text-slate-600 dark:text-slate-400">{attendanceContext.error || 'Persentase dari karyawan wajib hadir, tidak termasuk cuti dan hari libur.'}</p>
           </div>
         </div>
 
@@ -2170,38 +2176,44 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
             </div>
 
             {/* Sub-grid 2 kolom untuk departemen agar ringkas dan seimbang dengan tinggi donut chart */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 mt-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 mt-3">
               {departmentDistribution.map(item => (
-                <div key={item.label} className="flex flex-col justify-center">
-                  <div className="flex justify-between text-xs font-medium mb-1">
+                <button
+                  key={item.label}
+                  type="button"
+                  aria-label={`Lihat karyawan departemen ${item.label}: ${item.count} orang`}
+                  aria-haspopup="dialog"
+                  onClick={() => openDrilldown(item.label, 'Departemen', item.employees)}
+                  className="min-w-0 min-h-11 px-2 py-2 rounded-lg flex flex-col justify-center text-left hover:bg-slate-50 dark:hover:bg-[#18181b] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 dark:focus-visible:outline-blue-400 transition-colors cursor-pointer"
+                >
+                  <span className="flex justify-between text-xs font-medium mb-1 w-full">
                     <span className="text-slate-600 dark:text-slate-300 truncate pr-1" title={item.label}>
                       {item.label}
                     </span>
                     <span className="text-slate-900 dark:text-white font-bold shrink-0">
                       {item.count}{' '}
-                      <span className="text-[10px] text-slate-400 font-normal">({item.percentage}%)</span>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 font-normal">({item.percentage}%)</span>
                     </span>
-                  </div>
-                  <div className="w-full h-1.5 bg-slate-100 dark:bg-[#1F1F24] rounded-full overflow-hidden">
-                    <div
+                  </span>
+                  <span className="block w-full h-1.5 bg-slate-100 dark:bg-[#1F1F24] rounded-full overflow-hidden">
+                    <span
                       style={{ width: `${chartsReady ? item.percentage : 0}%` }}
-                      className={`h-full rounded-full transition-all duration-1000 ease-out ${
+                      className={`block h-full rounded-full transition-all duration-1000 ease-out motion-reduce:transition-none ${
                         item.isHighlight ? 'bg-slate-900 dark:bg-blue-500' : 'bg-slate-400 dark:bg-slate-600'
                       }`}
                     />
-                  </div>
-                </div>
+                  </span>
+                </button>
               ))}
             </div>
+            {departmentDistribution.length === 0 && (
+              <p className="py-4 text-xs text-slate-600 dark:text-slate-400">Belum ada karyawan sesuai filter terpilih.</p>
+            )}
           </div>
 
-          <button
-            onClick={() => openDrilldown('Departemen', 'Fungsi Organisasi')}
-            className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 mt-5 pt-3 border-t border-slate-100 dark:border-slate-800/80 transition-colors cursor-pointer"
-          >
-            <span>Klik kelompok untuk melihat karyawan</span>
-            <ArrowRight className="h-3 w-3" />
-          </button>
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-5 pt-3 border-t border-slate-100 dark:border-slate-800/80">
+            Klik kelompok untuk melihat karyawan
+          </p>
         </div>
 
         {/* 2. Status Kepegawaian (1 Kolom: Donut Chart Centered & Legend Proporsional) */}
@@ -2257,6 +2269,18 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
                     strokeDashoffset={chartsReady && totalHeadcount > 0 ? 238.76 * (1 - statusProbation / totalHeadcount) : 238.76}
                     transform={`rotate(${totalHeadcount > 0 ? ((statusPermanent + statusContract) / totalHeadcount) * 360 : 0} 50 50)`}
                   />
+                  <circle
+                    cx="50"
+                    cy="50"
+                    r="38"
+                    fill="transparent"
+                    stroke="currentColor"
+                    className="text-slate-400 dark:text-slate-500 transition-all duration-1000 ease-out motion-reduce:transition-none"
+                    strokeWidth="14"
+                    strokeDasharray="238.76"
+                    strokeDashoffset={chartsReady && totalHeadcount > 0 ? 238.76 * (1 - statusIntern / totalHeadcount) : 238.76}
+                    transform={`rotate(${totalHeadcount > 0 ? ((statusPermanent + statusContract + statusProbation) / totalHeadcount) * 360 : 0} 50 50)`}
+                  />
                 </svg>
                 <div className="absolute text-center">
                   <span className="text-lg font-black text-slate-900 dark:text-white block leading-none">
@@ -2269,48 +2293,38 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
 
             {/* Legend Stacked */}
             <div className="space-y-1.5 text-xs mt-3">
-              <div className="flex items-center justify-between py-1 border-b border-slate-50 dark:border-slate-800/40">
-                <div className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-[#103065] dark:bg-blue-500 shrink-0" />
-                  <span className="text-slate-600 dark:text-slate-300">PKWTT</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <strong className="font-bold text-slate-900 dark:text-white">{statusPermanent}</strong>
-                  <span className="text-[10px] text-slate-400">
-                    ({totalHeadcount > 0 ? ((statusPermanent / totalHeadcount) * 100).toFixed(1) : 0}%)
+              {[
+                { label: 'PKWTT', color: 'bg-[#103065] dark:bg-blue-500' },
+                { label: 'PKWT', color: 'bg-[#2563eb] dark:bg-sky-400' },
+                { label: 'Probation', color: 'bg-[#d97706] dark:bg-amber-400' },
+                { label: 'Magang', color: 'bg-slate-400 dark:bg-slate-500' },
+              ].filter(item => item.label !== 'Magang' || statusIntern > 0).map(item => (
+                <button
+                  key={item.label}
+                  type="button"
+                  aria-label={`Lihat karyawan status ${item.label}: ${statusEmployees[item.label].length} orang`}
+                  aria-haspopup="dialog"
+                  onClick={() => openDrilldown(item.label, 'Status kepegawaian', statusEmployees[item.label])}
+                  className="flex w-full min-h-11 items-center justify-between gap-2 rounded-lg px-2 py-2 text-left border-b border-slate-50 dark:border-slate-800/40 hover:bg-slate-50 dark:hover:bg-[#18181b] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 dark:focus-visible:outline-blue-400 transition-colors cursor-pointer"
+                >
+                  <span className="flex items-center gap-2">
+                    <span className={`h-2 w-2 rounded-full shrink-0 ${item.color}`} />
+                    <span className="text-slate-600 dark:text-slate-300">{item.label}</span>
                   </span>
-                </div>
-              </div>
-              <div className="flex items-center justify-between py-1 border-b border-slate-50 dark:border-slate-800/40">
-                <div className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-[#2563eb] dark:bg-sky-400 shrink-0" />
-                  <span className="text-slate-600 dark:text-slate-300">PKWT</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <strong className="font-bold text-slate-900 dark:text-white">{statusContract}</strong>
-                  <span className="text-[10px] text-slate-400">
-                    ({totalHeadcount > 0 ? ((statusContract / totalHeadcount) * 100).toFixed(1) : 0}%)
+                  <span className="flex items-center gap-1.5">
+                    <strong className="font-bold text-slate-900 dark:text-white">{statusEmployees[item.label].length}</strong>
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                      ({totalHeadcount > 0 ? ((statusEmployees[item.label].length / totalHeadcount) * 100).toFixed(1) : 0}%)
+                    </span>
                   </span>
-                </div>
-              </div>
-              <div className="flex items-center justify-between py-1">
-                <div className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-[#d97706] dark:bg-amber-400 shrink-0" />
-                  <span className="text-slate-600 dark:text-slate-300">Probation</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <strong className="font-bold text-slate-900 dark:text-white">{statusProbation}</strong>
-                  <span className="text-[10px] text-slate-400">
-                    ({totalHeadcount > 0 ? ((statusProbation / totalHeadcount) * 100).toFixed(1) : 0}%)
-                  </span>
-                </div>
-              </div>
+                </button>
+              ))}
             </div>
           </div>
 
-          <div className="text-[10px] text-slate-400 dark:text-slate-500 pt-3 border-t border-slate-100 dark:border-slate-800/80">
-            Database karyawan aktif
-          </div>
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-5 pt-3 border-t border-slate-100 dark:border-slate-800/80">
+            Klik kelompok untuk melihat karyawan
+          </p>
         </div>
 
         {/* 3. Komposisi Gender (1 Kolom: Donut Chart Centered & Legend Proporsional) */}
@@ -2365,50 +2379,42 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
 
             {/* Legend Stacked */}
             <div className="space-y-1.5 text-xs mt-3">
-              <div className="flex items-center justify-between py-1 border-b border-slate-50 dark:border-slate-800/40">
-                <div className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-[#103065] dark:bg-blue-500 shrink-0" />
-                  <span className="text-slate-600 dark:text-slate-300">Laki-laki</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <strong className="font-bold text-slate-900 dark:text-white">{maleCount}</strong>
-                  <span className="text-[10px] text-slate-400">
-                    ({totalHeadcount > 0 ? ((maleCount / totalHeadcount) * 100).toFixed(1) : 0}%)
+              {[
+                { label: 'Laki-laki', color: 'bg-[#103065] dark:bg-blue-500' },
+                { label: 'Perempuan', color: 'bg-[#0284C7] dark:bg-sky-400' },
+                { label: 'Belum diisi', color: 'bg-slate-400 dark:bg-slate-600' },
+              ].filter(item => item.label !== 'Belum diisi' || genderEmployees[item.label].length > 0).map(item => (
+                <button
+                  key={item.label}
+                  type="button"
+                  aria-label={`Lihat karyawan gender ${item.label}: ${genderEmployees[item.label].length} orang`}
+                  aria-haspopup="dialog"
+                  onClick={() => openDrilldown(item.label, 'Gender', genderEmployees[item.label])}
+                  className="flex w-full min-h-11 items-center justify-between gap-2 rounded-lg px-2 py-2 text-left border-b border-slate-50 dark:border-slate-800/40 hover:bg-slate-50 dark:hover:bg-[#18181b] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 dark:focus-visible:outline-blue-400 transition-colors cursor-pointer"
+                >
+                  <span className="flex items-center gap-2">
+                    <span className={`h-2 w-2 rounded-full shrink-0 ${item.color}`} />
+                    <span className="text-slate-600 dark:text-slate-300">{item.label}</span>
                   </span>
-                </div>
-              </div>
-              <div className="flex items-center justify-between py-1 border-b border-slate-50 dark:border-slate-800/40">
-                <div className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-[#0284C7] dark:bg-sky-400 shrink-0" />
-                  <span className="text-slate-600 dark:text-slate-300">Perempuan</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <strong className="font-bold text-slate-900 dark:text-white">{femaleCount}</strong>
-                  <span className="text-[10px] text-slate-400">
-                    ({totalHeadcount > 0 ? ((femaleCount / totalHeadcount) * 100).toFixed(1) : 0}%)
+                  <span className="flex items-center gap-1.5">
+                    <strong className="font-bold text-slate-900 dark:text-white">{genderEmployees[item.label].length}</strong>
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                      ({totalHeadcount > 0 ? ((genderEmployees[item.label].length / totalHeadcount) * 100).toFixed(1) : 0}%)
+                    </span>
                   </span>
-                </div>
-              </div>
-              {unspecifiedGenderCount > 0 && (
-                <div className="flex items-center justify-between py-1">
-                  <div className="flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full bg-slate-400 dark:bg-slate-600 shrink-0" />
-                    <span className="text-slate-600 dark:text-slate-300">Belum diisi</span>
-                  </div>
-                  <strong className="font-bold text-slate-900 dark:text-white">{unspecifiedGenderCount}</strong>
-                </div>
-              )}
+                </button>
+              ))}
             </div>
           </div>
 
-          <div className="text-[10px] text-slate-400 dark:text-slate-500 pt-3 border-t border-slate-100 dark:border-slate-800/80">
-            Proporsi database gender
-          </div>
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-5 pt-3 border-t border-slate-100 dark:border-slate-800/80">
+            Klik kelompok untuk melihat karyawan
+          </p>
         </div>
       </div>
 
       {/* ── ROW 5: RINGKASAN PER PERUSAHAAN (TABLE) ── */}
-      <div className="bg-white dark:bg-[#131316] border border-slate-200/80 dark:border-[#222225] rounded-2xl p-6 shadow-xs">
+      <div id="ringkasan-perusahaan" className="scroll-mt-4 bg-white dark:bg-[#131316] border border-slate-200/80 dark:border-[#222225] rounded-2xl p-6 shadow-xs">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="text-sm font-bold text-slate-900 dark:text-white">Ringkasan per perusahaan</h3>
@@ -2522,6 +2528,14 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
                           {emp.employee_code || emp.nik || 'EMP'} · {emp.job_title || emp.position || 'Staff'} ·{' '}
                           {emp.company || emp.company_name || 'Perusahaan belum tercatat'} ({emp.department || emp.department_name || 'Departemen belum tercatat'})
                         </p>
+                        {drilldownModal.dateField && (
+                          <p className="mt-1 text-[11px] text-slate-700 dark:text-slate-300">
+                            {{ date_of_birth: 'Tanggal lahir', join_date: 'Tanggal masuk', separation_date: 'Tanggal keluar', contract_end_date: 'Kontrak berakhir' }[drilldownModal.dateField]}:{' '}
+                            {new Date(emp[drilldownModal.dateField]).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                            {drilldownModal.dateField === 'date_of_birth' && ` (${calculateAge(emp.date_of_birth)} tahun)`}
+                            {drilldownModal.dateField === 'join_date' && ` (${calculateTenureYears(emp.join_date)?.toLocaleString('id-ID')} tahun)`}
+                          </p>
+                        )}
                       </div>
                     </div>
                     <button

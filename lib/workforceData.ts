@@ -1,5 +1,5 @@
 import { supabase } from './supabaseClient';
-import { isActiveEmployee, requestDisplayStatus } from './workforce-contract';
+import { isActiveEmployee, isEmployeeAccount, requestDisplayStatus } from './workforce-contract';
 
 export async function loadCurrentHRUser() {
   const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
@@ -27,9 +27,10 @@ export async function fetchAllRows(query: (from: number, to: number) => PromiseL
   }
 }
 
-export function loadWorkforceAccounts() {
+export function loadWorkforceAccounts({ includeSystemAccounts = false } = {}) {
   return fetchAllRows((from, to) => supabase.from('user_accounts').select('*').order('id').range(from, to))
-    .then(rows => rows.map(row => ({ ...row, id: String(row.id), status: row.employment_status || row.status })));
+    .then(rows => rows.filter(row => includeSystemAccounts || isEmployeeAccount(row))
+      .map(row => ({ ...row, id: String(row.id), status: row.employment_status || row.status })));
 }
 
 export function normalizeRequest<T extends { status?: string; approval_status?: string }>(row: T): T {

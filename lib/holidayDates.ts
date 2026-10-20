@@ -8,8 +8,9 @@ const fallbackDates: Record<number, string[]> = {
   2027: '01-01 01-05 02-05 02-06 03-08 03-09 03-10 03-11 03-12 03-15 03-25 03-26 03-28 05-01 05-06 05-17 05-18 05-19 05-20 06-01 06-06 08-15 08-17 12-24 12-25 12-26'.split(' '),
 };
 
-export async function loadHolidayDates(start: string, end: string): Promise<Set<string>> {
+export async function loadWorkCalendarDates(start: string, end: string): Promise<{ holidays: Set<string>; workingDates: Set<string> }> {
   const holidays = new Set<string>();
+  const workingDates = new Set<string>();
   for (let year = Number(start.slice(0, 4)); year <= Number(end.slice(0, 4)); year++) {
     let dates: string[] = [];
     if (year === 2027) {
@@ -31,6 +32,11 @@ export async function loadHolidayDates(start: string, end: string): Promise<Set<
   for (const row of overrides) {
     if (row.is_active === false || row.holiday_type === 'working_day') holidays.delete(row.holiday_date);
     else holidays.add(row.holiday_date);
+    if (row.is_active !== false && row.holiday_type === 'working_day') workingDates.add(row.holiday_date);
   }
-  return holidays;
+  return { holidays, workingDates };
+}
+
+export async function loadHolidayDates(start: string, end: string): Promise<Set<string>> {
+  return (await loadWorkCalendarDates(start, end)).holidays;
 }

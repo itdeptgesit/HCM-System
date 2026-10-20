@@ -12,6 +12,7 @@ import { UserAvatar } from './UserAvatar';
 import { normalizeGender, normalizeReligion } from '../lib/utils';
 import { EmployeeAppointmentSKModal, getCompanyAbbr } from './hr/EmployeeAppointmentSKModal';
 import { ImageCropModal } from '@/components/ui/ImageCropModal';
+import { standardShiftOptions, type ShiftSchedule } from '../lib/standardShifts';
 
 interface UserFormModalProps {
   isOpen: boolean;
@@ -215,7 +216,12 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [avatarError, setAvatarError] = useState('');
-  const [schedules, setSchedules] = useState<{ id: number | string; name: string; work_start: string; work_end: string; is_flexible: boolean; grace_period_minutes: number }[]>([]);
+  const [schedules, setSchedules] = useState<ShiftSchedule[]>([]);
+  const shiftOptions = standardShiftOptions(schedules, form.scheduleId);
+  const selectedLegacySchedule = schedules.find(schedule =>
+    String(schedule.id) === String(form.scheduleId) &&
+    !shiftOptions.some(option => String(option.schedule?.id) === String(schedule.id)),
+  );
   const [existingBranches, setExistingBranches] = useState<string[]>([
     'HQ',
     'Non HQ'
@@ -409,6 +415,9 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
     if (targetStep === 3) {
       if (!form.company?.trim()) nextErrors.company = 'Company wajib dipilih.';
       if (!form.department?.trim()) nextErrors.department = 'Department wajib dipilih.';
+      if (form.workScheduleType === 'shift' && !form.scheduleId) {
+        nextErrors.scheduleId = 'Pilih salah satu shift kerja.';
+      }
       if (isManualEmployeeId) {
         const code = form.employeeCode?.trim();
         if (!code) {
@@ -1149,20 +1158,38 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
                           className={inputClass}
                           value={String(form.scheduleId || '')}
                           onChange={e => setField('scheduleId' as any, e.target.value)}
+                          aria-invalid={Boolean(errors.scheduleId)}
                         >
-                          <option value="">— Pilih jadwal shift —</option>
-                          {schedules.filter(s => !s.is_flexible).map(s => (
-                            <option key={s.id} value={s.id}>
-                              {s.name} ({s.work_start?.slice(0, 5)} - {s.work_end?.slice(0, 5)})
+                          <option value="">Pilih jadwal shift</option>
+                          {selectedLegacySchedule && (
+                            <option value={selectedLegacySchedule.id} hidden disabled>
+                              Jadwal tersimpan: {selectedLegacySchedule.name}
                             </option>
-                          ))}
-                          {schedules.filter(s => s.is_flexible).map(s => (
-                            <option key={s.id} value={s.id}>
-                              {s.name}
+                          )}
+                          {shiftOptions.map(option => (
+                            <option
+                              key={option.start}
+                              value={option.schedule?.id ?? `unavailable-${option.start}`}
+                              disabled={!option.schedule}
+                            >
+                              {option.label}{!option.schedule ? ' (belum tersedia)' : ''}
                             </option>
                           ))}
                         </select>
                       </label>
+                      {errors.scheduleId && (
+                        <p className="mt-1 text-xs text-rose-600 dark:text-rose-400" role="alert">{errors.scheduleId}</p>
+                      )}
+                      {selectedLegacySchedule && (
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          Jadwal lama tetap tersimpan. Pilih salah satu dari empat shift untuk menggantinya.
+                        </p>
+                      )}
+                      {shiftOptions.some(option => !option.schedule) && (
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          Shift yang belum tersedia perlu ditambahkan ke master jadwal terlebih dahulu.
+                        </p>
+                      )}
                     </div>
                   )}
 

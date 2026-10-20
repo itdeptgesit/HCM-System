@@ -30,6 +30,15 @@ import {
 const mapsLink = (lat: number | null, lng: number | null) =>
   lat != null && lng != null ? `https://www.google.com/maps/search/?api=1&query=${lat},${lng}` : null;
 
+const reportTableContainer = (label: string): React.ComponentProps<'div'> => ({
+  role: 'region',
+  'aria-label': label,
+  tabIndex: 0,
+  className: 'max-h-[65dvh] overflow-auto overscroll-x-contain [scrollbar-gutter:stable] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-600 dark:focus-visible:outline-blue-400',
+});
+
+const reportTableHeaderClass = '[&_th]:sticky [&_th]:top-0 [&_th]:z-10 [&_th]:bg-card [&_th]:shadow-[0_1px_0_var(--border)]';
+
 const renderEmploymentBadge = (type?: string) => {
   const norm = (type || 'PKWT').toUpperCase();
   if (norm.includes('PKWTT') || norm.includes('TETAP')) {
@@ -300,7 +309,7 @@ export const AttendanceReport: React.FC<AttendanceReportProps> = ({ currentUser,
   }, [reportRecords, reportUsers, reportDept, reportSearch, reportLogStatus, allUsers, userMap]);
 
   const renderReport = () => (
-    <div className="w-full space-y-6 animate-in fade-in duration-500">
+    <div className="w-full min-w-0 space-y-6 animate-in fade-in duration-500">
       {/* Page Header */}
       <PageHeader
         title="Laporan Kehadiran"
@@ -566,8 +575,8 @@ export const AttendanceReport: React.FC<AttendanceReportProps> = ({ currentUser,
               </div>
             )}
           </CardHeader>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
+          <CardContent className="min-w-0 p-0">
+            <div className="min-w-0">
               {reportRows.length === 0 ? (
                 <div className="flex flex-col items-center justify-center gap-2 py-16 text-center text-muted-foreground">
                   <FileText size={40} className="text-muted-foreground/40" />
@@ -575,11 +584,11 @@ export const AttendanceReport: React.FC<AttendanceReportProps> = ({ currentUser,
                   <p className="text-xs text-muted-foreground">Silakan sesuaikan tanggal atau kata kunci pencarian</p>
                 </div>
               ) : (
-                <Table>
-                  <TableHeader>
+                <Table containerProps={reportTableContainer('Rekapitulasi kehadiran karyawan, geser untuk melihat semua kolom')}>
+                  <TableHeader className={reportTableHeaderClass}>
                     <TableRow className="hover:bg-transparent">
-                      <TableHead className="w-[240px]">Karyawan & NIK</TableHead>
-                      <TableHead>Perusahaan & Dept</TableHead>
+                      <TableHead className="min-w-[240px]">Karyawan & NIK</TableHead>
+                      <TableHead className="min-w-[200px]">Perusahaan & Dept</TableHead>
                       <TableHead className="text-center">Status</TableHead>
                       <TableHead className="text-center">Kehadiran</TableHead>
                       <TableHead className="text-center">Hari Wajib</TableHead>
@@ -606,7 +615,7 @@ export const AttendanceReport: React.FC<AttendanceReportProps> = ({ currentUser,
                         <React.Fragment key={row.user.id}>
                           <TableRow className={cn('hover:bg-muted/30 dark:hover:bg-zinc-800/40 transition-colors', isExpanded && 'bg-muted/30 dark:bg-zinc-800/50')}>
                             {/* Karyawan & NIK */}
-                            <TableCell className="py-3">
+                            <TableCell className="max-w-[280px] py-3">
                               <div className="flex items-center gap-3">
                                 <UserAvatar
                                   name={row.user.full_name || row.user.username || 'User'}
@@ -614,7 +623,7 @@ export const AttendanceReport: React.FC<AttendanceReportProps> = ({ currentUser,
                                   size="sm"
                                 />
                                 <div className="min-w-0">
-                                  <div className="text-xs font-semibold text-foreground truncate">
+                                  <div className="text-xs font-semibold text-foreground truncate" title={row.user.full_name || row.user.username}>
                                     {row.user.full_name || row.user.username || 'Tanpa Nama'}
                                   </div>
                                   <div className="flex items-center gap-1.5 mt-0.5">
@@ -624,7 +633,7 @@ export const AttendanceReport: React.FC<AttendanceReportProps> = ({ currentUser,
                                       </span>
                                     )}
                                     {row.user.job_title && (
-                                      <span className="text-[11px] text-muted-foreground truncate">{row.user.job_title}</span>
+                                      <span className="text-[11px] text-muted-foreground truncate" title={row.user.job_title}>{row.user.job_title}</span>
                                     )}
                                   </div>
                                 </div>
@@ -632,9 +641,9 @@ export const AttendanceReport: React.FC<AttendanceReportProps> = ({ currentUser,
                             </TableCell>
 
                             {/* Perusahaan & Dept */}
-                            <TableCell className="text-xs">
-                              <div className="font-medium text-foreground truncate">{row.user.company || 'GESIT'}</div>
-                              <div className="text-[11px] text-muted-foreground truncate">{row.user.department || '-'}</div>
+                            <TableCell className="max-w-[240px] text-xs">
+                              <div className="font-medium text-foreground truncate" title={row.user.company}>{row.user.company || 'GESIT'}</div>
+                              <div className="text-[11px] text-muted-foreground truncate" title={row.user.department}>{row.user.department || '-'}</div>
                             </TableCell>
 
                             {/* Status Kerja */}
@@ -900,6 +909,11 @@ export const AttendanceReport: React.FC<AttendanceReportProps> = ({ currentUser,
                 </Table>
               )}
             </div>
+            {reportRows.length > 0 && (
+              <p className="border-t border-border/40 px-4 py-3 text-xs text-slate-600 dark:text-slate-400">
+                Geser tabel ke kanan untuk melihat semua kolom, termasuk Evaluasi dan Detail Log.
+              </p>
+            )}
           </CardContent>
         </Card>
       )}
@@ -946,8 +960,8 @@ export const AttendanceReport: React.FC<AttendanceReportProps> = ({ currentUser,
               })}
             </div>
           </CardHeader>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
+          <CardContent className="min-w-0 p-0">
+            <div className="min-w-0">
               {filteredDailyRecords.length === 0 ? (
                 <div className="flex flex-col items-center justify-center gap-2 py-16 text-center text-muted-foreground">
                   <FileText size={40} className="text-muted-foreground/40" />
@@ -955,8 +969,8 @@ export const AttendanceReport: React.FC<AttendanceReportProps> = ({ currentUser,
                   <p className="text-xs text-muted-foreground">Silakan ubah rentang tanggal atau filter status absensi</p>
                 </div>
               ) : (
-                <Table>
-                  <TableHeader>
+                <Table containerProps={reportTableContainer('Log presensi harian, geser untuk melihat semua kolom')}>
+                  <TableHeader className={reportTableHeaderClass}>
                     <TableRow className="hover:bg-transparent">
                       <TableHead className="w-[140px]">Tanggal</TableHead>
                       <TableHead>Karyawan</TableHead>
@@ -1070,6 +1084,11 @@ export const AttendanceReport: React.FC<AttendanceReportProps> = ({ currentUser,
                 </Table>
               )}
             </div>
+            {filteredDailyRecords.length > 0 && (
+              <p className="border-t border-border/40 px-4 py-3 text-xs text-slate-600 dark:text-slate-400">
+                Geser tabel ke kanan untuk melihat semua kolom log presensi.
+              </p>
+            )}
           </CardContent>
         </Card>
       )}
@@ -1078,7 +1097,7 @@ export const AttendanceReport: React.FC<AttendanceReportProps> = ({ currentUser,
 
 
   return (
-    <div className="w-full">
+    <div className="w-full min-w-0">
       {renderReport()}
       {viewAttendancePhoto && (
         <Dialog open onOpenChange={(open) => { if (!open) setViewAttendancePhoto(null); }}>

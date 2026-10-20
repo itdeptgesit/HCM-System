@@ -6,6 +6,8 @@ import { SidebarProvider, SidebarInset } from '../../components/ui/sidebar';
 import { NexoraSidebar } from '../../components/nexora/layout/NexoraSidebar';
 import { NexoraHeader } from '../../components/nexora/layout/NexoraHeader';
 import { GlobalSearchDialog } from '../../components/GlobalSearchDialog';
+import { LanguageProvider } from '../../context/LanguageContext';
+import { Toaster } from 'sonner';
 import '../../index.css';
 
 const mockUser = {
@@ -51,6 +53,9 @@ function FullDashboardIntegration() {
 
 createRoot(document.getElementById('root')!).render(
   <MemoryRouter initialEntries={['/']}>
-    <FullDashboardIntegration />
+    <LanguageProvider>
+      <FullDashboardIntegration />
+      <Toaster />
+    </LanguageProvider>
   </MemoryRouter>
 );

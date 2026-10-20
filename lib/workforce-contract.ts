@@ -96,3 +96,13 @@ export function jakartaDate(date = new Date()): string {
 export function isActiveEmployee(account: { status?: string; employment_status?: string }): boolean {
   return !['inactive', 'resigned', 'terminated', 'suspended', 'nonaktif'].includes(String(account.employment_status || account.status || '').toLowerCase());
 }
+
+export function isEmployeeAccount(account: {
+  full_name?: string; fullName?: string; role?: string; is_employee?: boolean;
+}): boolean {
+  if (account.is_employee === false) return false;
+  const name = String(account.full_name || account.fullName || '').trim().toLowerCase();
+  const role = String(account.role || '').toLowerCase().replace(/[\s_-]/g, '');
+  // This is the system-only Administrator, not employees with admin access.
+  return !(name === 'administrator' && role === 'superadmin');
+}
