@@ -33,6 +33,8 @@ import {
   LogOut,
   ChevronDown,
 } from '@/components/ui/icons';
+import { useLanguage } from '@/context/LanguageContext';
+import { LanguageToggle } from '@/components/ui/LanguageToggle';
 
 interface NexoraHeaderProps {
   currentUser?: any;
@@ -52,6 +54,7 @@ export function NexoraHeader({
   onLogout,
 }: NexoraHeaderProps) {
   const navigate = useNavigate();
+  const { t, isEn } = useLanguage();
 
   return (
     <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between border-b border-slate-200/80 dark:border-[#222225] bg-white/95 dark:bg-[#0c0c0e]/95 backdrop-blur-md px-4 sm:px-6 transition-colors">
@@ -72,7 +75,7 @@ export function NexoraHeader({
                 className="flex items-center gap-1.5 cursor-pointer text-slate-500 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-white transition-colors"
               >
                 <Home className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Workspace</span>
+                <span className="hidden sm:inline">{t.nav.workspace}</span>
               </BreadcrumbLink>
             </BreadcrumbItem>
             <BreadcrumbSeparator />
@@ -85,8 +88,8 @@ export function NexoraHeader({
         </Breadcrumb>
       </div>
 
-      {/* ── RIGHT: SEARCH BUTTON (Ctrl K) + THEME + NOTIF + QUICK CTA + AVATAR ── */}
-      <div className="flex items-center gap-2 sm:gap-3">
+      {/* ── RIGHT: SEARCH BUTTON (Ctrl K) + LANG + THEME + NOTIF + QUICK CTA + AVATAR ── */}
+      <div className="flex items-center gap-2 sm:gap-2.5">
         {/* Search button styled clean & modern */}
         <button
           type="button"
@@ -94,9 +97,9 @@ export function NexoraHeader({
           className="relative hidden md:flex items-center gap-2.5 h-9 w-56 lg:w-72 rounded-full border border-slate-200/90 dark:border-[#27272a] bg-slate-50/60 hover:bg-slate-100/80 dark:bg-[#18181b]/60 dark:hover:bg-[#18181b] px-3.5 text-xs text-slate-500 dark:text-zinc-400 shadow-2xs transition-all cursor-pointer hover:border-slate-300 dark:hover:border-slate-700"
         >
           <Search className="h-4 w-4 text-slate-400 dark:text-zinc-500 shrink-0" />
-          <span className="truncate text-slate-500 dark:text-zinc-400">Cari data, menu, karyawan...</span>
+          <span className="truncate text-slate-500 dark:text-zinc-400">{t.common.searchPlaceholder}</span>
           <kbd className="ml-auto pointer-events-none inline-flex items-center rounded-md border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-1.5 py-0.5 text-[10px] font-sans font-medium text-slate-500 dark:text-zinc-400 shadow-2xs">
-            Ctrl K
+            {t.common.ctrlK}
           </kbd>
         </button>
 
@@ -106,10 +109,13 @@ export function NexoraHeader({
           size="icon"
           onClick={onSearchClick}
           className="h-8.5 w-8.5 rounded-lg text-slate-500 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-white md:hidden cursor-pointer"
-          title="Cari (Ctrl+K)"
+          title={`${t.common.search} (${t.common.ctrlK})`}
         >
           <Search className="h-4 w-4" />
         </Button>
+
+        {/* Language Switcher (EN / ID) */}
+        <LanguageToggle size="sm" />
 
         {/* Dark Mode Toggle */}
         {onToggleTheme && (
@@ -118,7 +124,7 @@ export function NexoraHeader({
             size="icon"
             onClick={onToggleTheme}
             className="h-8.5 w-8.5 rounded-lg text-slate-500 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-white cursor-pointer"
-            title={isDark ? 'Mode Terang' : 'Mode Gelap'}
+            title={isDark ? t.common.themeLight : t.common.themeDark}
           >
             {isDark ? <Sun className="h-4 w-4 text-amber-400" /> : <Moon className="h-4 w-4 text-slate-600" />}
           </Button>
@@ -136,7 +142,7 @@ export function NexoraHeader({
                   variant="ghost"
                   size="icon"
                   className="h-8.5 w-8.5 rounded-lg text-slate-500 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-white cursor-pointer"
-                  title={`Profil: ${currentUser?.fullName || 'Pengguna'}`}
+                  title={`${t.nav.myProfile}: ${currentUser?.fullName || 'User'}`}
                 />
               }
             >
@@ -151,7 +157,7 @@ export function NexoraHeader({
               <DropdownMenuLabel className="font-normal p-2">
                 <div className="flex flex-col space-y-1">
                   <p className="text-xs font-bold text-slate-900 dark:text-white leading-none">
-                    {currentUser?.fullName || 'Pengguna'}
+                    {currentUser?.fullName || 'User'}
                   </p>
                   <p className="text-[10px] text-slate-500 dark:text-zinc-400 truncate leading-none mt-1">
                     {currentUser?.email || '-'}
@@ -167,14 +173,14 @@ export function NexoraHeader({
                 className="text-xs cursor-pointer gap-2 py-2"
               >
                 <Users className="h-3.5 w-3.5 text-slate-500" />
-                <span>Data Karyawan</span>
+                <span>{t.nav.employees}</span>
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => navigate('/admin/users')}
                 className="text-xs cursor-pointer gap-2 py-2"
               >
                 <User className="h-3.5 w-3.5 text-slate-500" />
-                <span>Kelola Akun & Profil</span>
+                <span>{t.nav.myProfile}</span>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               {onLogout && (
@@ -183,7 +189,7 @@ export function NexoraHeader({
                   className="text-xs cursor-pointer gap-2 py-2 text-rose-600 focus:text-rose-600 focus:bg-rose-50 dark:focus:bg-rose-950/40"
                 >
                   <LogOut className="h-3.5 w-3.5" />
-                  <span>Keluar dari Akun</span>
+                  <span>{t.nav.signOut}</span>
                 </DropdownMenuItem>
               )}
             </DropdownMenuContent>

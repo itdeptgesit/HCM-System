@@ -59,6 +59,7 @@ import {
   Building,
   Navigation,
 } from '@/components/ui/icons';
+import { useLanguage } from '@/context/LanguageContext';
 
 interface NexoraSidebarProps {
   currentUser?: any;
@@ -91,6 +92,7 @@ export function NexoraSidebar({
   const location = useLocation();
   const navigate = useNavigate();
   const { isMobile } = useSidebar();
+  const { t, isEn } = useLanguage();
   const pathname = location.pathname;
 
   const isExactActive = (path: string) => pathname === path;
@@ -128,19 +130,19 @@ export function NexoraSidebar({
           {/* Main Menu Group */}
           <SidebarGroup>
             <SidebarGroupLabel className="text-[12px] font-semibold text-slate-500 dark:text-zinc-400 px-3 py-1.5 h-auto tracking-normal">
-              Main Menu
+              {isEn ? 'Main Menu' : 'Menu Utama'}
             </SidebarGroupLabel>
             <SidebarMenu className="space-y-0.5">
               {canView('Dashboard') && isHR && (
                 <SidebarMenuItem>
                   <SidebarMenuButton
-                    tooltip="Home"
+                    tooltip={t.nav.workspace}
                     isActive={isExactActive('/')}
                     className={itemClasses}
                     onClick={() => navigate('/')}
                   >
                     <Home className="size-4 shrink-0 text-slate-500" />
-                    <span className="group-data-[collapsible=icon]:hidden">Home</span>
+                    <span className="group-data-[collapsible=icon]:hidden">{t.nav.workspace}</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               )}
@@ -148,13 +150,13 @@ export function NexoraSidebar({
               {canView('Data Karyawan') && isHR && (
                 <SidebarMenuItem>
                   <SidebarMenuButton
-                    tooltip="Data Karyawan"
+                    tooltip={t.nav.employees}
                     isActive={isSectionActive('/employees')}
                     className={itemClasses}
                     onClick={() => navigate('/employees')}
                   >
                     <Users className="size-4 shrink-0 text-slate-500" />
-                    <span className="group-data-[collapsible=icon]:hidden">Data Karyawan</span>
+                    <span className="group-data-[collapsible=icon]:hidden">{t.nav.employees}</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               )}
@@ -165,7 +167,7 @@ export function NexoraSidebar({
           {isHR && (
             <SidebarGroup>
               <SidebarGroupLabel className="text-[12px] font-semibold text-slate-500 dark:text-zinc-400 px-3 py-1.5 h-auto tracking-normal">
-                Presensi & Waktu
+                {isEn ? 'Time & Attendance' : 'Presensi & Waktu'}
               </SidebarGroupLabel>
               <SidebarMenu className="space-y-0.5">
                 <Collapsible open={attendanceOpen} onOpenChange={setAttendanceOpen} className="group/collapsible">
@@ -173,14 +175,14 @@ export function NexoraSidebar({
                     <CollapsibleTrigger
                       render={
                         <SidebarMenuButton
-                          tooltip="Absensi & Kehadiran"
+                          tooltip={isEn ? 'Attendance' : 'Absensi & Kehadiran'}
                           isActive={attendanceActive}
                           className={itemClasses}
                         />
                       }
                     >
                       <Clock className="size-4 shrink-0 text-slate-500" />
-                      <span className="group-data-[collapsible=icon]:hidden">Absensi</span>
+                      <span className="group-data-[collapsible=icon]:hidden">{isEn ? 'Attendance' : 'Absensi'}</span>
                       <ChevronRight className="ml-auto size-4 transition-transform duration-200 group-data-open/collapsible:rotate-90 group-data-[collapsible=icon]:hidden opacity-60" />
                     </CollapsibleTrigger>
 
@@ -193,7 +195,7 @@ export function NexoraSidebar({
                             onClick={() => navigate('/attendance/report')}
                           >
                             <FileText className="size-3.5 shrink-0" />
-                            <span>Laporan Presensi</span>
+                            <span>{t.nav.attendanceReport}</span>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
 
@@ -204,7 +206,7 @@ export function NexoraSidebar({
                             onClick={() => navigate('/attendance/map')}
                           >
                             <Navigation className="size-3.5 shrink-0" />
-                            <span>Peta Presensi</span>
+                            <span>{t.nav.attendanceMap}</span>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
 
@@ -215,7 +217,7 @@ export function NexoraSidebar({
                             onClick={() => navigate('/attendance/requests')}
                           >
                             <Clock className="size-3.5 shrink-0" />
-                            <span>Request Absen</span>
+                            <span>{t.nav.attendanceRequests}</span>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
 
@@ -226,7 +228,7 @@ export function NexoraSidebar({
                             onClick={() => navigate('/attendance/calendar')}
                           >
                             <Calendar className="size-3.5 shrink-0" />
-                            <span>Kalender Kerja</span>
+                            <span>{t.nav.attendanceCalendar}</span>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
 
@@ -237,7 +239,7 @@ export function NexoraSidebar({
                             onClick={() => navigate('/attendance/locations')}
                           >
                             <MapPin className="size-3.5 shrink-0" />
-                            <span>Radius Office</span>
+                            <span>{t.nav.attendanceLocations}</span>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                       </SidebarMenuSub>
@@ -248,22 +250,22 @@ export function NexoraSidebar({
             </SidebarGroup>
           )}
 
-          {/* Permohonan & Persetujuan Group */}
+          {/* Requests & Services Group */}
           <SidebarGroup>
             <SidebarGroupLabel className="text-[12px] font-semibold text-slate-500 dark:text-zinc-400 px-3 py-1.5 h-auto tracking-normal">
-              Permohonan & Layanan
+              {t.nav.requestsServices}
             </SidebarGroupLabel>
             <SidebarMenu className="space-y-0.5">
               <SidebarMenuItem>
                 <SidebarMenuButton
-                  tooltip="Pengajuan & Approval"
+                  tooltip={t.nav.requestsAndApprovals}
                   isActive={isSectionActive('/requests') || isSectionActive('/approvals')}
                   className={itemClasses}
                   onClick={() => navigate('/requests')}
                 >
                   <CheckCircle2 className="size-4 shrink-0 text-slate-500" />
                   <span className="group-data-[collapsible=icon]:hidden flex-1 truncate">
-                    Pengajuan & Approval
+                    {t.nav.requestsAndApprovals}
                   </span>
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-500 group-data-[collapsible=icon]:hidden shrink-0" />
                 </SidebarMenuButton>
@@ -272,13 +274,13 @@ export function NexoraSidebar({
               {(canView('Catatan SP') || isHR) && (
                 <SidebarMenuItem>
                   <SidebarMenuButton
-                    tooltip="Catatan SP Karyawan"
+                    tooltip={t.nav.disciplinary}
                     isActive={isSectionActive('/disciplinary')}
                     className={itemClasses}
                     onClick={() => navigate('/disciplinary')}
                   >
                     <FileWarning className="size-4 shrink-0 text-slate-500" />
-                    <span className="group-data-[collapsible=icon]:hidden">Catatan SP</span>
+                    <span className="group-data-[collapsible=icon]:hidden">{t.nav.disciplinary}</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               )}
@@ -286,13 +288,13 @@ export function NexoraSidebar({
               {(canView('Dashboard') || isHR) && (
                 <SidebarMenuItem>
                   <SidebarMenuButton
-                    tooltip="News & Pengumuman"
+                    tooltip={t.nav.news}
                     isActive={isSectionActive('/news')}
                     className={itemClasses}
                     onClick={() => navigate('/news')}
                   >
                     <Megaphone className="size-4 shrink-0 text-slate-500" />
-                    <span className="group-data-[collapsible=icon]:hidden">News & Info</span>
+                    <span className="group-data-[collapsible=icon]:hidden">{t.nav.news}</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               )}
@@ -303,7 +305,7 @@ export function NexoraSidebar({
           {isHR && (
             <SidebarGroup>
               <SidebarGroupLabel className="text-[12px] font-semibold text-slate-500 dark:text-zinc-400 px-3 py-1.5 h-auto tracking-normal">
-                Administration
+                {t.nav.administration}
               </SidebarGroupLabel>
               <SidebarMenu className="space-y-0.5">
                 <Collapsible open={adminOpen} onOpenChange={setAdminOpen} className="group/collapsible">
@@ -311,14 +313,14 @@ export function NexoraSidebar({
                     <CollapsibleTrigger
                       render={
                         <SidebarMenuButton
-                          tooltip="Administrasi HR"
+                          tooltip={t.nav.administration}
                           isActive={adminActive}
                           className={itemClasses}
                         />
                       }
                     >
                       <Settings className="size-4 shrink-0 text-slate-500" />
-                      <span className="group-data-[collapsible=icon]:hidden">Administrasi</span>
+                      <span className="group-data-[collapsible=icon]:hidden">{t.nav.administration}</span>
                       <ChevronRight className="ml-auto size-4 transition-transform duration-200 group-data-open/collapsible:rotate-90 group-data-[collapsible=icon]:hidden opacity-60" />
                     </CollapsibleTrigger>
 
@@ -332,7 +334,7 @@ export function NexoraSidebar({
                               onClick={() => navigate('/admin/companies')}
                             >
                               <Building2 className="size-3.5 shrink-0" />
-                              <span>Master Company</span>
+                              <span>{t.nav.adminCompany}</span>
                             </SidebarMenuSubButton>
                           </SidebarMenuSubItem>
                         )}
@@ -345,7 +347,7 @@ export function NexoraSidebar({
                               onClick={() => navigate('/admin/departments')}
                             >
                               <FolderTree className="size-3.5 shrink-0" />
-                              <span>Master Department</span>
+                              <span>{t.nav.adminDepartment}</span>
                             </SidebarMenuSubButton>
                           </SidebarMenuSubItem>
                         )}
@@ -358,7 +360,7 @@ export function NexoraSidebar({
                               onClick={() => navigate('/admin/approval-hierarchy')}
                             >
                               <GitMerge className="size-3.5 shrink-0" />
-                              <span>Hierarchy Approval</span>
+                              <span>{t.nav.adminApprovalHierarchy}</span>
                             </SidebarMenuSubButton>
                           </SidebarMenuSubItem>
                         )}
@@ -371,7 +373,7 @@ export function NexoraSidebar({
                               onClick={() => navigate('/admin/permissions')}
                             >
                               <Lock className="size-3.5 shrink-0" />
-                              <span>Permission Menu</span>
+                              <span>{t.nav.adminPermissionMenu}</span>
                             </SidebarMenuSubButton>
                           </SidebarMenuSubItem>
                         )}
@@ -384,7 +386,7 @@ export function NexoraSidebar({
                               onClick={() => navigate('/admin/accounts')}
                             >
                               <UserCheck className="size-3.5 shrink-0" />
-                              <span>User Accounts</span>
+                              <span>{t.nav.adminUserAccounts}</span>
                             </SidebarMenuSubButton>
                           </SidebarMenuSubItem>
                         )}
@@ -397,7 +399,7 @@ export function NexoraSidebar({
                               onClick={() => navigate('/admin/activity-logs')}
                             >
                               <History className="size-3.5 shrink-0" />
-                              <span>Log Aktivitas</span>
+                              <span>{t.nav.adminAuditLogs}</span>
                             </SidebarMenuSubButton>
                           </SidebarMenuSubItem>
                         )}
@@ -410,7 +412,7 @@ export function NexoraSidebar({
                               onClick={() => navigate('/analytics')}
                             >
                               <BarChart3 className="size-3.5 shrink-0" />
-                              <span>Analitik & Laporan</span>
+                              <span>{t.nav.adminReportsAnalytics}</span>
                             </SidebarMenuSubButton>
                           </SidebarMenuSubItem>
                         )}
@@ -423,7 +425,7 @@ export function NexoraSidebar({
                               onClick={() => navigate('/settings')}
                             >
                               <Settings className="size-3.5 shrink-0" />
-                              <span>Pengaturan</span>
+                              <span>{t.nav.adminSystemSettings}</span>
                             </SidebarMenuSubButton>
                           </SidebarMenuSubItem>
                         )}
@@ -485,7 +487,7 @@ export function NexoraSidebar({
                 <DropdownMenuLabel className="font-normal p-2">
                   <div className="flex flex-col space-y-1">
                     <p className="text-xs font-bold text-slate-900 dark:text-white leading-none">
-                      {currentUser?.fullName || 'Pengguna'}
+                      {currentUser?.fullName || (isEn ? 'User' : 'Pengguna')}
                     </p>
                     <p className="text-[10px] text-slate-500 dark:text-zinc-400 truncate leading-none mt-1">
                       {currentUser?.email || '-'}
@@ -498,14 +500,14 @@ export function NexoraSidebar({
                   className="text-xs cursor-pointer gap-2 py-2"
                 >
                   <User className="h-3.5 w-3.5 text-slate-500" />
-                  <span>Kelola Akun & Profil</span>
+                  <span>{t.nav.manageAccount}</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() => navigate('/employees')}
                   className="text-xs cursor-pointer gap-2 py-2"
                 >
                   <Users className="h-3.5 w-3.5 text-slate-500" />
-                  <span>Data Karyawan</span>
+                  <span>{t.nav.employeeData}</span>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 {onLogout && (
@@ -514,7 +516,7 @@ export function NexoraSidebar({
                     className="text-xs cursor-pointer gap-2 py-2 text-rose-600 focus:text-rose-600 focus:bg-rose-50 dark:focus:bg-rose-950/40"
                   >
                     <LogOut className="h-3.5 w-3.5" />
-                    <span>Keluar dari Akun</span>
+                    <span>{t.nav.signOut}</span>
                   </DropdownMenuItem>
                 )}
               </DropdownMenuContent>

@@ -22,6 +22,8 @@ import { toast } from 'sonner';
 import { supabase } from '../../lib/supabaseClient';
 import { loadCurrentHRUser } from '../../lib/workforceData';
 import { trackActivity } from '../../lib/auditLogger';
+import { useLanguage } from '@/context/LanguageContext';
+import { LanguageToggle } from '@/components/ui/LanguageToggle';
 
 interface LoginPageProps {
   onLoginSuccess: (user: any) => void;
@@ -31,6 +33,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
   const navigate = useNavigate();
   const { setTheme, resolvedTheme } = useTheme();
   const isDark = resolvedTheme === 'dark';
+  const { t, isEn } = useLanguage();
 
   const [email, setEmail] = useState(() => {
     try {
@@ -52,11 +55,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
     setErrorMsg('');
 
     if (!email.trim()) {
-      setErrorMsg('Silakan masukkan email perusahaan Anda.');
+      setErrorMsg(t.auth.errorEmailRequired);
       return;
     }
     if (!password) {
-      setErrorMsg('Silakan masukkan kata sandi Anda.');
+      setErrorMsg(t.auth.errorPasswordRequired);
       return;
     }
 
@@ -82,7 +85,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
         localStorage.removeItem('gesit_remembered_email');
       }
 
-      toast.success(`Selamat datang kembali, ${loggedInUser.fullName}!`);
+      toast.success(`${t.auth.welcomeBack}, ${loggedInUser.fullName}!`);
       trackActivity({
         userId: loggedInUser.id,
         userName: loggedInUser.fullName || loggedInUser.name || loggedInUser.username,
@@ -144,14 +147,17 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
+          {/* Language Switcher (EN / ID) */}
+          <LanguageToggle size="sm" />
+
           {/* Dark / Light Toggle */}
           <Button
             variant="ghost"
             size="icon"
             onClick={() => setTheme(isDark ? 'light' : 'dark')}
-            className="h-9 w-9 rounded-xl text-muted-foreground hover:text-foreground cursor-pointer"
-            title={isDark ? 'Mode Terang' : 'Mode Gelap'}
+            className="h-8.5 w-8.5 rounded-xl text-muted-foreground hover:text-foreground cursor-pointer"
+            title={isDark ? t.common.themeLight : t.common.themeDark}
           >
             {isDark ? <Sun className="size-4 text-amber-400" /> : <Moon className="size-4" />}
           </Button>
@@ -163,7 +169,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
             className="hidden sm:inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
           >
             <HelpCircle className="size-3.5" />
-            <span>Bantuan HR</span>
+            <span>{t.common.hrHelp}</span>
           </button>
         </div>
       </header>
@@ -176,16 +182,15 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
           <section className="hidden lg:block">
             <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-border/80 bg-background/70 px-3.5 py-1.5 text-xs text-muted-foreground backdrop-blur-sm shadow-2xs">
               <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
-              The Gesit Companies • HCM Workspace
+              {t.auth.systemBadge}
             </div>
 
             <h1 className="max-w-xl text-4xl font-semibold tracking-tight xl:text-5xl leading-[1.2]">
-              Pusat Tata Kelola SDM & <span className="text-primary font-bold">Talenta Terintegrasi.</span>
+              {t.auth.heroTitlePrefix}<span className="text-primary font-bold">{t.auth.heroTitleHighlight}</span>
             </h1>
 
             <p className="mt-6 max-w-lg text-base leading-7 text-muted-foreground">
-              Platform manajemen kehadiran real-time berbasis geofencing GPS, pengajuan cuti & lembur,
-              hierarki approval berjenjang, dan tata kelola karyawan The Gesit Companies terpadu.
+              {t.auth.heroDescription}
             </p>
 
             {/* Feature Cards Grid */}
@@ -193,32 +198,32 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
               <div className="flex items-start gap-2.5 p-3 rounded-xl border border-border/60 bg-card/60 backdrop-blur-xs">
                 <CheckCircle2 className="size-4 text-emerald-500 shrink-0 mt-0.5" />
                 <div className="text-xs">
-                  <p className="font-semibold text-foreground">Presensi Geofencing</p>
-                  <p className="text-muted-foreground text-[11px] mt-0.5">Validasi radius kantor presisi</p>
+                  <p className="font-semibold text-foreground">{t.auth.featureGeofencingTitle}</p>
+                  <p className="text-muted-foreground text-[11px] mt-0.5">{t.auth.featureGeofencingDesc}</p>
                 </div>
               </div>
 
               <div className="flex items-start gap-2.5 p-3 rounded-xl border border-border/60 bg-card/60 backdrop-blur-xs">
                 <CheckCircle2 className="size-4 text-emerald-500 shrink-0 mt-0.5" />
                 <div className="text-xs">
-                  <p className="font-semibold text-foreground">Multi-Tier Approval</p>
-                  <p className="text-muted-foreground text-[11px] mt-0.5">Hierarki persetujuan berjenjang</p>
+                  <p className="font-semibold text-foreground">{t.auth.featureApprovalTitle}</p>
+                  <p className="text-muted-foreground text-[11px] mt-0.5">{t.auth.featureApprovalDesc}</p>
                 </div>
               </div>
 
               <div className="flex items-start gap-2.5 p-3 rounded-xl border border-border/60 bg-card/60 backdrop-blur-xs">
                 <CheckCircle2 className="size-4 text-emerald-500 shrink-0 mt-0.5" />
                 <div className="text-xs">
-                  <p className="font-semibold text-foreground">Kontrak PKWT & PKWTT</p>
-                  <p className="text-muted-foreground text-[11px] mt-0.5">Peringatan jatuh tempo otomatis</p>
+                  <p className="font-semibold text-foreground">{t.auth.featureContractTitle}</p>
+                  <p className="text-muted-foreground text-[11px] mt-0.5">{t.auth.featureContractDesc}</p>
                 </div>
               </div>
 
               <div className="flex items-start gap-2.5 p-3 rounded-xl border border-border/60 bg-card/60 backdrop-blur-xs">
                 <CheckCircle2 className="size-4 text-emerald-500 shrink-0 mt-0.5" />
                 <div className="text-xs">
-                  <p className="font-semibold text-foreground">Audit Log & Keamanan</p>
-                  <p className="text-muted-foreground text-[11px] mt-0.5">Enkripsi terproteksi PostgreSQL</p>
+                  <p className="font-semibold text-foreground">{t.auth.featureSecurityTitle}</p>
+                  <p className="text-muted-foreground text-[11px] mt-0.5">{t.auth.featureSecurityDesc}</p>
                 </div>
               </div>
             </div>
@@ -226,7 +231,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
             {/* Group Companies Badges */}
             <div className="mt-12">
               <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Entitas Perusahaan
+                {t.auth.companyEntities}
               </p>
               <div className="flex flex-wrap items-center gap-2">
                 {[
@@ -248,9 +253,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
 
           {/* ── Right Login Card (Nexora Template) ── */}
           <div className="w-full rounded-2xl border border-border/80 bg-card/90 dark:bg-zinc-900/90 p-7 shadow-xl backdrop-blur-md sm:p-8">
-            <h2 className="text-xl font-semibold tracking-tight text-foreground">Selamat Datang</h2>
+            <h2 className="text-xl font-semibold tracking-tight text-foreground">{t.auth.welcomeTitle}</h2>
             <p className="mb-6 mt-1.5 text-sm text-muted-foreground">
-              Masuk ke akun Gesit People HCM Anda.
+              {t.auth.welcomeSubtitle}
             </p>
 
             {/* Google SSO Button */}
@@ -267,13 +272,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                 <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
                 <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
               </svg>
-              Masuk dengan Akun Google
+              {t.auth.googleSignIn}
             </Button>
 
             {/* Divider */}
             <div className="my-5 flex items-center gap-3 text-xs text-muted-foreground">
               <div className="h-px flex-1 bg-border" />
-              ATAU EMAIL
+              {t.auth.orEmail}
               <div className="h-px flex-1 bg-border" />
             </div>
 
@@ -287,11 +292,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
               )}
 
               <div className="grid gap-2">
-                <Label htmlFor="email">Email Perusahaan</Label>
+                <Label htmlFor="email">{t.auth.emailLabel}</Label>
                 <Input
                   id="email"
                   type="email"
-                  placeholder="nama@gesit.co.id"
+                  placeholder={t.auth.emailPlaceholder}
                   autoComplete="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -301,20 +306,20 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
 
               <div className="grid gap-2">
                 <div className="flex items-center justify-between gap-2">
-                  <Label htmlFor="password">Kata Sandi</Label>
+                  <Label htmlFor="password">{t.auth.passwordLabel}</Label>
                   <button
                     type="button"
                     onClick={() => setShowForgotModal(true)}
                     className="text-xs font-medium text-primary hover:underline underline-offset-4 cursor-pointer"
                   >
-                    Lupa kata sandi?
+                    {t.auth.forgotPassword}
                   </button>
                 </div>
                 <div className="relative">
                   <Input
                     id="password"
                     type={showPassword ? 'text' : 'password'}
-                    placeholder="Masukkan kata sandi Anda"
+                    placeholder={t.auth.passwordPlaceholder}
                     autoComplete="current-password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -342,7 +347,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                   className="h-4 w-4 rounded border-border text-primary focus:ring-primary/20 cursor-pointer"
                 />
                 <label htmlFor="remember" className="text-xs text-muted-foreground cursor-pointer select-none">
-                  Ingat email saya pada perangkat ini
+                  {t.auth.rememberMe}
                 </label>
               </div>
 
@@ -350,11 +355,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                 {loading ? (
                   <div className="flex items-center gap-2">
                     <Loader2 className="size-4 animate-spin" />
-                    <span>Memverifikasi...</span>
+                    <span>{t.auth.verifying}</span>
                   </div>
                 ) : (
                   <div className="flex items-center gap-2">
-                    <span>Masuk ke Workspace</span>
+                    <span>{t.auth.signInButton}</span>
                     <ArrowRight className="size-4" />
                   </div>
                 )}
@@ -362,13 +367,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
             </form>
 
             <p className="mt-6 text-center text-xs leading-relaxed text-muted-foreground">
-              Belum memiliki akses?{' '}
+              {t.auth.noAccess}{' '}
               <button
                 type="button"
                 onClick={() => setShowHelpModal(true)}
                 className="font-semibold text-foreground underline underline-offset-2 hover:text-primary cursor-pointer"
               >
-                Hubungi Helpdesk HR
+                {t.auth.contactHelpdesk}
               </button>
             </p>
           </div>
@@ -378,20 +383,20 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
       {/* ── Footer ── */}
       <footer className="relative z-20 flex flex-col items-center justify-between gap-4 px-6 pb-6 pt-4 text-xs text-muted-foreground sm:flex-row sm:px-10 lg:px-12">
         <p>
-          Hak Cipta © {new Date().getFullYear()}{' '}
-          <span className="font-medium text-foreground">The Gesit Companies</span>. All rights reserved.
+          {isEn ? 'Copyright' : 'Hak Cipta'} © {new Date().getFullYear()}{' '}
+          <span className="font-medium text-foreground">The Gesit Companies</span>. {t.common.allRightsReserved}
         </p>
         <div className="flex items-center gap-5">
           <span className="inline-flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
             <span className="size-1.5 rounded-full bg-emerald-500" />
-            Sistem Operasional
+            {t.common.systemOperational}
           </span>
           <button
             type="button"
             onClick={() => setShowHelpModal(true)}
             className="transition-colors hover:text-foreground cursor-pointer"
           >
-            Panduan Akses
+            {t.common.accessGuide}
           </button>
         </div>
       </footer>
@@ -406,15 +411,14 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
               </div>
               <div>
                 <h3 className="text-base font-bold text-foreground">
-                  Bantuan Akses Akun
+                  {t.auth.helpModalTitle}
                 </h3>
-                <p className="text-xs text-muted-foreground">Tim People & Culture Gesit</p>
+                <p className="text-xs text-muted-foreground">{t.auth.helpModalSubtitle}</p>
               </div>
             </div>
 
             <p className="text-xs text-muted-foreground leading-relaxed mb-4">
-              Jika Anda belum memiliki kredensial login atau mengalami kendala akses ke workspace,
-              silakan hubungi Helpdesk HR:
+              {t.auth.helpModalDesc}
             </p>
 
             <div className="space-y-2.5 rounded-xl bg-muted/50 p-3.5 text-xs">
@@ -431,9 +435,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Jam Operasional:</span>
+                <span className="text-muted-foreground">{t.auth.operatingHoursLabel}</span>
                 <span className="font-semibold text-foreground">
-                  Senin - Jumat, 08:30 - 17:30
+                  {t.auth.operatingHoursValue}
                 </span>
               </div>
             </div>
@@ -444,7 +448,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                 onClick={() => setShowHelpModal(false)}
                 className="cursor-pointer"
               >
-                Tutup
+                {t.common.close}
               </Button>
             </div>
           </div>

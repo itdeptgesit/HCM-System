@@ -7,6 +7,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { ThemeProvider } from '@/components/theme-provider';
 
 import { ToastProvider } from './components/ToastProvider';
+import { LanguageProvider } from './context/LanguageContext';
 
 console.log("Gesit ERP: index.tsx loaded. Attempting to mount...");
 
@@ -23,11 +24,13 @@ root.render(
   <React.StrictMode>
     <BrowserRouter>
       <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
-        <TooltipProvider>
-          <ToastProvider>
-            <App />
-          </ToastProvider>
-        </TooltipProvider>
+        <LanguageProvider>
+          <TooltipProvider>
+            <ToastProvider>
+              <App />
+            </ToastProvider>
+          </TooltipProvider>
+        </LanguageProvider>
       </ThemeProvider>
     </BrowserRouter>
   </React.StrictMode>
