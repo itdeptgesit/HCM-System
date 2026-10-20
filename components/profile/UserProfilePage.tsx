@@ -31,7 +31,8 @@ import {
   Shield,
   Sparkles,
   Copy,
-  ChevronRight
+  ChevronRight,
+  Crop
 } from '@/components/ui/icons';
 import { toast } from 'sonner';
 import { supabase } from '../../lib/supabaseClient';
@@ -43,6 +44,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { ImageCropModal } from '@/components/ui/ImageCropModal';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
@@ -154,8 +156,11 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({ currentUser, o
     }
   }, [currentUser?.id, currentUser?.email]);
 
-  // Handle Avatar Upload with Google Drive Integration
-  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const [cropModalOpen, setCropModalOpen] = useState(false);
+  const [rawCropImageSrc, setRawCropImageSrc] = useState<string>('');
+
+  // Handle Avatar Selection & Open Cropper
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -164,16 +169,36 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({ currentUser, o
       return;
     }
 
-    if (file.size > 10 * 1024 * 1024) {
-      toast.error('Ukuran foto maksimal 10MB.');
+    if (file.size > 15 * 1024 * 1024) {
+      toast.error('Ukuran foto maksimal 15MB.');
       return;
     }
 
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        setRawCropImageSrc(reader.result);
+        setCropModalOpen(true);
+      }
+    };
+    reader.readAsDataURL(file);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleCropExistingAvatar = () => {
+    const currentSrc = avatarImgUrl || rawAvatarUrl;
+    if (!currentSrc) return;
+    setRawCropImageSrc(currentSrc);
+    setCropModalOpen(true);
+  };
+
+  const handleCropComplete = async (croppedBlob: Blob, croppedDataUrl: string) => {
     setIsUploadingAvatar(true);
-    const toastId = toast.loading('Mengunggah foto profil ke Google Drive...');
+    const toastId = toast.loading('Mengunggah foto profil yang telah di-crop ke Google Drive...');
 
     try {
-      const uploadRes = await uploadFileToGoogleDrive(file, {
+      const croppedFile = new File([croppedBlob], `avatar_${Date.now()}.jpg`, { type: 'image/jpeg' });
+      const uploadRes = await uploadFileToGoogleDrive(croppedFile, {
         category: 'foto_profil',
         employeeName: profileData.full_name || currentUser?.fullName || 'User',
         employeeId: profileData.employee_code || currentUser?.employeeCode,
@@ -207,13 +232,12 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({ currentUser, o
       if (onUserUpdate) onUserUpdate(updatedUser);
       localStorage.setItem('gesit_user', JSON.stringify(updatedUser));
 
-      toast.success('Foto profil berhasil diperbarui!', { id: toastId });
+      toast.success('Foto profil berhasil diperbarui & disimpan!', { id: toastId });
     } catch (err: any) {
       console.error('Error avatar upload:', err);
       toast.error('Gagal memperbarui foto profil: ' + (err.message || 'Error'), { id: toastId });
     } finally {
       setIsUploadingAvatar(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -433,16 +457,29 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({ currentUser, o
                   )}
                 </div>
 
-                {/* Upload Action Button */}
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={isUploadingAvatar}
-                  className="absolute -bottom-1 -right-1 p-2 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground shadow-md transition-transform hover:scale-105 active:scale-95 ring-2 ring-card cursor-pointer"
-                  title="Ganti Foto Profil (Google Drive)"
-                >
-                  <Camera size={14} />
-                </button>
+                {/* Upload & Crop Action Buttons */}
+                <div className="absolute -bottom-1 -right-1 flex items-center gap-1">
+                  {avatarImgUrl && (
+                    <button
+                      type="button"
+                      onClick={handleCropExistingAvatar}
+                      disabled={isUploadingAvatar}
+                      className="p-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-md transition-transform hover:scale-105 active:scale-95 ring-2 ring-card cursor-pointer"
+                      title="Crop & Sesuaikan Posisi Foto"
+                    >
+                      <Crop size={13} />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploadingAvatar}
+                    className="p-2 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground shadow-md transition-transform hover:scale-105 active:scale-95 ring-2 ring-card cursor-pointer"
+                    title="Ganti Foto Profil (Google Drive)"
+                  >
+                    <Camera size={14} />
+                  </button>
+                </div>
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -1231,6 +1268,15 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({ currentUser, o
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Interactive Image Cropper Modal */}
+      <ImageCropModal
+        isOpen={cropModalOpen}
+        imageSrc={rawCropImageSrc}
+        onClose={() => setCropModalOpen(false)}
+        onCropComplete={handleCropComplete}
+        title="Sesuaikan & Crop Foto Profil Anda"
+      />
     </div>
   );
 };

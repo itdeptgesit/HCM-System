@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Check, ChevronLeft, ChevronRight, X, CheckCircle2, Info, GraduationCap, Upload, ExternalLink, FileText, Loader2, Camera, Trash2, Clock, Lock } from '@/components/ui/icons';
+import { Check, ChevronLeft, ChevronRight, X, CheckCircle2, Info, GraduationCap, Upload, ExternalLink, FileText, Loader2, Camera, Trash2, Clock, Lock, Crop } from '@/components/ui/icons';
 import { uploadFileToGoogleDrive } from '../lib/googleDriveUpload';
 import { UserAccount, UserGroup, Company, DocumentCategory } from '../types';
 import { supabase } from '../lib/supabaseClient';
@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { UserAvatar } from './UserAvatar';
 import { normalizeGender, normalizeReligion } from '../lib/utils';
 import { EmployeeAppointmentSKModal, getCompanyAbbr } from './hr/EmployeeAppointmentSKModal';
+import { ImageCropModal } from '@/components/ui/ImageCropModal';
 
 interface UserFormModalProps {
   isOpen: boolean;
@@ -220,20 +221,47 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
     'Non HQ'
   ]);
   const [skModalOpen, setSkModalOpen] = useState(false);
+  const [cropModalOpen, setCropModalOpen] = useState(false);
+  const [rawCropImageSrc, setRawCropImageSrc] = useState<string>('');
 
-  const handleAvatarFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 10 * 1024 * 1024) {
-      setAvatarError('Ukuran file foto maksimal 10MB.');
+    if (file.size > 15 * 1024 * 1024) {
+      setAvatarError('Ukuran file foto maksimal 15MB.');
       return;
     }
 
+    setAvatarError('');
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        setRawCropImageSrc(reader.result);
+        setCropModalOpen(true);
+      }
+    };
+    reader.onerror = () => {
+      setAvatarError('Gagal membaca file gambar.');
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const handleCropExistingAvatar = () => {
+    if (!form.avatarUrl) return;
+    setRawCropImageSrc(form.avatarUrl);
+    setCropModalOpen(true);
+  };
+
+  const handleCropComplete = async (croppedBlob: Blob, croppedDataUrl: string) => {
+    // Show immediate optimistic preview
+    setField('avatarUrl', croppedDataUrl);
     setUploadingAvatar(true);
     setAvatarError('');
     try {
-      const result = await uploadFileToGoogleDrive(file, {
+      const croppedFile = new File([croppedBlob], `avatar_${Date.now()}.jpg`, { type: 'image/jpeg' });
+      const result = await uploadFileToGoogleDrive(croppedFile, {
         category: 'foto_profil',
         visibility: 'all_active',
         targetEmail: (form.email || '').trim().toLowerCase(),
@@ -243,17 +271,16 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
       });
       if (result.success && result.fileUrl) {
         setField('avatarUrl', result.fileUrl);
-        showToast('Foto profil karyawan berhasil diunggah', 'success');
+        showToast('Foto profil karyawan berhasil di-crop dan disimpan', 'success');
       } else {
         throw new Error(result.error || 'Gagal mengunggah foto profil.');
       }
     } catch (err: any) {
       const msg = err.message || 'Gagal mengunggah foto';
       setAvatarError(msg);
-      showToast('Gagal upload foto: ' + msg, 'error');
+      showToast('Gagal simpan foto: ' + msg, 'error');
     } finally {
       setUploadingAvatar(false);
-      e.target.value = '';
     }
   };
 
@@ -592,6 +619,18 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
                             className="hidden" 
                           />
                         </label>
+
+                        {form.avatarUrl && (
+                          <button
+                            type="button"
+                            onClick={handleCropExistingAvatar}
+                            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 border border-emerald-200 dark:border-emerald-800 transition-colors cursor-pointer"
+                            title="Crop, perbesar, dan geser posisi wajah agar pas"
+                          >
+                            <Crop size={14} />
+                            <span>Crop / Sesuaikan</span>
+                          </button>
+                        )}
 
                         {form.avatarUrl && (
                           <button
@@ -1556,6 +1595,15 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
         </form>
       </DialogContent>
     </Dialog>
+
+    {/* Interactive Image Cropper Modal */}
+    <ImageCropModal
+      isOpen={cropModalOpen}
+      imageSrc={rawCropImageSrc}
+      onClose={() => setCropModalOpen(false)}
+      onCropComplete={handleCropComplete}
+      title="Crop & Posisikan Foto Profil Karyawan"
+    />
 
     {/* Modal Pratinjau & Cetak SK Pengangkatan Karyawan Tetap */}
     <EmployeeAppointmentSKModal
