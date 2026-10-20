@@ -20,7 +20,7 @@ interface ImageCropModalProps {
   onCropComplete: (croppedBlob: Blob, croppedDataUrl: string) => void;
   title?: string;
   aspectRatio?: number; // default 1 (1:1 square)
-  outputSize?: number; // default 600 (600x600 px high res)
+  outputSize?: number; // default 420 (optimized for crisp retina avatars with tiny payload)
 }
 
 export const ImageCropModal: React.FC<ImageCropModalProps> = ({
@@ -30,7 +30,7 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
   onCropComplete,
   title = 'Sesuaikan & Crop Foto Profil',
   aspectRatio = 1,
-  outputSize = 600,
+  outputSize = 420,
 }) => {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [zoom, setZoom] = useState(1);
@@ -182,13 +182,13 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
     canvas.toBlob(
       blob => {
         if (blob) {
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
           onCropComplete(blob, dataUrl);
           onClose();
         }
       },
       'image/jpeg',
-      0.92
+      0.85
     );
   };
 

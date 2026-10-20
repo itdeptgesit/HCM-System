@@ -31,6 +31,7 @@ import {
   ShieldCheck
 } from '@/components/ui/icons';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
 import {
@@ -56,6 +57,10 @@ interface DemographicGroup {
   count: number;
   percentage: number;
   isHighlight?: boolean;
+}
+
+interface EmployeeDemographicGroup extends DemographicGroup {
+  employees: any[];
 }
 
 // Helpers for calculations
@@ -121,6 +126,7 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
     employees: [],
   });
   const [drilldownSearch, setDrilldownSearch] = useState<string>('');
+  const drilldownTriggerRef = useRef<HTMLElement | null>(null);
   const [chartsReady, setChartsReady] = useState<boolean>(false);
 
   useEffect(() => {
@@ -419,101 +425,100 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
   }, [tenuresWithData]);
 
   // Age Distribution
-  const ageDistribution: DemographicGroup[] = useMemo(() => {
+  const ageDistribution: EmployeeDemographicGroup[] = useMemo(() => {
     const groups = [
-      { label: '<25 tahun', count: 0, min: 0, max: 24 },
-      { label: '25–34 tahun', count: 0, min: 25, max: 34 },
-      { label: '35–44 tahun', count: 0, min: 35, max: 44 },
-      { label: '45–54 tahun', count: 0, min: 45, max: 54 },
-      { label: '≥55 tahun', count: 0, min: 55, max: 150 },
-      { label: 'Belum tercatat', count: 0, min: -1, max: -1 },
-    ];
+      { label: '<25 tahun', min: 0, max: 25 },
+      { label: '25–<30 tahun', min: 25, max: 30 },
+      { label: '30–<40 tahun', min: 30, max: 40 },
+      { label: '40–<50 tahun', min: 40, max: 50 },
+      { label: '50–<60 tahun', min: 50, max: 60 },
+      { label: '≥60 tahun', min: 60, max: Infinity },
+      { label: 'Belum tercatat', min: -1, max: 0 },
+    ].map(group => ({ ...group, employees: [] as any[] }));
 
     filteredEmployees.forEach(emp => {
-      const a = calculateAge(emp.date_of_birth);
-      if (a === null) {
-        groups[5].count++;
-      } else {
-        const found = groups.slice(0, 5).find(g => a >= g.min && a <= g.max);
-        if (found) {
-          found.count++;
-        }
-      }
+      const age = calculateAge(emp.date_of_birth) ?? -1;
+      groups.find(group => age >= group.min && age < group.max)?.employees.push(emp);
     });
 
-    const maxCount = Math.max(...groups.map(g => g.count), 1);
+    const maxCount = Math.max(...groups.map(g => g.employees.length), 1);
     return groups.map(g => ({
       label: g.label,
-      count: g.count,
-      percentage: totalHeadcount > 0 ? Number(((g.count / totalHeadcount) * 100).toFixed(1)) : 0,
-      isHighlight: g.count === maxCount && g.count > 0,
+      employees: g.employees,
+      count: g.employees.length,
+      percentage: totalHeadcount > 0 ? Number(((g.employees.length / totalHeadcount) * 100).toFixed(1)) : 0,
+      isHighlight: g.employees.length === maxCount,
     }));
   }, [filteredEmployees, totalHeadcount]);
 
   // Education Distribution
-  const educationDistribution: DemographicGroup[] = useMemo(() => {
-    const buckets: Record<string, number> = {
-      'SMA / SMK': 0,
-      'Diploma': 0,
-      'S1': 0,
-      'S2': 0,
-      'S3': 0,
-      'Belum tercatat': 0,
+  const educationDistribution: EmployeeDemographicGroup[] = useMemo(() => {
+    const buckets: Record<string, any[]> = {
+      'SMA / SMK': [],
+      'Diploma': [],
+      'S1': [],
+      'S2': [],
+      'S3': [],
+      'Belum tercatat': [],
     };
 
     filteredEmployees.forEach(emp => {
       const ed = String(emp.last_education || '').toLowerCase().trim();
       if (!ed) {
-        buckets['Belum tercatat']++;
-      } else if (ed.includes('s1') || ed.includes('sarjana') || ed.includes('bachelor')) {
-        buckets['S1']++;
+        buckets['Belum tercatat'].push(emp);
       } else if (ed.includes('s2') || ed.includes('magister') || ed.includes('master')) {
-        buckets['S2']++;
+        buckets['S2'].push(emp);
       } else if (ed.includes('s3') || ed.includes('doktor')) {
-        buckets['S3']++;
+        buckets['S3'].push(emp);
+      } else if (ed.includes('s1') || ed.includes('sarjana') || ed.includes('bachelor')) {
+        buckets['S1'].push(emp);
       } else if (ed.includes('d1') || ed.includes('d2') || ed.includes('d3') || ed.includes('d4') || ed.includes('diploma')) {
-        buckets['Diploma']++;
+        buckets['Diploma'].push(emp);
       } else if (ed.includes('sma') || ed.includes('smk') || ed.includes('slta')) {
-        buckets['SMA / SMK']++;
+        buckets['SMA / SMK'].push(emp);
       } else {
-        buckets['S1']++;
+        (buckets['Lainnya'] ??= []).push(emp);
       }
     });
 
-    const maxCount = Math.max(...Object.values(buckets), 1);
-    return Object.entries(buckets).map(([label, count]) => ({
+    const maxCount = Math.max(...Object.values(buckets).map(employees => employees.length), 1);
+    return Object.entries(buckets).map(([label, employees]) => ({
       label,
-      count,
-      percentage: totalHeadcount > 0 ? Number(((count / totalHeadcount) * 100).toFixed(1)) : 0,
-      isHighlight: count === maxCount && count > 0,
+      employees,
+      count: employees.length,
+      percentage: totalHeadcount > 0 ? Number(((employees.length / totalHeadcount) * 100).toFixed(1)) : 0,
+      isHighlight: employees.length === maxCount,
     }));
   }, [filteredEmployees, totalHeadcount]);
 
   // Tenure Distribution
-  const tenureDistribution: DemographicGroup[] = useMemo(() => {
-    const buckets: Record<string, number> = {
-      '<1 tahun': 0,
-      '1–3 tahun': 0,
-      '3–5 tahun': 0,
-      '5–10 tahun': 0,
-      '≥10 tahun': 0,
+  const tenureDistribution: EmployeeDemographicGroup[] = useMemo(() => {
+    const buckets: Record<string, any[]> = {
+      '<1 tahun': [],
+      '1–3 tahun': [],
+      '3–5 tahun': [],
+      '5–10 tahun': [],
+      '≥10 tahun': [],
+      'Belum tercatat': [],
     };
 
     filteredEmployees.forEach(emp => {
       const t = calculateTenureYears(emp.join_date);
-      if (t === null || t < 1) buckets['<1 tahun']++;
-      else if (t < 3) buckets['1–3 tahun']++;
-      else if (t < 5) buckets['3–5 tahun']++;
-      else if (t < 10) buckets['5–10 tahun']++;
-      else buckets['≥10 tahun']++;
+      if (t === null) buckets['Belum tercatat'].push(emp);
+      else if (t < 1) buckets['<1 tahun'].push(emp);
+      else if (t < 3) buckets['1–3 tahun'].push(emp);
+      else if (t < 5) buckets['3–5 tahun'].push(emp);
+      else if (t < 10) buckets['5–10 tahun'].push(emp);
+      else buckets['≥10 tahun'].push(emp);
     });
 
-    const maxCount = Math.max(...Object.values(buckets), 1);
-    return Object.entries(buckets).map(([label, count]) => ({
+    const maxCount = Math.max(...Object.values(buckets).map(employees => employees.length), 1);
+    return Object.entries(buckets).map(([label, employees]) => ({
       label,
-      count,
-      percentage: totalHeadcount > 0 ? Number(((count / totalHeadcount) * 100).toFixed(1)) : 0,
-      isHighlight: count === maxCount && count > 0,
+      employees,
+      count: employees.length,
+      percentage: totalHeadcount > 0 ? Number(((employees.length / totalHeadcount) * 100).toFixed(1)) : 0,
+      isHighlight: employees.length === maxCount,
     }));
   }, [filteredEmployees, totalHeadcount]);
 
@@ -786,6 +791,7 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
 
   // Helper to open drilldown list with real data
   const openDrilldown = (groupName: string, category: string, employeeList?: any[]) => {
+    drilldownTriggerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     let list = employeeList;
     if (!list) {
       if (groupName.includes('55')) list = seniorEmployees;
@@ -2016,36 +2022,39 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
               </span>
             </div>
 
-            <div className="space-y-3 mt-4">
+            <div className="space-y-1 mt-4">
               {ageDistribution.map(item => (
-                <div key={item.label}>
-                  <div className="flex justify-between text-xs font-medium mb-1">
+                <button
+                  key={item.label}
+                  type="button"
+                  aria-label={`Lihat karyawan usia ${item.label}: ${item.count} orang`}
+                  aria-haspopup="dialog"
+                  onClick={() => openDrilldown(item.label, 'Usia', item.employees)}
+                  className="block w-full min-h-11 rounded-lg px-2 py-2 text-left hover:bg-slate-50 dark:hover:bg-[#18181b] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 dark:focus-visible:outline-blue-400 transition-colors cursor-pointer"
+                >
+                  <span className="flex justify-between text-xs font-medium mb-1">
                     <span className="text-slate-600 dark:text-slate-300">{item.label}</span>
                     <span className="text-slate-900 dark:text-white font-bold">
                       {item.count}{' '}
-                      <span className="text-[10px] text-slate-400 font-normal">({item.percentage}%)</span>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 font-normal">({item.percentage}%)</span>
                     </span>
-                  </div>
-                  <div className="w-full h-2 bg-slate-100 dark:bg-[#1F1F24] rounded-full overflow-hidden">
-                    <div
+                  </span>
+                  <span className="block w-full h-2 bg-slate-100 dark:bg-[#1F1F24] rounded-full overflow-hidden">
+                    <span
                       style={{ width: `${chartsReady ? item.percentage : 0}%` }}
-                      className={`h-full rounded-full transition-all duration-1000 ease-out ${
+                      className={`block h-full rounded-full transition-all duration-1000 ease-out motion-reduce:transition-none ${
                         item.isHighlight ? 'bg-blue-600 dark:bg-blue-500' : 'bg-slate-400 dark:bg-slate-600'
                       }`}
                     />
-                  </div>
-                </div>
+                  </span>
+                </button>
               ))}
             </div>
           </div>
 
-          <button
-            onClick={() => openDrilldown('Kelompok Usia', 'Demografi')}
-            className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 mt-5 pt-3 border-t border-slate-100 dark:border-slate-800/80 transition-colors cursor-pointer"
-          >
-            <span>Klik kelompok untuk melihat karyawan</span>
-            <ArrowRight className="h-3 w-3" />
-          </button>
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-5 pt-3 border-t border-slate-100 dark:border-slate-800/80">
+            Klik kelompok untuk melihat karyawan
+          </p>
         </div>
 
         {/* 2. Pendidikan Terakhir */}
@@ -2061,36 +2070,39 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
               </span>
             </div>
 
-            <div className="space-y-3 mt-4">
+            <div className="space-y-1 mt-4">
               {educationDistribution.map(item => (
-                <div key={item.label}>
-                  <div className="flex justify-between text-xs font-medium mb-1">
+                <button
+                  key={item.label}
+                  type="button"
+                  aria-label={`Lihat karyawan pendidikan ${item.label}: ${item.count} orang`}
+                  aria-haspopup="dialog"
+                  onClick={() => openDrilldown(item.label, 'Pendidikan terakhir', item.employees)}
+                  className="block w-full min-h-11 rounded-lg px-2 py-2 text-left hover:bg-slate-50 dark:hover:bg-[#18181b] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 dark:focus-visible:outline-blue-400 transition-colors cursor-pointer"
+                >
+                  <span className="flex justify-between text-xs font-medium mb-1">
                     <span className="text-slate-600 dark:text-slate-300">{item.label}</span>
                     <span className="text-slate-900 dark:text-white font-bold">
                       {item.count}{' '}
-                      <span className="text-[10px] text-slate-400 font-normal">({item.percentage}%)</span>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 font-normal">({item.percentage}%)</span>
                     </span>
-                  </div>
-                  <div className="w-full h-2 bg-slate-100 dark:bg-[#1F1F24] rounded-full overflow-hidden">
-                    <div
+                  </span>
+                  <span className="block w-full h-2 bg-slate-100 dark:bg-[#1F1F24] rounded-full overflow-hidden">
+                    <span
                       style={{ width: `${chartsReady ? item.percentage : 0}%` }}
-                      className={`h-full rounded-full transition-all duration-1000 ease-out ${
+                      className={`block h-full rounded-full transition-all duration-1000 ease-out motion-reduce:transition-none ${
                         item.isHighlight ? 'bg-amber-500 dark:bg-amber-400' : 'bg-slate-400 dark:bg-slate-600'
                       }`}
                     />
-                  </div>
-                </div>
+                  </span>
+                </button>
               ))}
             </div>
           </div>
 
-          <button
-            onClick={() => openDrilldown('Jenjang Pendidikan', 'Pendidikan')}
-            className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 mt-5 pt-3 border-t border-slate-100 dark:border-slate-800/80 transition-colors cursor-pointer"
-          >
-            <span>Klik kelompok untuk melihat karyawan</span>
-            <ArrowRight className="h-3 w-3" />
-          </button>
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-5 pt-3 border-t border-slate-100 dark:border-slate-800/80">
+            Klik kelompok untuk melihat karyawan
+          </p>
         </div>
 
         {/* 3. Masa Kerja */}
@@ -2106,36 +2118,39 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
               </span>
             </div>
 
-            <div className="space-y-3 mt-4">
+            <div className="space-y-1 mt-4">
               {tenureDistribution.map(item => (
-                <div key={item.label}>
-                  <div className="flex justify-between text-xs font-medium mb-1">
+                <button
+                  key={item.label}
+                  type="button"
+                  aria-label={`Lihat karyawan masa kerja ${item.label}: ${item.count} orang`}
+                  aria-haspopup="dialog"
+                  onClick={() => openDrilldown(item.label, 'Masa kerja', item.employees)}
+                  className="block w-full min-h-11 rounded-lg px-2 py-2 text-left hover:bg-slate-50 dark:hover:bg-[#18181b] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 dark:focus-visible:outline-blue-400 transition-colors cursor-pointer"
+                >
+                  <span className="flex justify-between text-xs font-medium mb-1">
                     <span className="text-slate-600 dark:text-slate-300">{item.label}</span>
                     <span className="text-slate-900 dark:text-white font-bold">
                       {item.count}{' '}
-                      <span className="text-[10px] text-slate-400 font-normal">({item.percentage}%)</span>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 font-normal">({item.percentage}%)</span>
                     </span>
-                  </div>
-                  <div className="w-full h-2 bg-slate-100 dark:bg-[#1F1F24] rounded-full overflow-hidden">
-                    <div
+                  </span>
+                  <span className="block w-full h-2 bg-slate-100 dark:bg-[#1F1F24] rounded-full overflow-hidden">
+                    <span
                       style={{ width: `${chartsReady ? item.percentage : 0}%` }}
-                      className={`h-full rounded-full transition-all duration-1000 ease-out ${
+                      className={`block h-full rounded-full transition-all duration-1000 ease-out motion-reduce:transition-none ${
                         item.isHighlight ? 'bg-blue-600 dark:bg-blue-500' : 'bg-slate-400 dark:bg-slate-600'
                       }`}
                     />
-                  </div>
-                </div>
+                  </span>
+                </button>
               ))}
             </div>
           </div>
 
-          <button
-            onClick={() => openDrilldown('Masa Kerja', 'Tenur Karyawan')}
-            className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 mt-5 pt-3 border-t border-slate-100 dark:border-slate-800/80 transition-colors cursor-pointer"
-          >
-            <span>Klik kelompok untuk melihat karyawan</span>
-            <ArrowRight className="h-3 w-3" />
-          </button>
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-5 pt-3 border-t border-slate-100 dark:border-slate-800/80">
+            Klik kelompok untuk melihat karyawan
+          </p>
         </div>
       </div>
 
@@ -2451,17 +2466,22 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
       </div>
 
       {/* ── DRILLDOWN EMPLOYEES MODAL (WITH SEARCH & HIGH-CONTRAST DARK/LIGHT THEME) ── */}
-      {drilldownModal.open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in">
-          <div className="w-full max-w-xl bg-white dark:bg-[#131316] rounded-2xl border border-slate-200 dark:border-[#27272a] shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+      <Dialog open={drilldownModal.open} onOpenChange={open => setDrilldownModal(prev => ({ ...prev, open }))}>
+          <DialogContent
+            showCloseButton={false}
+            finalFocus={drilldownTriggerRef}
+            className="sm:max-w-xl bg-white dark:bg-[#131316] border-slate-200 dark:border-[#27272a] flex flex-col max-h-[85dvh]"
+          >
             <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800/80 bg-slate-50/70 dark:bg-[#18181b]/50">
               <div>
-                <h3 className="text-sm font-bold text-slate-900 dark:text-white">{drilldownModal.title}</h3>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400">{drilldownModal.subtitle}</p>
+                <DialogTitle className="text-sm font-bold text-slate-900 dark:text-white">{drilldownModal.title}</DialogTitle>
+                <DialogDescription className="text-[11px] text-slate-600 dark:text-slate-400">{drilldownModal.subtitle}</DialogDescription>
               </div>
               <button
+                type="button"
+                aria-label="Tutup daftar karyawan"
                 onClick={() => setDrilldownModal(prev => ({ ...prev, open: false }))}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                className="min-h-11 min-w-11 shrink-0 flex items-center justify-center rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 focus-visible:outline-2 focus-visible:outline-blue-600 transition-colors cursor-pointer"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -2470,34 +2490,37 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
             {/* Modal Internal Search Bar */}
             <div className="px-4 pt-3 pb-1 border-b border-slate-100 dark:border-slate-800/60 bg-white dark:bg-[#131316]">
               <div className="relative">
-                <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500" />
                 <input
                   type="text"
+                  aria-label="Cari karyawan dalam kelompok"
                   placeholder="Cari nama karyawan, NIK, jabatan, atau perusahaan..."
                   value={drilldownSearch}
                   onChange={e => setDrilldownSearch(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 dark:border-[#27272a] bg-slate-50 dark:bg-[#18181b] pl-9 pr-3.5 py-1.5 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  className="w-full min-h-11 rounded-xl border border-slate-200 dark:border-[#27272a] bg-slate-50 dark:bg-[#18181b] pl-9 pr-3.5 py-1.5 text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-500 dark:placeholder:text-slate-400 focus-visible:outline-2 focus-visible:outline-blue-600 dark:focus-visible:outline-blue-400"
                 />
               </div>
             </div>
 
-            <div className="p-4 overflow-y-auto space-y-2.5 divide-y divide-slate-100 dark:divide-slate-800/60">
+            <div className="min-h-0 p-4 overflow-y-auto space-y-2.5 divide-y divide-slate-100 dark:divide-slate-800/60">
               {modalEmployeesFiltered.length === 0 ? (
-                <div className="text-center py-8 text-xs text-slate-400 dark:text-slate-500">
-                  Tidak ada karyawan yang sesuai kriteria pencarian ini.
+                <div className="text-center py-8 text-xs text-slate-600 dark:text-slate-400">
+                  {drilldownModal.employees.length === 0
+                    ? 'Belum ada karyawan dalam kelompok ini.'
+                    : 'Tidak ada karyawan yang sesuai kriteria pencarian ini.'}
                 </div>
               ) : (
                 modalEmployeesFiltered.map((emp: any) => (
                   <div key={emp.id} className="pt-2.5 first:pt-0 flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3">
+                    <div className="flex min-w-0 items-center gap-3">
                       <UserAvatar name={emp.full_name || 'Karyawan'} url={emp.avatar_url} size="sm" />
-                      <div>
+                      <div className="min-w-0 break-words">
                         <h4 className="text-xs font-bold text-slate-900 dark:text-white">
                           {emp.full_name || emp.name}
                         </h4>
-                        <p className="text-[10px] text-slate-400 dark:text-slate-500">
+                        <p className="text-[10px] text-slate-600 dark:text-slate-400">
                           {emp.employee_code || emp.nik || 'EMP'} · {emp.job_title || emp.position || 'Staff'} ·{' '}
-                          {emp.company || 'The Gesit Companies'} ({emp.department || 'General'})
+                          {emp.company || emp.company_name || 'Perusahaan belum tercatat'} ({emp.department || emp.department_name || 'Departemen belum tercatat'})
                         </p>
                       </div>
                     </div>
@@ -2506,7 +2529,7 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
                         setDrilldownModal(prev => ({ ...prev, open: false }));
                         navigate('/employees');
                       }}
-                      className="text-[10px] font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 hover:underline shrink-0 cursor-pointer"
+                      className="min-h-11 min-w-11 text-[10px] font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 hover:underline focus-visible:outline-2 focus-visible:outline-blue-600 shrink-0 cursor-pointer"
                     >
                       Profil →
                     </button>
@@ -2515,20 +2538,19 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
               )}
             </div>
 
-            <div className="p-3.5 border-t border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-[#18181b]/50 flex items-center justify-between">
-              <span className="text-[10px] text-slate-400">
+            <div className="p-3.5 shrink-0 border-t border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-[#18181b]/50 flex items-center justify-between gap-3">
+              <span className="text-[10px] text-slate-600 dark:text-slate-400" aria-live="polite">
                 Menampilkan {modalEmployeesFiltered.length} dari {drilldownModal.employees.length} karyawan
               </span>
               <button
                 onClick={() => setDrilldownModal(prev => ({ ...prev, open: false }))}
-                className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-semibold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                className="min-h-11 px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-semibold hover:bg-slate-200 dark:hover:bg-slate-700 focus-visible:outline-2 focus-visible:outline-blue-600 transition-colors cursor-pointer"
               >
                 Tutup
               </button>
             </div>
-          </div>
-        </div>
-      )}
+          </DialogContent>
+      </Dialog>
     </div>
   );
 }
