@@ -543,7 +543,8 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
                         name={form.fullName || 'Employee'} 
                         url={form.avatarUrl} 
                         size="xl" 
-                        className="h-20 w-20 sm:h-24 sm:w-24 text-xl sm:text-2xl shadow-md border-2 border-border ring-2 ring-border/50"
+                        shape="square"
+                        className="h-20 w-20 sm:h-24 sm:w-24 text-xl sm:text-2xl shadow-md border-2 border-border ring-2 ring-border/50 aspect-square rounded-2xl"
                       />
                       {form.avatarUrl && (
                         <button

@@ -21,6 +21,7 @@ interface UserAvatarProps {
     url?: string | null;
     size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
     className?: string;
+    shape?: 'circle' | 'square';
 }
 
 export const formatAvatarImageUrl = (url?: string | null): string | null => {
@@ -37,7 +38,7 @@ export const formatAvatarImageUrl = (url?: string | null): string | null => {
     return clean;
 };
 
-export const UserAvatar: React.FC<UserAvatarProps> = ({ name, url, size = 'sm', className = '' }) => {
+export const UserAvatar: React.FC<UserAvatarProps> = ({ name, url, size = 'sm', className = '', shape = 'square' }) => {
     const fallbackColor = getAvatarColor(name);
     const initials = React.useMemo(() => {
         const parts = (name || 'User').trim().split(/\s+/).filter(Boolean);
@@ -63,15 +64,16 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({ name, url, size = 'sm', 
     };
 
     const showImage = Boolean(resolvedUrl && !hasError);
+    const radiusClass = shape === 'circle' ? 'rounded-full' : 'rounded-2xl';
 
     return (
-        <div className={`${sizeClasses[size]} rounded-full flex items-center justify-center font-bold text-white shadow-sm overflow-hidden border border-white/10 shrink-0 ${showImage ? 'bg-slate-100 dark:bg-zinc-800' : fallbackColor} ${className}`}>
+        <div className={`${sizeClasses[size]} aspect-square ${radiusClass} flex items-center justify-center font-bold text-white shadow-sm overflow-hidden border border-white/10 shrink-0 ${showImage ? 'bg-slate-100 dark:bg-zinc-800' : fallbackColor} ${className}`}>
             {showImage ? (
                 <img 
                     src={resolvedUrl!} 
                     alt={name || 'Avatar'} 
                     aria-hidden="true" 
-                    className="w-full h-full object-cover" 
+                    className="w-full h-full object-cover object-center aspect-square" 
                     referrerPolicy="no-referrer"
                     loading="lazy"
                     onError={() => setHasError(true)}
