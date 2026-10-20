@@ -575,7 +575,7 @@ export const AttendanceReport: React.FC<AttendanceReportProps> = ({ currentUser,
                   <p className="text-xs text-muted-foreground">Silakan sesuaikan tanggal atau kata kunci pencarian</p>
                 </div>
               ) : (
-                <Table>
+                <Table className="min-w-[1200px]">
                   <TableHeader>
                     <TableRow className="hover:bg-transparent">
                       <TableHead className="w-[240px]">Karyawan & NIK</TableHead>
@@ -955,7 +955,7 @@ export const AttendanceReport: React.FC<AttendanceReportProps> = ({ currentUser,
                   <p className="text-xs text-muted-foreground">Silakan ubah rentang tanggal atau filter status absensi</p>
                 </div>
               ) : (
-                <Table>
+                <Table className="min-w-[980px]">
                   <TableHeader>
                     <TableRow className="hover:bg-transparent">
                       <TableHead className="w-[140px]">Tanggal</TableHead>
