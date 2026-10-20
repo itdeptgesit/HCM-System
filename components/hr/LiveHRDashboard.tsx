@@ -31,6 +31,16 @@ import {
   ShieldCheck
 } from '@/components/ui/icons';
 import { Button } from '@/components/ui/button';
+import * as XLSX from 'xlsx';
+import { toast } from 'sonner';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator
+} from '@/components/ui/dropdown-menu';
 import { supabase } from '../../lib/supabaseClient';
 import { fetchAllRows, loadWorkforceAccounts, normalizeAttendance } from '../../lib/workforceData';
 import { isActiveEmployee, isHRAccount, jakartaDate, resolveApprovalStatus } from '../../lib/workforce-contract';
@@ -96,6 +106,7 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
   const [records, setRecords] = useState<any[]>([]);
   const [requests, setRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [exporting, setExporting] = useState<boolean>(false);
 
   // Drilldown Modal State with Search
   const [drilldownModal, setDrilldownModal] = useState<{
@@ -807,27 +818,276 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
     });
   }, [drilldownModal.employees, drilldownSearch]);
 
-  // Export KPI Report
-  const handleExportKPI = () => {
-    const csvContent =
-      'data:text/csv;charset=utf-8,' +
-      'Indikator,Nilai,Keterangan\n' +
-      `Karyawan Aktif,${totalHeadcount},Orang\n` +
-      `Karyawan Baru Masuk,+${newHires},Bulan Berjalan\n` +
-      `Karyawan Keluar,${resignations},Bulan Berjalan\n` +
-      `Rata-Rata Usia,${avgAge} tahun,${ageRangeStr}\n` +
-      `Rata-Rata Masa Kerja,${avgTenure} tahun,${overFiveYearsEmployees.length} karyawan > 5 tahun\n` +
-      `Turnover Rate,${turnoverRate}%,Bulan berjalan\n` +
-      `Tingkat Kehadiran,${attendanceRate}%,${checkedInCount} check-in\n` +
-      `Kontrak Berakhir <=30 Hari,${expiringContracts.length},Perlu evaluasi\n`;
+  // Helper to calculate auto-fit column widths in worksheet
+  const autoFitCols = (data: Record<string, any>[]) => {
+    if (!data || data.length === 0) return [];
+    const widths: { [key: string]: number } = {};
+    Object.keys(data[0]).forEach(key => {
+      widths[key] = Math.max(key.length, 10);
+    });
+    data.forEach(row => {
+      Object.keys(row).forEach(key => {
+        const val = row[key] !== null && row[key] !== undefined ? String(row[key]) : '';
+        widths[key] = Math.max(widths[key] || 10, Math.min(val.length + 3, 50));
+      });
+    });
+    return Object.values(widths).map(wch => ({ wch }));
+  };
 
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `KPI_Human_Capital_${snapshotDate}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  // Helper to map an employee to a full Excel row
+  const mapEmployeeToMasterRow = (emp: any, index: number) => {
+    const branchLower = String(emp.branch || '').toLowerCase().trim();
+    const isNonHq = branchLower.includes('non') || branchLower.includes('site') || branchLower.includes('cabang') || branchLower.includes('field') || branchLower.includes('proyek');
+    const placementType = isNonHq ? 'Non-HQ (Site / Lapangan)' : 'HQ (Headquarter)';
+
+    const age = calculateAge(emp.date_of_birth);
+    const tenure = calculateTenureYears(emp.join_date);
+
+    let contractRemainingDays: number | string = '-';
+    let contractStatusAlert = 'Aman / Tetap';
+    if (emp.contract_end_date) {
+      const end = new Date(emp.contract_end_date);
+      if (!isNaN(end.getTime())) {
+        const todayDate = new Date();
+        const diff = Math.ceil((end.getTime() - todayDate.getTime()) / (1000 * 60 * 60 * 24));
+        contractRemainingDays = diff >= 0 ? diff : 0;
+        if (diff <= 30) {
+          contractStatusAlert = '⚠️ Perlu Perpanjangan (≤ 30 Hari)';
+        } else if (diff <= 60) {
+          contractStatusAlert = 'Mendekati Jatuh Tempo (≤ 60 Hari)';
+        } else {
+          contractStatusAlert = 'Aktif';
+        }
+      }
+    }
+
+    return {
+      'No': index + 1,
+      'NIK / Employee ID': emp.employee_code || emp.nik || '-',
+      'Nama Lengkap': emp.full_name || emp.name || '-',
+      'Perusahaan / Entitas': emp.company || emp.company_name || '-',
+      'Departemen': emp.department || emp.department_name || '-',
+      'Jabatan / Posisi': emp.job_title || emp.position || '-',
+      'Level / Golongan': emp.level || emp.grade || '-',
+      'Tipe Penempatan': placementType,
+      'Lokasi Kantor / Cabang': emp.branch || emp.work_location || 'Jakarta (HQ)',
+      'Status Kepegawaian': emp.contract_type || emp.employment_type || 'PKWTT',
+      'Status Akun': emp.status || 'Active',
+      'Tanggal Bergabung': emp.join_date || '-',
+      'Masa Kerja (Tahun)': tenure !== null ? tenure : '-',
+      'Nomor Kontrak / SK': emp.pkwt_number || emp.contract_number || '-',
+      'Mulai Kontrak': emp.contract_start_date || '-',
+      'Selesai Kontrak': emp.contract_end_date || '-',
+      'Sisa Kontrak (Hari)': contractRemainingDays,
+      'Status Evaluasi Kontrak': contractStatusAlert,
+      'Email Perusahaan': emp.email || '-',
+      'No. Handphone / WA': emp.phone_number || emp.phone || '-',
+      'Jenis Kelamin': emp.gender || '-',
+      'Tanggal Lahir': emp.date_of_birth || '-',
+      'Usia (Tahun)': age !== null ? age : '-',
+      'Tempat Lahir': emp.birth_place || '-',
+      'Agama': emp.religion || '-',
+      'Status Pernikahan': emp.marital_status || '-',
+      'Pendidikan Terakhir': emp.last_education || '-',
+      'Nama Institusi / Kampus': emp.institution_name || '-',
+      'Jurusan': emp.major || '-',
+      'Bank Payroll': emp.bank_name || '-',
+      'Nomor Rekening': emp.bank_account_number || '-',
+      'Atas Nama Rekening': emp.bank_account_name || '-',
+      'NPWP': emp.npwp || '-',
+      'BPJS Ketenagakerjaan': emp.bpjs_tk_number || '-',
+      'BPJS Kesehatan': emp.bpjs_health_number || '-'
+    };
+  };
+
+  // 1. Ekspor Keseluruhan (Full Comprehensive Workbook - 4 Sheets)
+  const handleExportFullExcel = () => {
+    try {
+      setExporting(true);
+      const wb = XLSX.utils.book_new();
+
+      // Sheet 1: Ringkasan Eksekutif & KPI
+      const kpiOverviewRows = [
+        { 'Kategori': 'INFORMASI DOKUMEN', 'Indikator': 'Judul Laporan', 'Nilai': 'Laporan Eksekutif Human Capital Management (HCM)', 'Catatan / Detail': 'The Gesit Companies' },
+        { 'Kategori': 'INFORMASI DOKUMEN', 'Indikator': 'Tanggal Snapshot Data', 'Nilai': snapshotDate, 'Catatan / Detail': `Filter Entitas: ${selectedCompany === 'all' ? 'Semua Perusahaan' : selectedCompany}` },
+        { 'Kategori': 'INFORMASI DOKUMEN', 'Indikator': 'Filter Departemen', 'Nilai': selectedDepartment === 'all' ? 'Semua Departemen' : selectedDepartment, 'Catatan / Detail': `Waktu Export: ${new Date().toLocaleString('id-ID')}` },
+        { 'Kategori': '', 'Indikator': '', 'Nilai': '', 'Catatan / Detail': '' },
+        
+        { 'Kategori': 'KOMPOSISI SDM', 'Indikator': 'Total Karyawan Aktif', 'Nilai': `${totalHeadcount} Orang`, 'Catatan / Detail': 'Karyawan terverifikasi aktif sistem' },
+        { 'Kategori': 'KOMPOSISI SDM', 'Indikator': 'Karyawan Baru (Bulan Ini)', 'Nilai': `+${newHires} Orang`, 'Catatan / Detail': `Periode ${currentMonthStr}` },
+        { 'Kategori': 'KOMPOSISI SDM', 'Indikator': 'Karyawan Keluar (Turnover)', 'Nilai': `${resignations} Orang (${turnoverRate}%)`, 'Catatan / Detail': 'Turnover bulan berjalan' },
+        { 'Kategori': 'KOMPOSISI SDM', 'Indikator': 'Rata-Rata Usia', 'Nilai': `${avgAge} Tahun`, 'Catatan / Detail': ageRangeStr },
+        { 'Kategori': 'KOMPOSISI SDM', 'Indikator': 'Rata-Rata Masa Kerja', 'Nilai': `${avgTenure} Tahun`, 'Catatan / Detail': `${overFiveYearsEmployees.length} karyawan masa kerja > 5 tahun` },
+        { 'Kategori': 'KOMPOSISI SDM', 'Indikator': 'Karyawan Tetap (PKWTT)', 'Nilai': `${statusPermanent} Orang`, 'Catatan / Detail': `${totalHeadcount > 0 ? ((statusPermanent / totalHeadcount) * 100).toFixed(1) : 0}% dari total` },
+        { 'Kategori': 'KOMPOSISI SDM', 'Indikator': 'Karyawan Kontrak (PKWT)', 'Nilai': `${statusContract} Orang`, 'Catatan / Detail': `${totalHeadcount > 0 ? ((statusContract / totalHeadcount) * 100).toFixed(1) : 0}% dari total` },
+        { 'Kategori': 'KOMPOSISI SDM', 'Indikator': 'Probation & Magang', 'Nilai': `${statusProbation + statusIntern} Orang`, 'Catatan / Detail': `Probation: ${statusProbation}, Magang: ${statusIntern}` },
+        { 'Kategori': '', 'Indikator': '', 'Nilai': '', 'Catatan / Detail': '' },
+
+        { 'Kategori': 'PRESENSI & KEHADIRAN', 'Indikator': 'Tingkat Kehadiran', 'Nilai': `${attendanceRate}%`, 'Catatan / Detail': `Snapshot tanggal ${snapshotDate}` },
+        { 'Kategori': 'PRESENSI & KEHADIRAN', 'Indikator': 'Hadir Tepat Waktu', 'Nilai': `${onTimeCount} Orang`, 'Catatan / Detail': 'Check-in sebelum batas toleransi' },
+        { 'Kategori': 'PRESENSI & KEHADIRAN', 'Indikator': 'Terlambat Masuk', 'Nilai': `${lateCount} Orang`, 'Catatan / Detail': 'Check-in melewati jam shift kerja' },
+        { 'Kategori': 'PRESENSI & KEHADIRAN', 'Indikator': 'Cuti / Izin / Sakit', 'Nilai': `${leaveCount} Orang`, 'Catatan / Detail': 'Pengajuan permohonan disetujui' },
+        { 'Kategori': 'PRESENSI & KEHADIRAN', 'Indikator': 'Belum / Lupa Check-In', 'Nilai': `${notCheckedInCount} Orang`, 'Catatan / Detail': 'Belum melakukan absensi' },
+        { 'Kategori': '', 'Indikator': '', 'Nilai': '', 'Catatan / Detail': '' },
+
+        { 'Kategori': 'KEPATUHAN & MONITORING', 'Indikator': 'Kontrak Berakhir ≤ 30 Hari', 'Nilai': `${expiringContracts.length} Orang`, 'Catatan / Detail': 'Mendesak: butuh evaluasi perpanjangan PKWT / SK' },
+        { 'Kategori': 'KEPATUHAN & MONITORING', 'Indikator': 'Mendekati Pensiun (≥ 55 Thn)', 'Nilai': `${seniorEmployees.length} Orang`, 'Catatan / Detail': 'Perlu persiapan suksesi talenta' },
+        { 'Kategori': 'KEPATUHAN & MONITORING', 'Indikator': 'Permohonan Pending Approval', 'Nilai': `${totalPendingRequestsCount} Pengajuan`, 'Catatan / Detail': 'Menunggu persetujuan atasan / HR' },
+      ];
+      const sheet1 = XLSX.utils.json_to_sheet(kpiOverviewRows);
+      sheet1['!cols'] = autoFitCols(kpiOverviewRows);
+      XLSX.utils.book_append_sheet(wb, sheet1, '1. Ringkasan Eksekutif & KPI');
+
+      // Sheet 2: Master Data Seluruh Karyawan
+      const employeeRows = filteredEmployees.map(mapEmployeeToMasterRow);
+      const sheet2 = XLSX.utils.json_to_sheet(employeeRows);
+      sheet2['!cols'] = autoFitCols(employeeRows);
+      XLSX.utils.book_append_sheet(wb, sheet2, '2. Master Data Karyawan');
+
+      // Sheet 3: Monitoring Kontrak PKWT
+      const contractRows = expiringContracts.length > 0 ? expiringContracts.map((emp, i) => {
+        let days = '-';
+        if (emp.contract_end_date) {
+          const end = new Date(emp.contract_end_date);
+          days = `${Math.ceil((end.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))} Hari`;
+        }
+        return {
+          'No': i + 1,
+          'NIK': emp.employee_code || emp.nik || '-',
+          'Nama Lengkap': emp.full_name || emp.name || '-',
+          'Perusahaan': emp.company || emp.company_name || '-',
+          'Departemen': emp.department || emp.department_name || '-',
+          'Jabatan': emp.job_title || emp.position || '-',
+          'Nomor Kontrak / SK': emp.pkwt_number || emp.contract_number || '-',
+          'Mulai Kontrak': emp.contract_start_date || '-',
+          'Selesai Kontrak': emp.contract_end_date || '-',
+          'Sisa Hari Menuju Jatuh Tempo': days,
+          'Status Evaluasi': '⚠️ JATUH TEMPO ≤ 30 HARI',
+          'Rekomendasi Tindakan HR': 'Perpanjangan PKWT / Evaluasi Pengangkatan PKWTT / Persiapan Surat Pengakhiran',
+          'Email Karyawan': emp.email || '-',
+          'No. Telp / WA': emp.phone_number || emp.phone || '-'
+        };
+      }) : [
+        {
+          'No': 1,
+          'NIK': '-',
+          'Nama Lengkap': 'Tidak ada kontrak PKWT yang jatuh tempo dalam 30 hari ke depan',
+          'Perusahaan': '-',
+          'Departemen': '-',
+          'Jabatan': '-',
+          'Nomor Kontrak / SK': '-',
+          'Mulai Kontrak': '-',
+          'Selesai Kontrak': '-',
+          'Sisa Hari Menuju Jatuh Tempo': '-',
+          'Status Evaluasi': 'Aman',
+          'Rekomendasi Tindakan HR': 'Semua kontrak dalam kondisi aktif dan aman',
+          'Email Karyawan': '-',
+          'No. Telp / WA': '-'
+        }
+      ];
+      const sheet3 = XLSX.utils.json_to_sheet(contractRows);
+      sheet3['!cols'] = autoFitCols(contractRows);
+      XLSX.utils.book_append_sheet(wb, sheet3, '3. Evaluasi Kontrak PKWT');
+
+      // Sheet 4: Rekap Presensi & Kehadiran Hari Ini
+      const attendanceRows = todayAttendance.length > 0 ? todayAttendance.map((rec, i) => {
+        const emp = accounts.find(a => String(a.id) === String(rec.user_id));
+        return {
+          'No': i + 1,
+          'Tanggal': rec.date,
+          'NIK': emp?.employee_code || emp?.nik || '-',
+          'Nama Karyawan': emp?.full_name || emp?.name || rec.user_name || '-',
+          'Perusahaan': emp?.company || emp?.company_name || '-',
+          'Departemen': emp?.department || emp?.department_name || '-',
+          'Status Kehadiran': rec.status === 'present' ? 'Hadir Tepat Waktu' : rec.status === 'late' ? 'Terlambat' : rec.status === 'leave' ? 'Cuti / Izin' : rec.status,
+          'Jam Masuk (Clock In)': rec.clock_in ? new Date(rec.clock_in).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-',
+          'Jam Pulang (Clock Out)': rec.clock_out ? new Date(rec.clock_out).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-',
+          'Durasi Kerja (Menit)': rec.total_work_minutes || '-',
+          'Verifikasi Geofence': rec.geofence_verified ? 'Terverifikasi GPS' : 'Manual / Bypass'
+        };
+      }) : [
+        {
+          'No': 1,
+          'Tanggal': snapshotDate,
+          'NIK': '-',
+          'Nama Karyawan': 'Belum ada catatan presensi untuk tanggal ini',
+          'Perusahaan': '-',
+          'Departemen': '-',
+          'Status Kehadiran': '-',
+          'Jam Masuk (Clock In)': '-',
+          'Jam Pulang (Clock Out)': '-',
+          'Durasi Kerja (Menit)': '-',
+          'Verifikasi Geofence': '-'
+        }
+      ];
+      const sheet4 = XLSX.utils.json_to_sheet(attendanceRows);
+      sheet4['!cols'] = autoFitCols(attendanceRows);
+      XLSX.utils.book_append_sheet(wb, sheet4, '4. Rekap Presensi Harian');
+
+      XLSX.writeFile(wb, `GESIT-HCM-Laporan-Keseluruhan-${snapshotDate}.xlsx`);
+      toast.success('Laporan Keseluruhan Excel (.xlsx) berhasil diunduh!');
+    } catch (err: any) {
+      console.error('Export Excel error:', err);
+      toast.error('Gagal mengunduh file Excel: ' + (err?.message || 'Error'));
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  // 2. Ekspor Khusus Master Data Karyawan
+  const handleExportEmployeeMasterExcel = () => {
+    try {
+      setExporting(true);
+      const wb = XLSX.utils.book_new();
+      const rows = filteredEmployees.map(mapEmployeeToMasterRow);
+      const sheet = XLSX.utils.json_to_sheet(rows);
+      sheet['!cols'] = autoFitCols(rows);
+      XLSX.utils.book_append_sheet(wb, sheet, 'Master Data Karyawan');
+      XLSX.writeFile(wb, `GESIT-HCM-Master-Data-Karyawan-${snapshotDate}.xlsx`);
+      toast.success(`Master Data ${rows.length} Karyawan Excel (.xlsx) berhasil diunduh!`);
+    } catch (err: any) {
+      toast.error('Gagal mengunduh data karyawan: ' + (err?.message || 'Error'));
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  // 3. Ekspor Khusus Kontrak PKWT
+  const handleExportContractsExcel = () => {
+    try {
+      setExporting(true);
+      const wb = XLSX.utils.book_new();
+      const rows = expiringContracts.map((emp, i) => {
+        let days = '-';
+        if (emp.contract_end_date) {
+          const end = new Date(emp.contract_end_date);
+          days = `${Math.ceil((end.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))} Hari`;
+        }
+        return {
+          'No': i + 1,
+          'NIK': emp.employee_code || emp.nik || '-',
+          'Nama Lengkap': emp.full_name || emp.name || '-',
+          'Perusahaan': emp.company || emp.company_name || '-',
+          'Departemen': emp.department || emp.department_name || '-',
+          'Jabatan': emp.job_title || emp.position || '-',
+          'Nomor Kontrak / SK': emp.pkwt_number || emp.contract_number || '-',
+          'Mulai Kontrak': emp.contract_start_date || '-',
+          'Selesai Kontrak': emp.contract_end_date || '-',
+          'Sisa Hari': days,
+          'Status Evaluasi': '⚠️ JATUH TEMPO ≤ 30 HARI',
+          'Rekomendasi Tindakan HR': 'Perpanjangan PKWT / Pengangkatan PKWTT / Surat Pengakhiran'
+        };
+      });
+      const sheet = XLSX.utils.json_to_sheet(rows.length > 0 ? rows : [{ Keterangan: 'Tidak ada kontrak yang jatuh tempo' }]);
+      sheet['!cols'] = autoFitCols(rows.length > 0 ? rows : [{ Keterangan: 'Tidak ada kontrak yang jatuh tempo' }]);
+      XLSX.utils.book_append_sheet(wb, sheet, 'Jatuh Tempo Kontrak');
+      XLSX.writeFile(wb, `GESIT-HCM-Jatuh-Tempo-Kontrak-${snapshotDate}.xlsx`);
+      toast.success('Data Monitoring Jatuh Tempo Kontrak Excel (.xlsx) berhasil diunduh!');
+    } catch (err: any) {
+      toast.error('Gagal mengunduh monitoring kontrak: ' + (err?.message || 'Error'));
+    } finally {
+      setExporting(false);
+    }
   };
 
   const handleResetFilters = () => {
@@ -881,15 +1141,64 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
 
           <div className="flex flex-col sm:items-end gap-1.5">
             <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleExportKPI}
-                className="h-8.5 rounded-lg gap-1.5 text-xs font-medium border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-slate-50 dark:hover:bg-zinc-800"
-              >
-                <Download className="size-3.5" />
-                <span>Export Report</span>
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  render={
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={exporting || loading}
+                      className="h-8.5 rounded-lg gap-1.5 text-xs font-semibold border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-slate-50 dark:hover:bg-zinc-800 text-slate-800 dark:text-zinc-200 shadow-2xs cursor-pointer"
+                    >
+                      <FileSpreadsheet className="size-4 text-emerald-600 dark:text-emerald-400" />
+                      <span>{exporting ? 'Mengunduh...' : 'Download Excel'}</span>
+                      <ChevronDown className="size-3 opacity-60 ml-0.5" />
+                    </Button>
+                  }
+                />
+                <DropdownMenuContent align="end" className="w-68 p-1.5 rounded-xl shadow-2xl bg-white dark:bg-[#18181b] border border-slate-200/80 dark:border-[#27272a]">
+                  <DropdownMenuLabel className="px-2.5 py-1.5 text-[11px] font-semibold text-slate-500 dark:text-zinc-400">
+                    Pilihan Ekspor Data Excel (.xlsx)
+                  </DropdownMenuLabel>
+                  <DropdownMenuItem
+                    onClick={handleExportFullExcel}
+                    className="text-xs font-medium cursor-pointer py-2 px-2.5 rounded-lg gap-2.5"
+                  >
+                    <div className="p-1.5 rounded-md bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 shrink-0">
+                      <FileSpreadsheet className="size-4" />
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="font-semibold text-slate-900 dark:text-white">Laporan Keseluruhan (Full)</span>
+                      <span className="text-[10px] text-slate-500 dark:text-zinc-400">4 Sheet: KPI, Seluruh Karyawan, Kontrak & Presensi</span>
+                    </div>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator className="my-1" />
+                  <DropdownMenuItem
+                    onClick={handleExportEmployeeMasterExcel}
+                    className="text-xs font-medium cursor-pointer py-2 px-2.5 rounded-lg gap-2.5"
+                  >
+                    <div className="p-1.5 rounded-md bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 shrink-0">
+                      <Users className="size-4" />
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="font-semibold text-slate-900 dark:text-white">Master Data Karyawan</span>
+                      <span className="text-[10px] text-slate-500 dark:text-zinc-400">{totalHeadcount} Karyawan dengan data lengkap & bank</span>
+                    </div>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={handleExportContractsExcel}
+                    className="text-xs font-medium cursor-pointer py-2 px-2.5 rounded-lg gap-2.5"
+                  >
+                    <div className="p-1.5 rounded-md bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 shrink-0">
+                      <AlertCircle className="size-4" />
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="font-semibold text-slate-900 dark:text-white">Monitoring Jatuh Tempo Kontrak</span>
+                      <span className="text-[10px] text-slate-500 dark:text-zinc-400">{expiringContracts.length} Karyawan perlu evaluasi (≤ 30 hari)</span>
+                    </div>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
               <Button
                 size="sm"
                 onClick={() => loadData()}
