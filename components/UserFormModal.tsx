@@ -14,6 +14,7 @@ import { EmployeeAppointmentSKModal, getCompanyAbbr } from './hr/EmployeeAppoint
 import { ImageCropModal } from '@/components/ui/ImageCropModal';
 import { standardShiftOptions, type ShiftSchedule } from '../lib/standardShifts';
 import { prepareProfileImage } from '../lib/profileImage';
+import { DateInput } from '@/components/ui/date-input';
 
 interface UserFormModalProps {
   isOpen: boolean;
@@ -34,7 +35,7 @@ const steps = [
   { title: 'Data Payroll', description: 'Data pembayaran gaji dan pajak' },
 ];
 
-const inputClass = 'mt-1 w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20';
+const inputClass = 'mt-1 w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm text-foreground placeholder:text-slate-500 placeholder:opacity-100 dark:placeholder:text-slate-400 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20';
 const labelClass = 'text-xs font-semibold text-foreground/80';
 
 // Standalone input field component to ensure DOM node is never unmounted during typing
@@ -182,25 +183,38 @@ const FormField: React.FC<FormFieldProps> = ({
   error,
   onChange,
 }) => (
-  <label className="block">
-    <span className={labelClass}>
+  <div className="block">
+    <label htmlFor={`employee-${name}`} className={labelClass}>
       {label}{required && <span className="text-rose-500"> *</span>}
-    </span>
-    <input
-      type={type}
-      required={required}
-      aria-invalid={Boolean(error)}
-      className={`${inputClass} ${error ? 'border-rose-500 ring-2 ring-rose-500/10' : ''}`}
-      value={value}
-      onChange={(e) => onChange(name, e.target.value)}
-      placeholder={placeholder}
-    />
+    </label>
+    {type === 'date' ? (
+      <DateInput
+        id={`employee-${name}`}
+        aria-label={label}
+        required={required}
+        aria-invalid={Boolean(error)}
+        className={`${inputClass} ${error ? 'border-rose-500 ring-2 ring-rose-500/10' : ''}`}
+        value={value}
+        onChange={value => onChange(name, value)}
+      />
+    ) : (
+      <input
+        id={`employee-${name}`}
+        type={type}
+        required={required}
+        aria-invalid={Boolean(error)}
+        className={`${inputClass} ${error ? 'border-rose-500 ring-2 ring-rose-500/10' : ''}`}
+        value={value}
+        onChange={(e) => onChange(name, e.target.value)}
+        placeholder={placeholder}
+      />
+    )}
     {error && (
       <span className="mt-1 block text-xs font-medium text-rose-600">
         {error}
       </span>
     )}
-  </label>
+  </div>
 );
 
 export const UserFormModal: React.FC<UserFormModalProps> = ({
@@ -459,6 +473,10 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
   };
 
   const next = () => {
+    const dateInputs = document.querySelectorAll<HTMLInputElement>('#employee-form [data-date-input]');
+    for (const input of dateInputs) {
+      if (!input.reportValidity()) return;
+    }
     if (validate(step)) {
       // Pastikan contractStartDate tersinkron dari joinDate saat lanjut dari Step 3 ke Step 4
       if (step === 3 && form.joinDate && !form.contractStartDate) {
@@ -1132,7 +1150,7 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
                     <span className="text-xs font-bold text-foreground">Jadwal & Jam Kerja Karyawan</span>
                   </div>
                   <p className="text-[11px] text-muted-foreground leading-relaxed">
-                    Tentukan apakah karyawan mengikuti jadwal default perusahaan, ditugaskan ke shift tertentu, atau menggunakan jam kerja khusus (tetap).
+                    Tentukan apakah karyawan mengikuti jadwal default perusahaan atau ditugaskan ke shift tertentu.
                   </p>
 
                   {/* Mode Selection */}
@@ -1140,7 +1158,6 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
                     {[
                       { key: 'default', label: 'Default (Fleksibel)' },
                       { key: 'shift', label: 'Pilih Shift' },
-                      { key: 'custom', label: 'Jam Khusus' },
                     ].map(opt => (
                       <button
                         key={opt.key}
@@ -1208,48 +1225,6 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
                     </div>
                   )}
 
-                  {/* Custom Work Hours */}
-                  {(form.workScheduleType || 'default') === 'custom' && (
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      <div>
-                        <label className="block">
-                          <span className={labelClass}>Jam Masuk</span>
-                          <input
-                            type="time"
-                            className={inputClass}
-                            value={String(form.customWorkStart || '')}
-                            onChange={e => setField('customWorkStart' as any, e.target.value)}
-                          />
-                        </label>
-                      </div>
-                      <div>
-                        <label className="block">
-                          <span className={labelClass}>Jam Pulang</span>
-                          <input
-                            type="time"
-                            className={inputClass}
-                            value={String(form.customWorkEnd || '')}
-                            onChange={e => setField('customWorkEnd' as any, e.target.value)}
-                          />
-                        </label>
-                      </div>
-                      <div>
-                        <label className="block">
-                          <span className={labelClass}>Toleransi (Menit)</span>
-                          <input
-                            type="number"
-                            min="0"
-                            max="60"
-                            className={inputClass}
-                            value={String(form.customGracePeriodMinutes ?? 15)}
-                            onChange={e => setField('customGracePeriodMinutes' as any, e.target.value)}
-                          />
-                        </label>
-                        <span className="text-[10px] text-muted-foreground">Toleransi keterlambatan</span>
-                      </div>
-                    </div>
-                  )}
-
                   {/* Info Badge */}
                   {(form.workScheduleType || 'default') === 'default' && (
                     <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50/70 px-3 py-2">
@@ -1272,7 +1247,7 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
               const isSeparated = form.employmentStatus && form.employmentStatus !== 'Active';
 
               return (
-                <div className="grid gap-5 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
                   {/* Dropdown Tipe Kontrak (PKWT / PKWTT) */}
                   <label className="block">
                     <span className={labelClass}>
@@ -1384,7 +1359,7 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
 
                   <div className="block">
                     <div className="flex items-center justify-between mb-1">
-                      <span className={labelClass}>
+                      <label htmlFor="employee-contractStartDate" className={labelClass}>
                         {isCurrentPKWTT
                           ? 'Tanggal Mulai Bekerja / SK'
                           : form.contractType === 'Probation'
@@ -1393,7 +1368,7 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
                           ? 'Tanggal Mulai Magang'
                           : 'Tanggal Mulai PKWT'}{' '}
                         {isCurrentPKWT && <span className="text-rose-500">*</span>}
-                      </span>
+                      </label>
                       {form.joinDate && form.contractStartDate !== form.joinDate && (
                         <button
                           type="button"
@@ -1404,11 +1379,11 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
                         </button>
                       )}
                     </div>
-                    <input
-                      type="date"
+                    <DateInput
+                      id="employee-contractStartDate"
                       className={`${inputClass} ${errors.contractStartDate ? 'border-rose-500 ring-2 ring-rose-500/10' : ''}`}
                       value={String(form.contractStartDate || form.joinDate || '')}
-                      onChange={e => setField('contractStartDate', e.target.value)}
+                      onChange={value => setField('contractStartDate', value)}
                     />
                     {form.joinDate && (form.contractStartDate === form.joinDate || !form.contractStartDate) && (
                       <span className="mt-1 block text-[11px] font-medium text-emerald-600">

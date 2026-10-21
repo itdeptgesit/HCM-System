@@ -167,7 +167,7 @@ export const translations: Record<Language, Translations> = {
       welcomeBack: 'Welcome back'
     },
     nav: {
-      workspace: 'Workspace',
+      workspace: 'Dashboard / Home',
       mainMenu: 'Main Menu',
       dashboard: 'Executive Dashboard',
       employees: 'Employee Directory',
@@ -261,7 +261,7 @@ export const translations: Record<Language, Translations> = {
       welcomeBack: 'Selamat datang kembali'
     },
     nav: {
-      workspace: 'Workspace',
+      workspace: 'Dashboard / Home',
       mainMenu: 'Menu Utama',
       dashboard: 'Dashboard Eksekutif',
       employees: 'Data Karyawan',

@@ -297,6 +297,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                   id="email"
                   type="email"
                   placeholder={t.auth.emailPlaceholder}
+                  className="placeholder:text-zinc-600 placeholder:opacity-100 dark:placeholder:text-zinc-400"
                   autoComplete="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -323,7 +324,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                     autoComplete="current-password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="pr-10"
+                    className="pr-10 placeholder:text-zinc-600 placeholder:opacity-100 dark:placeholder:text-zinc-400"
                     required
                   />
                   <button

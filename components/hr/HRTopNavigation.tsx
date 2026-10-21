@@ -327,7 +327,7 @@ export function HRTopNavigation({
             </div>
             <div className="flex items-center gap-1.5 mt-0.5 text-[12px]">
               <span className="text-white/80 font-medium cursor-pointer" onClick={() => navigate('/')}>
-                Workspace
+                Dashboard / Home
               </span>
               <span className="text-blue-300/40">/</span>
               <span className="text-blue-200/90">{breadcrumbLabel}</span>

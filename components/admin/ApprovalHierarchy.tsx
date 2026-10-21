@@ -606,29 +606,7 @@ export const ApprovalHierarchy: React.FC<{ currentUser?: any }> = ({ currentUser
                 </span>
               </div>
 
-              {/* Level 2: Manager */}
-              <div>
-                <label className="block text-xs font-semibold text-foreground mb-1">
-                  Level 3: Head of Department (Manager)
-                </label>
-                <select
-                  value={selectedManager}
-                  onChange={(e) => setSelectedManager(e.target.value)}
-                  className="w-full h-9 rounded-xl border border-border bg-muted/40 px-3 text-xs text-foreground focus:border-primary focus:bg-background focus:outline-none cursor-pointer"
-                >
-                  <option value="">(Belum ditentukan / Lewati tahap)</option>
-                  {users.filter(u => u.id !== editingUser.id).map(u => (
-                    <option key={u.id} value={u.id.toString()}>
-                      {u.full_name} — {u.job_title || u.role} ({u.department || 'All'})
-                    </option>
-                  ))}
-                </select>
-                <span className="text-[10px] text-muted-foreground mt-1 block">
-                  Pemberi persetujuan manajerial setelah Supervisor setuju.
-                </span>
-              </div>
-
-              {/* Level 3: HR Approval */}
+              {/* Level 2: HR Approval */}
               <div>
                 <label className="block text-xs font-semibold text-foreground mb-1">
                   Level 2: HR Specialist / PIC HRD
@@ -647,6 +625,28 @@ export const ApprovalHierarchy: React.FC<{ currentUser?: any }> = ({ currentUser
                 </select>
                 <span className="text-[10px] text-muted-foreground mt-1 block">
                   Verifikasi HR setelah Supervisor, sebelum Manager. Saldo dipotong hanya pada approval final.
+                </span>
+              </div>
+
+              {/* Level 3: Manager */}
+              <div>
+                <label className="block text-xs font-semibold text-foreground mb-1">
+                  Level 3: Head of Department (Manager)
+                </label>
+                <select
+                  value={selectedManager}
+                  onChange={(e) => setSelectedManager(e.target.value)}
+                  className="w-full h-9 rounded-xl border border-border bg-muted/40 px-3 text-xs text-foreground focus:border-primary focus:bg-background focus:outline-none cursor-pointer"
+                >
+                  <option value="">(Belum ditentukan / Lewati tahap)</option>
+                  {users.filter(u => u.id !== editingUser.id).map(u => (
+                    <option key={u.id} value={u.id.toString()}>
+                      {u.full_name} — {u.job_title || u.role} ({u.department || 'All'})
+                    </option>
+                  ))}
+                </select>
+                <span className="text-[10px] text-muted-foreground mt-1 block">
+                  Pemberi persetujuan manajerial setelah Supervisor dan HR.
                 </span>
               </div>
 

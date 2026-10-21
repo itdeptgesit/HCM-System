@@ -93,7 +93,7 @@ export function NexoraLayout({
   const pageMeta = useMemo(() => {
     if (pathname === '/' || pathname === '/dashboard') {
       return {
-        breadcrumb: 'Workspace / Dashboard',
+        breadcrumb: 'Dashboard / Home',
         title: 'Dashboard Human Capital',
         subtitle: 'Ringkasan performa SDM, kehadiran, dan indikator kunci organisasi',
         metric1Label: 'Total SDM',
@@ -106,7 +106,7 @@ export function NexoraLayout({
     }
     if (pathname === '/employees') {
       return {
-        breadcrumb: 'Workspace / Data Karyawan',
+        breadcrumb: 'Home / Data Karyawan',
         title: 'Direktori & Manajemen Karyawan',
         subtitle: 'Kelola data identitas, kontrak kerja, NIK, dan struktur penempatan',
         metric1Label: 'Headcount',
@@ -132,7 +132,7 @@ export function NexoraLayout({
     }
     if (pathname.startsWith('/attendance')) {
       return {
-        breadcrumb: 'Workspace / Absensi & Presensi',
+        breadcrumb: 'Home / Absensi & Presensi',
         title: 'Manajemen Presensi & Kehadiran',
         subtitle: 'Rekapitulasi log absensi, kalender operasional, dan kepatuhan radius office',
         metric1Label: 'Tingkat Hadir',
@@ -145,7 +145,7 @@ export function NexoraLayout({
     }
     if (pathname === '/disciplinary') {
       return {
-        breadcrumb: 'Workspace / Catatan SP',
+        breadcrumb: 'Home / Catatan SP',
         title: 'Catatan SP & Disiplin Karyawan',
         subtitle: 'Arsip penertiban surat peringatan dan kepatuhan tata tertib kerja',
         metric1Label: 'Status',
@@ -158,7 +158,7 @@ export function NexoraLayout({
     }
     if (pathname === '/news') {
       return {
-        breadcrumb: 'Workspace / Informasi',
+        breadcrumb: 'Home / Informasi',
         title: 'News & Pengumuman Internal',
         subtitle: 'Pusat publikasi memo direksi, berita korporat, dan edaran resmi',
         metric1Label: 'Kanal',
@@ -183,7 +183,7 @@ export function NexoraLayout({
       };
     }
     return {
-      breadcrumb: `Workspace / ${breadcrumbLabel || 'Modul'}`,
+      breadcrumb: `Home / ${breadcrumbLabel || 'Modul'}`,
       title: breadcrumbLabel || 'Gesit People HCM',
       subtitle: 'Sistem Informasi Manajemen Sumber Daya Manusia Terpadu',
       metric1Label: 'Organisasi',

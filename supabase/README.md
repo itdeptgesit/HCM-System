@@ -93,6 +93,8 @@ select setval(pg_get_serial_sequence('public.user_accounts','id'),
 
 ## Pemeriksaan instalasi
 
+Untuk notifikasi email cuti, request absen, dan pengajuan absen di luar lokasi dari `hr-admin@gesit.co.id`, lihat [WORKFORCE_EMAIL_SETUP.md](WORKFORCE_EMAIL_SETUP.md). Pengiriman mengikuti approver aktif dan nonaktif secara default sampai OAuth Gmail, secrets, serta jadwal worker selesai diatur. Migrasi 14/15 merupakan tambahan, bukan pengganti fungsi approval yang sudah berjalan.
+
 ```sql
 select table_name from information_schema.tables where table_schema='public' order by table_name;
 select proname from pg_proc p join pg_namespace n on n.oid=p.pronamespace

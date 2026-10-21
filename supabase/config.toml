@@ -2,3 +2,7 @@ project_id = "gesit-people-hr"
 
 [functions.manage-user]
 verify_jwt = false
+
+# Cron authenticates inside this function using HR_EMAIL_WORKER_SECRET.
+[functions.send-workforce-emails]
+verify_jwt = false
