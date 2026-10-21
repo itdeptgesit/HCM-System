@@ -187,8 +187,8 @@ test('invalid configuration fails closed without invoking Gmail', async t => {
   assert.equal(calls.http.length, 0);
 });
 
-test('emailed leave approvals link to a signed confirmation page, attendance stays in the app', async () => {
-  const actionBaseUrl = 'https://project.supabase.co/functions/v1/send-workforce-emails';
+test('emailed leave approvals link to the HR confirmation page, attendance stays in the app', async () => {
+  const actionBaseUrl = 'https://hr.example.invalid/email-approval';
   const { handle, calls } = fixture({
     options: { actionBaseUrl },
     store: { async prepare() { return { ...envelope, recipient_id: '77' }; } },
@@ -196,7 +196,7 @@ test('emailed leave approvals link to a signed confirmation page, attendance sta
   assert.equal((await handle(request())).status, 200);
   const send = calls.http.find(call => call.url.includes('/messages/send'));
   const { html, text } = decodeMail(JSON.parse(send.init.body).raw);
-  const links = [...html.matchAll(/href="(https:\/\/project\.supabase\.co[^"]+)"/g)].map(match => match[1]);
+  const links = [...html.matchAll(/href="(https:\/\/hr\.example\.invalid\/email-approval[^"]+)"/g)].map(match => match[1]);
   assert.equal(links.length, 2);
   const token = new URL(links[0]).searchParams.get('t');
   assert.ok(token);
@@ -222,7 +222,7 @@ test('emailed leave approvals link to a signed confirmation page, attendance sta
   await attendance.handle(request());
   const attendanceSend = attendance.calls.http.find(call => call.url.includes('/messages/send'));
   const attendanceMail = decodeMail(JSON.parse(attendanceSend.init.body).raw);
-  assert.equal(attendanceMail.html.includes('project.supabase.co'), false);
+  assert.equal(attendanceMail.html.includes('/email-approval'), false);
   assert.match(attendanceMail.html, /approvals/);
 
   const final = fixture({
@@ -231,5 +231,5 @@ test('emailed leave approvals link to a signed confirmation page, attendance sta
   });
   await final.handle(request());
   const finalSend = final.calls.http.find(call => call.url.includes('/messages/send'));
-  assert.equal(decodeMail(JSON.parse(finalSend.init.body).raw).html.includes('project.supabase.co'), false);
+  assert.equal(decodeMail(JSON.parse(finalSend.init.body).raw).html.includes('/email-approval'), false);
 });

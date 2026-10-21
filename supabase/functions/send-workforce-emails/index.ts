@@ -38,12 +38,13 @@ const store: EmailStore = {
 
 const secret = Deno.env.get('HR_EMAIL_WORKER_SECRET') || '';
 const appUrl = Deno.env.get('HR_APP_URL') || '';
-const functionUrl = `${Deno.env.get('SUPABASE_URL') || ''}/functions/v1/send-workforce-emails`;
 
 const worker = createEmailWorker({
   secret,
   appUrl,
-  actionBaseUrl: functionUrl,
+  // Approval links open a public page on the HR app domain. Supabase serves
+  // function HTML as text/plain, so the page lives with the application.
+  actionBaseUrl: appUrl ? `${appUrl.replace(/\/+$/, '')}/email-approval` : undefined,
   credentials: {
     clientId: Deno.env.get('GMAIL_OAUTH_CLIENT_ID') || '',
     clientSecret: Deno.env.get('GMAIL_OAUTH_CLIENT_SECRET') || '',

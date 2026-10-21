@@ -11,7 +11,8 @@ Konfigurasi Google Drive dan akun login Supabase tidak perlu diubah.
 - Clock-in/out biasa, lembur, reimbursement, dan data historis tidak diikutkan.
 - Notifikasi membaca status yang sudah disimpan. Fitur ini tidak mengganti RPC, aturan kewenangan, atau urutan approval yang sudah berjalan.
 - Email berformat kartu: logo GESIT, judul pengajuan, sapaan, rincian (jenis cuti, tanggal, durasi, alasan, sisa saldo cuti bila tersedia), tombol Setujui/Tolak, dan tautan ke aplikasi. Foto, koordinat, lampiran, serta berkas medis tidak disertakan.
-- **Cuti dapat diputuskan langsung dari email.** Tombol membuka halaman konfirmasi di Edge Function (tanpa login), lalu keputusan disimpan setelah tombol Setujui/Tolak ditekan. Tautan ditandatangani (HMAC), berlaku 7 hari, hanya untuk satu tahap, dan diverifikasi ulang ke database saat dibuka/ditekan sehingga tidak bisa dipakai setelah pengajuan diproses, dialihkan, atau kedaluwarsa.
+- **Cuti dapat diputuskan langsung dari email.** Tombol membuka halaman `{HR_APP_URL}/email-approval?t=...` di domain aplikasi HR (tanpa login), lalu keputusan disimpan setelah tombol Setujui/Tolak ditekan. Halaman tidak dirender dari Edge Function karena Supabase menyajikan respons HTML function sebagai `text/plain`; function hanya bertukar JSON dengan halaman itu.
+- Tautan ditandatangani (HMAC), berlaku 7 hari, hanya untuk satu tahap, dan diverifikasi ulang ke database saat dibuka/ditekan sehingga tidak bisa dipakai setelah pengajuan diproses, dialihkan, atau kedaluwarsa.
 - Request/koreksi absen dan live attendance **belum** bisa diputuskan dari email; tombolnya membuka halaman persetujuan aplikasi dan tetap wajib login. Alasannya keputusan absen menulis ke rekap presensi sehingga perlu diuji terpisah.
 - Jangan meneruskan email persetujuan: siapa pun yang memegang tautan dapat mengambil keputusan untuk tahap itu sampai pengajuan diproses.
 - Logo diambil dari `{HR_APP_URL}/image/logo.png`. Pastikan file `public/image/logo.png` ikut ter-deploy dan dapat diakses publik tanpa login; bila tidak, gambar tidak tampil tetapi teks email tetap terbaca.
@@ -77,7 +78,7 @@ supabase functions deploy send-workforce-emails
 
 `config.toml` mematikan JWT gateway hanya untuk function ini. Endpoint tetap menolak pemanggil tanpa header rahasia `x-email-worker-secret`; anon key atau sesi karyawan tidak memberikan izin mengirim email. Endpoint tidak menerima alamat penerima/pengirim dari request body.
 
-Function yang sama juga melayani halaman konfirmasi approval cuti dari tautan `?t=...`. Halaman itu hanya bisa dibuka dengan tautan bertanda tangan; `GET` tidak mengubah data, keputusan baru disimpan lewat `POST` dari tombol di halaman. Tanda tangan memakai `HR_EMAIL_WORKER_SECRET` yang sama, jadi merotasi secret akan membatalkan tautan email yang belum dipakai. Halaman memakai `SUPABASE_URL` dan service role bawaan function, tidak perlu secret tambahan.
+Function yang sama juga melayani JSON untuk halaman konfirmasi approval cuti di `{HR_APP_URL}/email-approval?t=...`. Halaman itu hanya bisa dibuka dengan tautan bertanda tangan; `GET` tidak mengubah data, keputusan baru disimpan lewat `POST` dari tombol di halaman. Endpoint hanya mengizinkan CORS dari `HR_APP_URL`, jadi halaman harus di-deploy bersama aplikasi HR (file `components/approvals/EmailApprovalPage.tsx`). Tanda tangan memakai `HR_EMAIL_WORKER_SECRET` yang sama, jadi merotasi secret akan membatalkan tautan email yang belum dipakai. Tidak perlu secret tambahan.
 
 Aktifkan **Cron (pg_cron)** dan **pg_net** melalui Supabase dashboard. Di **Vault**, simpan dua secret berikut lewat UI agar nilainya tidak ditulis ke riwayat SQL:
 
@@ -107,7 +108,7 @@ Lalu uji dengan karyawan dan approver yang sudah disepakati:
 2. Setujui dari halaman konfirmasi email (atau dari aplikasi). Approver berikutnya menerima email, bukan semua atasan sekaligus.
 3. Selesaikan approval atau tolak. Karyawan menerima hasil final. Coba klik ulang tautan lama: harus tampil "sudah diproses", bukan keputusan kedua.
 4. Ulangi untuk request/koreksi absen dan pengajuan di luar lokasi. Clock-in/out normal tidak mengirim email.
-5. Pastikan tautan approval mengarah ke `https://PROJECT_REF.supabase.co/functions/v1/send-workforce-emails`, sedangkan tautan "Lihat di aplikasi" mengarah ke domain HR yang benar.
+5. Pastikan tautan approval mengarah ke `{HR_APP_URL}/email-approval?t=...` dan halaman menampilkan rincian pengajuan, sedangkan tautan "Lihat di aplikasi" mengarah ke halaman aplikasi HR yang benar.
 
 Keberhasilan Gmail API berarti Gmail menerima pesan untuk dikirim, bukan jaminan email masuk inbox; periksa spam, kebijakan organisasi, dan email log Workspace jika diperlukan.
 

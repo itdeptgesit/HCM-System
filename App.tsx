@@ -90,6 +90,7 @@ import { ApprovalHierarchy } from './components/admin/ApprovalHierarchy';
 import { ActivityLogsManager } from './components/admin/ActivityLogsManager';
 import { SystemSettings } from './components/admin/SystemSettings';
 import { LoginPage } from './components/auth/LoginPage';
+import { EmailApprovalPage } from './components/approvals/EmailApprovalPage';
 import { ModulePlaceholder } from './components/ModulePlaceholder';
 import { AccessDenied } from './components/AccessDenied';
 import { UserProfilePage } from './components/profile/UserProfilePage';
@@ -185,6 +186,9 @@ export default function App() {
     window.addEventListener(PERMISSION_CHANGED_EVENT, handlePermissionsUpdated);
     return () => window.removeEventListener(PERMISSION_CHANGED_EVENT, handlePermissionsUpdated);
   }, []);
+
+  // Public approval page linked from email; it authorizes itself with a signed token.
+  if (location.pathname === '/email-approval') return <EmailApprovalPage />;
 
   if (authLoading) return <div role="status" className="flex min-h-screen items-center justify-center bg-slate-50 dark:bg-[#09090b] text-slate-600 dark:text-zinc-400 font-sans text-sm">Memuat sesi...</div>;
 
