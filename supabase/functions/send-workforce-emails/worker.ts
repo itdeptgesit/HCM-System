@@ -20,24 +20,29 @@ interface WorkerOptions {
   fetcher?: typeof fetch;
 }
 
-async function buildActionUrl(
+async function buildActionUrls(
   envelope: EmailEnvelope,
   secret: string,
   baseUrl: string | undefined,
   ttlSeconds: number,
-): Promise<string | undefined> {
+): Promise<{ approve: string; reject: string } | undefined> {
   // Attendance requests still require the application UI.
   if (!baseUrl || envelope.request_table !== 'leave_requests') return undefined;
   if (!envelope.recipient_id || !/^pending_level_[1-4]$/.test(envelope.state)) return undefined;
-  const token = await signActionToken({
-    event: envelope.id,
-    table: envelope.request_table,
-    request: envelope.request_id,
-    state: envelope.state,
-    approver: envelope.recipient_id,
-    exp: Math.floor(Date.now() / 1000) + ttlSeconds,
-  }, secret);
-  return `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}t=${encodeURIComponent(token)}`;
+  const expires = Math.floor(Date.now() / 1000) + ttlSeconds;
+  const link = async (action: 'approve' | 'reject') => {
+    const token = await signActionToken({
+      event: envelope.id,
+      table: envelope.request_table,
+      request: envelope.request_id,
+      state: envelope.state,
+      approver: envelope.recipient_id!,
+      action,
+      exp: expires,
+    }, secret);
+    return `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}t=${encodeURIComponent(token)}`;
+  };
+  return { approve: await link('approve'), reject: await link('reject') };
 }
 
 const respond = (body: object, status = 200) => Response.json(body, { status, headers: { 'Cache-Control': 'no-store' } });
@@ -51,7 +56,7 @@ function authorized(request: Request, secret: string): boolean {
 }
 
 export function createEmailWorker({
-  secret, appUrl, actionBaseUrl, actionTtlSeconds = 7 * 24 * 60 * 60, credentials, store, fetcher = fetch,
+  secret, appUrl, actionBaseUrl, actionTtlSeconds = 3 * 24 * 60 * 60, credentials, store, fetcher = fetch,
 }: WorkerOptions) {
   return async (request: Request): Promise<Response> => {
     if (request.method !== 'POST') return respond({ error: 'Method not allowed' }, 405);
@@ -70,8 +75,8 @@ export function createEmailWorker({
         if (!envelope) return 'skipped';
         let messageId: string;
         try {
-          const actionUrl = await buildActionUrl(envelope, secret, actionBaseUrl, actionTtlSeconds);
-          messageId = await sendGmail(token, renderEmail(envelope, appUrl, { actionUrl }), fetcher);
+          const actionUrls = await buildActionUrls(envelope, secret, actionBaseUrl, actionTtlSeconds);
+          messageId = await sendGmail(token, renderEmail(envelope, appUrl, { actionUrls }), fetcher);
         } catch (error) {
           const failure = error instanceof EmailError ? error : new EmailError('EMAIL_DELIVERY_ERROR', true);
           await store.finish(job, { error: failure.message, retryable: failure.retryable });

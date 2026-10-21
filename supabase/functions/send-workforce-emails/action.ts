@@ -102,8 +102,8 @@ export function createEmailAction({ secret, appUrl, database }: ActionOptions) {
       } catch {
         return reply({ error: 'INVALID_ACTION', message: 'Pilihan keputusan tidak dikenali.' }, 400);
       }
-      if (choice !== 'approve' && choice !== 'reject') {
-        return reply({ error: 'INVALID_ACTION', message: 'Pilihan keputusan tidak dikenali.' }, 400);
+      if (!choice || choice !== payload.action) {
+        return reply({ error: 'INVALID_ACTION', message: 'Pilihan keputusan tidak cocok dengan tautan ini.' }, 400);
       }
       const decision = choice === 'approve' ? 'approved' : 'rejected';
       const { error } = await database.rpc('decide_leave_via_email', {
@@ -135,6 +135,7 @@ export function createEmailAction({ secret, appUrl, database }: ActionOptions) {
         total_days: row.total_days,
         reason: row.reason,
         level: Number(payload.state.slice(-1)),
+        action: payload.action,
         sender: HR_SENDER,
       },
     });

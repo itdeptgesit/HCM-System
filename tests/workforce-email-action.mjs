@@ -17,7 +17,7 @@ const row = {
 async function token(overrides = {}) {
   return signActionToken({
     event: eventId, table: 'leave_requests', request: requestId,
-    state: 'pending_level_2', approver: '2', exp: Math.floor(Date.now() / 1000) + 600,
+    state: 'pending_level_2', approver: '2', action: 'approve', exp: Math.floor(Date.now() / 1000) + 600,
     ...overrides,
   }, secret);
 }
@@ -71,7 +71,7 @@ test('GET returns the request as JSON for the HR page and never decides anything
     request: {
       requester_name: 'Budi', approver_name: 'Sari', leave_type: 'annual',
       start_date: '2027-01-04', end_date: '2027-01-06', total_days: 3,
-      reason: 'Keperluan keluarga', level: 2, sender: 'hr-admin@gesit.co.id',
+      reason: 'Keperluan keluarga', level: 2, action: 'approve', sender: 'hr-admin@gesit.co.id',
     },
   });
   assert.deepEqual(calls.map(call => call.name), ['workforce_email_state']);
@@ -93,7 +93,7 @@ test('invalid, tampered, expired and non-leave links are refused as JSON', async
   const { handle } = fixture();
   const valid = await token();
   for (const value of ['', 'not-a-token', valid.slice(0, -3), await token({ exp: 1 }), await token({ state: 'approved' }),
-    await token({ table: 'attendance_requests' }), await signActionToken({ event: eventId, table: 'leave_requests', request: requestId, state: 'pending_level_2', approver: '2', exp: Math.floor(Date.now() / 1000) + 600 }, `${secret}-other`)]) {
+    await token({ table: 'attendance_requests' }), await token({ action: 'maybe' }), await signActionToken({ event: eventId, table: 'leave_requests', request: requestId, state: 'pending_level_2', approver: '2', action: 'approve', exp: Math.floor(Date.now() / 1000) + 600 }, `${secret}-other`)]) {
     const response = await handle(get(value));
     assert.equal(response.status, 400);
     assert.equal((await response.json()).error, 'INVALID_TOKEN');
@@ -118,8 +118,13 @@ test('POST records the approver decision and refuses unknown or failed choices',
   });
 
   const reject = fixture();
-  assert.deepEqual(await (await reject.handle(post(await token(), 'reject'))).json(), { decision: 'rejected' });
+  assert.deepEqual(await (await reject.handle(post(await token({ action: 'reject' }), 'reject'))).json(), { decision: 'rejected' });
   assert.equal(reject.calls.find(call => call.name === 'decide_leave_via_email').args.p_decision, 'rejected');
+
+  // A link is bound to one decision and cannot be replayed for the other.
+  const mismatch = fixture();
+  assert.equal((await mismatch.handle(post(await token(), 'reject'))).status, 400);
+  assert.equal(mismatch.calls.some(call => call.name === 'decide_leave_via_email'), false);
 
   const invalid = fixture();
   assert.equal((await invalid.handle(post(await token(), 'maybe'))).status, 400);

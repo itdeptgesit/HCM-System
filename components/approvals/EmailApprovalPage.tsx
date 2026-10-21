@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, CheckCircle2, Loader2 } from '@/components/ui/icons';
 
 interface ApprovalRequest {
@@ -10,6 +10,7 @@ interface ApprovalRequest {
   total_days: number | string | null;
   reason: string | null;
   level: number;
+  action: 'approve' | 'reject';
 }
 
 interface ApiError {
@@ -52,8 +53,32 @@ export function EmailApprovalPage() {
   const [request, setRequest] = useState<ApprovalRequest | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState<'approve' | 'reject' | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const [decision, setDecision] = useState<'approved' | 'rejected' | null>(null);
+  const started = useRef(false);
+
+  const decide = async (action: 'approve' | 'reject') => {
+    if (!token || submitting) return;
+    setSubmitting(true);
+    setError('');
+    try {
+      const response = await fetch(`${endpoint}?t=${encodeURIComponent(token)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      const payload = await response.json().catch(() => null) as (ApiError & { decision?: 'approved' | 'rejected' }) | null;
+      if (!response.ok || !payload?.decision) {
+        setError(payload?.message || 'Keputusan gagal disimpan. Silakan buka aplikasi GESIT People.');
+        return;
+      }
+      setDecision(payload.decision);
+    } catch {
+      setError('Tidak dapat menghubungi server. Periksa koneksi lalu coba lagi.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   useEffect(() => {
     if (!token) {
@@ -82,33 +107,30 @@ export function EmailApprovalPage() {
     return () => { active = false; };
   }, [endpoint, token]);
 
-  const decide = async (action: 'approve' | 'reject') => {
-    if (!token || submitting) return;
-    setSubmitting(action);
-    setError('');
-    try {
-      const response = await fetch(`${endpoint}?t=${encodeURIComponent(token)}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ action }),
-      });
-      const payload = await response.json().catch(() => null) as (ApiError & { decision?: 'approved' | 'rejected' }) | null;
-      if (!response.ok || !payload?.decision) {
-        setError(payload?.message || 'Keputusan gagal disimpan. Silakan buka aplikasi GESIT People.');
-        return;
-      }
-      setDecision(payload.decision);
-    } catch {
-      setError('Tidak dapat menghubungi server. Periksa koneksi lalu coba lagi.');
-    } finally {
-      setSubmitting(null);
-    }
-  };
+  // One-click from email: the token names the decision, so record it as soon as
+  // the details are validated. The mutation is a POST, so mail link scanners
+  // that only fetch the page cannot approve anything.
+  useEffect(() => {
+    if (!request?.action || started.current) return;
+    started.current = true;
+    void decide(request.action);
+  }, [request]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const start = longDate(request?.start_date);
   const end = longDate(request?.end_date);
   const dates = start && end && start !== end ? `${start} – ${end}` : start;
   const days = Number(request?.total_days || 0) > 0 ? `${Number(request?.total_days)} hari` : '';
+
+  const details = request ? (
+    <dl className="mt-5 text-left">
+      <DetailRow label="Karyawan">{request.requester_name}</DetailRow>
+      <DetailRow label="Jenis cuti">{LEAVE_TYPES[request.leave_type] || request.leave_type || 'Cuti'}</DetailRow>
+      <DetailRow label="Tanggal">{dates || '-'}</DetailRow>
+      {days && <DetailRow label="Durasi">{days}</DetailRow>}
+      {request.reason && <DetailRow label="Alasan">{request.reason}</DetailRow>}
+      <DetailRow label="Tahap">Level {request.level}</DetailRow>
+    </dl>
+  ) : null;
 
   return (
     <div className="min-h-screen bg-slate-100 px-4 py-10 font-sans text-slate-900">
@@ -132,11 +154,12 @@ export function EmailApprovalPage() {
             <div className="text-center">
               <CheckCircle2 className="mx-auto mb-4 h-12 w-12 text-emerald-600" />
               <h1 className="text-xl font-bold text-slate-900">
-                {decision === 'approved' ? 'Cuti disetujui' : 'Cuti ditolak'}
+                Cuti {decision === 'approved' ? 'disetujui' : 'ditolak'}
               </h1>
               <p className="mt-3 text-sm leading-6 text-slate-600">
                 Keputusan Anda sudah tercatat. Approver berikutnya dan karyawan akan menerima email sesuai alur persetujuan.
               </p>
+              {details}
               <a href="/requests" className="mt-6 inline-flex rounded-lg bg-[#12346a] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#0d2750]">
                 Buka GESIT People
               </a>
@@ -149,56 +172,41 @@ export function EmailApprovalPage() {
                 <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
                 <p>{error}</p>
               </div>
-              <a href="/requests" className="mt-6 inline-flex text-sm font-semibold text-[#12346a] underline underline-offset-4">
+              {request?.action && (
+                <button
+                  type="button"
+                  onClick={() => decide(request.action)}
+                  disabled={submitting}
+                  className="mt-5 inline-flex items-center gap-2 rounded-lg bg-[#12346a] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#0d2750] disabled:opacity-60"
+                >
+                  {submitting && <Loader2 className="h-4 w-4 animate-spin" />} Coba lagi
+                </button>
+              )}
+              <a href="/requests" className="mt-5 ml-4 inline-flex text-sm font-semibold text-[#12346a] underline underline-offset-4">
                 Buka GESIT People
               </a>
             </div>
           )}
 
           {!loading && !decision && !error && request && (
-            <>
-              <h1 className="text-xl font-bold text-slate-900">Konfirmasi pengajuan cuti</h1>
+            <div className="text-center">
+              <Loader2 className="mx-auto mb-4 h-10 w-10 animate-spin text-[#12346a]" />
+              <h1 className="text-lg font-bold text-slate-900">
+                {request.action === 'approve' ? 'Menyetujui pengajuan…' : 'Menolak pengajuan…'}
+              </h1>
               <p className="mt-2 text-sm leading-6 text-slate-600">
-                Halo {request.approver_name}, konfirmasi keputusan Anda untuk pengajuan berikut. Keputusan langsung tercatat setelah tombol ditekan.
+                Keputusan untuk {request.requester_name} sedang disimpan.
               </p>
-
-              <dl className="mt-5">
-                <DetailRow label="Karyawan">{request.requester_name}</DetailRow>
-                <DetailRow label="Jenis cuti">{LEAVE_TYPES[request.leave_type] || request.leave_type || 'Cuti'}</DetailRow>
-                <DetailRow label="Tanggal">{dates || '-'}</DetailRow>
-                {days && <DetailRow label="Durasi">{days}</DetailRow>}
-                {request.reason && <DetailRow label="Alasan">{request.reason}</DetailRow>}
-                <DetailRow label="Tahap">Level {request.level}</DetailRow>
-              </dl>
-
-              <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-                <button
-                  type="button"
-                  onClick={() => decide('approve')}
-                  disabled={submitting !== null}
-                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#12346a] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#0d2750] disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {submitting === 'approve' && <Loader2 className="h-4 w-4 animate-spin" />} Setujui
-                </button>
-                <button
-                  type="button"
-                  onClick={() => decide('reject')}
-                  disabled={submitting !== null}
-                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-6 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {submitting === 'reject' && <Loader2 className="h-4 w-4 animate-spin" />} Tolak
-                </button>
-              </div>
-
+              {details}
               <p className="mt-5 text-xs leading-5 text-slate-500">
-                Tautan ini hanya berlaku untuk tahap ini dan otomatis tidak berlaku setelah pengajuan diproses atau kedaluwarsa. Jangan teruskan tautan ini.
+                Jangan tutup halaman ini sampai proses selesai.
               </p>
-            </>
+            </div>
           )}
         </div>
 
         <p className="mx-auto mt-4 max-w-xl px-2 text-xs leading-5 text-slate-500">
-          Email otomatis dari GESIT HR. Jika Anda tidak merasa berhak menyetujui pengajuan ini, tutup halaman dan hubungi HR.
+          Email otomatis dari GESIT HR. Tautan hanya berlaku sekali untuk tahap ini. Jika Anda tidak merasa berhak memutuskan pengajuan ini, tutup halaman dan hubungi HR.
         </p>
       </div>
     </div>

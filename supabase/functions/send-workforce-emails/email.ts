@@ -24,6 +24,7 @@ export interface EmailActionToken {
   request: string;
   state: string;
   approver: string;
+  action: 'approve' | 'reject';
   exp: number;
 }
 
@@ -97,6 +98,7 @@ export async function verifyActionToken(value: string, secret: string): Promise<
   if (!fields.every(field => typeof payload[field] === 'string' && (payload[field] as string).length > 0)) return null;
   if (!/^[a-f0-9-]{36}$/i.test(payload.event as string)) return null;
   if (!/^pending_level_[1-4]$/.test(payload.state as string)) return null;
+  if (payload.action !== 'approve' && payload.action !== 'reject') return null;
   return payload as EmailActionToken;
 }
 
@@ -165,7 +167,11 @@ function actionButton(href: string, label: string, primary: boolean): string {
     + style + '">' + escapeHtml(label) + '</a>';
 }
 
-export function renderEmail(envelope: EmailEnvelope, appUrl: string, options: { actionUrl?: string } = {}): string {
+export function renderEmail(
+  envelope: EmailEnvelope,
+  appUrl: string,
+  options: { actionUrls?: { approve?: string; reject?: string } } = {},
+): string {
   if (!/^[a-f0-9-]{36}$/i.test(envelope.id)) throw new EmailError('INVALID_EVENT_ID');
   if (!/^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/.test(envelope.recipient_email)) {
     throw new EmailError('INVALID_RECIPIENT_EMAIL');
@@ -217,17 +223,20 @@ export function renderEmail(envelope: EmailEnvelope, appUrl: string, options: { 
     ...details.map(([label, value]) => `${label}: ${value}`),
     '',
     pending
-      ? options.actionUrl
-        ? 'Setujui atau tolak melalui tautan berikut:'
-        : 'Setujui atau tolak melalui GESIT People (login diperlukan):'
-      : 'Lihat pengajuan di GESIT People (login diperlukan):',
-    options.actionUrl || url,
+      ? options.actionUrls
+        ? [
+            'Sekali klik untuk memutuskan langsung dari email:',
+            `Setujui: ${options.actionUrls.approve || url}`,
+            `Tolak: ${options.actionUrls.reject || url}`,
+          ]
+        : ['Setujui atau tolak melalui GESIT People (login diperlukan):', url]
+      : ['Lihat pengajuan di GESIT People (login diperlukan):', url],
     '',
     `Nomor pengajuan: ${envelope.request_id}`,
     '',
     pending
-      ? options.actionUrl
-        ? 'Tautan hanya berlaku untuk tahap ini dan tidak dapat dipakai ulang setelah pengajuan diproses.'
+      ? options.actionUrls
+        ? 'Sekali klik, keputusan langsung tercatat dan tidak dapat dibatalkan dari email. Tautan hanya berlaku untuk tahap ini dan tidak dapat dipakai ulang.'
         : 'Tombol di email hanya membuka halaman persetujuan. Keputusan tercatat setelah Anda login dan mengonfirmasi di aplikasi.'
       : 'Email ini dikirim otomatis oleh HR. Keputusan tidak dapat diubah melalui email.',
     '',
@@ -236,15 +245,16 @@ export function renderEmail(envelope: EmailEnvelope, appUrl: string, options: { 
   ].join('\n');
 
   const rowsHtml = details.map(([label, value]) => detailRow(label, value)).join('');
-  const actionHref = options.actionUrl || url;
+  const approveHref = options.actionUrls?.approve || url;
+  const rejectHref = options.actionUrls?.reject || url;
   const actionsHtml = pending
     ? '<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 0;"><tr>'
-      + '<td style="padding:0 12px 0 0;">' + actionButton(actionHref, 'Setujui', true) + '</td>'
-      + '<td>' + actionButton(actionHref, 'Tolak', false) + '</td>'
+      + '<td style="padding:0 12px 0 0;">' + actionButton(approveHref, 'Setujui', true) + '</td>'
+      + '<td>' + actionButton(rejectHref, 'Tolak', false) + '</td>'
       + '</tr></table>'
       + '<p style="margin:16px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;color:#6b7280;">'
-      + (options.actionUrl
-        ? 'Tombol di atas membuka halaman konfirmasi. Tautan hanya berlaku untuk tahap ini dan tidak dapat dipakai ulang setelah pengajuan diproses.'
+      + (options.actionUrls
+        ? 'Sekali klik, keputusan langsung tercatat dan tidak dapat dibatalkan dari email. Tautan hanya berlaku untuk tahap ini dan tidak dapat dipakai ulang. Jangan teruskan email ini.'
         : 'Tombol di atas membuka halaman persetujuan di GESIT People. Keputusan hanya tercatat setelah Anda login dan mengonfirmasi di aplikasi.')
       + '</p>'
     : '';

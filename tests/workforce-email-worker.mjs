@@ -117,7 +117,7 @@ test('superseded/blocked jobs do not send', async () => {
   assert.equal(calls.finish.length, 0);
 });
 
-test('MIME supports Unicode, escapes HTML, contains no one-click approval, and rejects header injection', () => {
+test('MIME supports Unicode, escapes HTML, emits no approval links without action URLs, and rejects header injection', () => {
   const { text, html } = decodeMail(renderEmail({ ...envelope, requester_name: 'TEST Siti “É” <img src=x onerror=alert(1)>', recipient_name: 'TEST 李' }, 'https://hr.example.invalid'));
   assert.match(text, /TEST 李/);
   assert.match(text, /“É”/);
@@ -198,20 +198,25 @@ test('emailed leave approvals link to the HR confirmation page, attendance stays
   const { html, text } = decodeMail(JSON.parse(send.init.body).raw);
   const links = [...html.matchAll(/href="(https:\/\/hr\.example\.invalid\/email-approval[^"]+)"/g)].map(match => match[1]);
   assert.equal(links.length, 2);
-  const token = new URL(links[0]).searchParams.get('t');
-  assert.ok(token);
-  const payload = await verifyActionToken(token, secret);
+  const approveToken = new URL(links[0]).searchParams.get('t');
+  const rejectToken = new URL(links[1]).searchParams.get('t');
+  assert.ok(approveToken);
+  assert.ok(rejectToken);
+  assert.notEqual(approveToken, rejectToken);
+  const payload = await verifyActionToken(approveToken, secret);
   assert.deepEqual(payload, {
     event: job.id, table: 'leave_requests', request: envelope.request_id,
-    state: envelope.state, approver: '77', exp: payload.exp,
+    state: envelope.state, approver: '77', action: 'approve', exp: payload.exp,
   });
+  assert.equal((await verifyActionToken(rejectToken, secret)).action, 'reject');
   assert.ok(payload.exp > Date.now() / 1000);
-  assert.match(text, /Setujui atau tolak melalui tautan berikut/);
+  assert.ok(payload.exp <= Math.floor(Date.now() / 1000) + 3 * 24 * 60 * 60);
+  assert.match(text, /Sekali klik untuk memutuskan langsung dari email/);
   assert.match(text, /tidak dapat dipakai ulang/);
 
   // Tampering, another secret and expiry all invalidate the link.
-  assert.equal(await verifyActionToken(token.slice(0, -2), secret), null);
-  assert.equal(await verifyActionToken(token, `${secret}-other`), null);
+  assert.equal(await verifyActionToken(approveToken.slice(0, -2), secret), null);
+  assert.equal(await verifyActionToken(approveToken, `${secret}-other`), null);
   const expired = await signActionToken({ ...payload, exp: 1 }, secret);
   assert.equal(await verifyActionToken(expired, secret), null);
 
