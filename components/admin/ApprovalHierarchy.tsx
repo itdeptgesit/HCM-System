@@ -31,6 +31,8 @@ interface UserAccount {
   department?: string;
   job_title?: string;
   role?: string;
+  status?: string;
+  employment_status?: string;
   supervisor_id?: number | null;
   manager_id?: number | null;
   attendance_hr_id?: number | null;
@@ -39,6 +41,14 @@ interface UserAccount {
   attendance_manager_id?: number | null;
   attendance_vp_id?: number | null;
 }
+
+const INACTIVE_EMPLOYEE_STATUSES = new Set([
+  'inactive', 'resigned', 'resign', 'terminate', 'terminated', 'suspended', 'nonaktif', 'disabled',
+]);
+
+const isInactiveEmployee = (u: UserAccount) =>
+  INACTIVE_EMPLOYEE_STATUSES.has(String(u.status || '').trim().toLowerCase()) ||
+  INACTIVE_EMPLOYEE_STATUSES.has(String(u.employment_status || '').trim().toLowerCase());
 
 interface WorkflowRule {
   id: string;
@@ -203,7 +213,7 @@ export const ApprovalHierarchy: React.FC<{ currentUser?: any }> = ({ currentUser
     try {
       const { data, error } = await supabase
         .from('user_accounts')
-        .select('id, full_name, email, department, job_title, role, employee_code, supervisor_id, manager_id, attendance_hr_id, vp_id, attendance_supervisor_id, attendance_manager_id, attendance_vp_id')
+        .select('id, full_name, email, department, job_title, role, status, employment_status, employee_code, supervisor_id, manager_id, attendance_hr_id, vp_id, attendance_supervisor_id, attendance_manager_id, attendance_vp_id')
         .order('full_name', { ascending: true });
 
       if (error) throw error;
@@ -283,10 +293,14 @@ export const ApprovalHierarchy: React.FC<{ currentUser?: any }> = ({ currentUser
     return found ? found.full_name : `ID: ${id}`;
   };
 
-  // Departments list for filtering
-  const departments = Array.from(new Set(users.map(u => u.department).filter(Boolean)));
+  // Resigned / terminated accounts stay available for name lookup above,
+  // but are not offered as employees or approvers in this page.
+  const activeUsers = users.filter(u => !isInactiveEmployee(u));
 
-  const filteredUsers = users.filter(u => {
+  // Departments list for filtering
+  const departments = Array.from(new Set(activeUsers.map(u => u.department).filter(Boolean)));
+
+  const filteredUsers = activeUsers.filter(u => {
     const haystack = [u.full_name, u.email, u.department || '', u.job_title || ''].join(' ').toLowerCase();
     const matchesSearch = haystack.includes(searchQuery.toLowerCase());
     const matchesDept = deptFilter === 'all' || u.department === deptFilter;
@@ -595,7 +609,7 @@ export const ApprovalHierarchy: React.FC<{ currentUser?: any }> = ({ currentUser
                   className="w-full h-9 rounded-xl border border-border bg-muted/40 px-3 text-xs text-foreground focus:border-primary focus:bg-background focus:outline-none cursor-pointer"
                 >
                   <option value="">(Belum ditentukan / Lewati ke Level 2)</option>
-                  {users.filter(u => u.id !== editingUser.id).map(u => (
+                  {activeUsers.filter(u => u.id !== editingUser.id).map(u => (
                     <option key={u.id} value={u.id.toString()}>
                       {u.full_name} — {u.job_title || u.role} ({u.department || 'All'})
                     </option>
@@ -617,7 +631,7 @@ export const ApprovalHierarchy: React.FC<{ currentUser?: any }> = ({ currentUser
                   className="w-full h-9 rounded-xl border border-border bg-muted/40 px-3 text-xs text-foreground focus:border-primary focus:bg-background focus:outline-none cursor-pointer"
                 >
                   <option value="">(Belum ditentukan / Lewati tahap)</option>
-                  {users.filter(u => u.id !== editingUser.id).map(u => (
+                  {activeUsers.filter(u => u.id !== editingUser.id).map(u => (
                     <option key={u.id} value={u.id.toString()}>
                       {u.full_name} — {u.job_title || u.role}
                     </option>
@@ -639,7 +653,7 @@ export const ApprovalHierarchy: React.FC<{ currentUser?: any }> = ({ currentUser
                   className="w-full h-9 rounded-xl border border-border bg-muted/40 px-3 text-xs text-foreground focus:border-primary focus:bg-background focus:outline-none cursor-pointer"
                 >
                   <option value="">(Belum ditentukan / Lewati tahap)</option>
-                  {users.filter(u => u.id !== editingUser.id).map(u => (
+                  {activeUsers.filter(u => u.id !== editingUser.id).map(u => (
                     <option key={u.id} value={u.id.toString()}>
                       {u.full_name} — {u.job_title || u.role} ({u.department || 'All'})
                     </option>
@@ -658,7 +672,7 @@ export const ApprovalHierarchy: React.FC<{ currentUser?: any }> = ({ currentUser
                   className="h-9 w-full rounded-xl border border-border bg-muted/40 px-3 text-xs text-foreground focus:border-primary focus:bg-background focus:outline-none cursor-pointer"
                 >
                   <option value="">(Belum ditentukan / Lewati tahap)</option>
-                  {users.filter(u => u.id !== editingUser.id).map(u => <option key={u.id} value={String(u.id)}>{u.full_name} ({u.department || '-'})</option>)}
+                  {activeUsers.filter(u => u.id !== editingUser.id).map(u => <option key={u.id} value={String(u.id)}>{u.full_name} ({u.department || '-'})</option>)}
                 </select>
               </div>
               <div className="flex items-center justify-end gap-3 pt-3 border-t border-border">
