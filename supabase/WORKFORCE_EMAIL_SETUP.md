@@ -148,6 +148,7 @@ Pesan yang sudah sedang dikirim ke Google mungkin tetap terkirim saat fitur dino
 
 ```powershell
 node --test tests/workforce-email-worker.mjs
+node --test tests/workforce-email-action.mjs
 # Install @electric-sql/pglite di lokasi QA, lalu arahkan PGLITE_MODULE ke package itu:
 node --test tests/workforce-email-outbox.mjs
 deno check supabase/functions/send-workforce-emails/index.ts
