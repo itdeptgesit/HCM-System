@@ -29,6 +29,9 @@ create table if not exists public.workforce_email_outbox (
 );
 create index if not exists workforce_email_due on public.workforce_email_outbox(available_at)
   where status in ('pending','processing');
+-- Added with the email approval links; keeps 14 self-contained for existing installs.
+alter table public.workforce_email_outbox
+  add column if not exists recipient_account_id text;
 
 alter table public.workforce_email_settings enable row level security;
 alter table public.workforce_email_outbox enable row level security;
