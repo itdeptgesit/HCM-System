@@ -1,6 +1,4 @@
--- Run after 14_workforce_email_notifications.sql.
--- Lets an approver decide a LEAVE request from the email link, without a login.
--- The email token is verified by the Edge Function and re-validated here against
+﻿-- The email token is verified by the Edge Function and re-validated here against
 -- the live approval chain, so a stale, forwarded or reused link cannot decide a
 -- request that has already moved on.
 begin;
@@ -8,10 +6,23 @@ begin;
 alter table public.workforce_email_outbox
   add column if not exists recipient_account_id text;
 
+-- Drop obsolete uuid signatures if they exist (prevents PGRST203 overload conflict)
+drop function if exists public.review_workforce_request(text, uuid, text, text);
+drop function if exists public.review_workforce_request_as(text, text, uuid, text, text);
+drop function if exists public.decide_leave_via_email(uuid, text, text, text);
+
+-- Ensure workforce_approval_chain handles both text and bigint cleanly
+create or replace function public.workforce_approval_chain(p_user_id bigint)
+returns table(level_number integer, approver_id text)
+language sql stable security definer set search_path=public as $$
+  select * from public.workforce_approval_chain(p_user_id::text);
+$$;
+
 -- Same review logic as review_workforce_request, but the acting account is an
 -- explicit argument so a trusted server can act for the emailed approver.
+-- p_request_id is bigint matching leave_requests, overtime_requests, and reimbursements tables.
 create or replace function public.review_workforce_request_as(
-  p_actor_id text, p_request_type text, p_request_id uuid, p_decision text, p_notes text default null
+  p_actor_id text, p_request_type text, p_request_id bigint, p_decision text, p_notes text default null
 ) returns jsonb language plpgsql security definer set search_path=public as $$
 declare
   v_table text; v_request jsonb; v_result jsonb; v_actor public.user_accounts;
@@ -72,7 +83,7 @@ $$;
 
 -- The session-based entry point stays the public API used by the application.
 create or replace function public.review_workforce_request(
-  p_request_type text, p_request_id uuid, p_decision text, p_notes text default null
+  p_request_type text, p_request_id bigint, p_decision text, p_notes text default null
 ) returns jsonb language plpgsql security definer set search_path=public as $$
 begin
   return public.review_workforce_request_as(public.current_account_id(),p_request_type,p_request_id,p_decision,p_notes);
@@ -83,7 +94,7 @@ $$;
 -- the stage must still be the one named in the email, and the approver must
 -- still be the assignee for that stage.
 create or replace function public.decide_leave_via_email(
-  p_request_id uuid, p_approver_id text, p_expected_state text, p_decision text
+  p_request_id bigint, p_approver_id text, p_expected_state text, p_decision text
 ) returns jsonb language plpgsql security definer set search_path=public as $$
 declare
   v_row public.leave_requests; v_state text; v_level integer; v_assignee text;
@@ -100,15 +111,16 @@ begin
   if v_state is distinct from p_expected_state then raise exception 'REQUEST_STATE_CHANGED'; end if;
   if v_state not like 'pending_level_%' then raise exception 'REQUEST_ALREADY_REVIEWED'; end if;
   v_level := right(v_state,1)::integer;
-  select approver_id into v_assignee from public.workforce_approval_chain(v_row.user_id) where level_number=v_level;
+  select approver_id into v_assignee from public.workforce_approval_chain(v_row.user_id::text) where level_number=v_level;
   if v_assignee is distinct from p_approver_id then raise exception 'NOT_DESIGNATED_APPROVER'; end if;
   return public.review_workforce_request_as(p_approver_id,'leave',p_request_id,p_decision,'Diputuskan melalui tautan email');
 end;
 $$;
 
-revoke all on function public.review_workforce_request_as(text,text,uuid,text,text) from public,anon,authenticated;
-revoke all on function public.decide_leave_via_email(uuid,text,text,text) from public,anon,authenticated;
-grant execute on function public.review_workforce_request_as(text,text,uuid,text,text) to service_role;
-grant execute on function public.decide_leave_via_email(uuid,text,text,text) to service_role;
+revoke all on function public.review_workforce_request_as(text,text,bigint,text,text) from public,anon,authenticated;
+revoke all on function public.decide_leave_via_email(bigint,text,text,text) from public,anon,authenticated;
+grant execute on function public.review_workforce_request_as(text,text,bigint,text,text) to service_role;
+grant execute on function public.decide_leave_via_email(bigint,text,text,text) to service_role;
+grant execute on function public.review_workforce_request(text,bigint,text,text) to authenticated,anon;
 notify pgrst,'reload schema';
 commit;

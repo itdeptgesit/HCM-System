@@ -119,7 +119,7 @@ export function createEmailAction({ secret, appUrl, database }: ActionOptions) {
       });
       if (error) {
         console.error('decide_leave_via_email failed', { request: payload.request, code: error.code, message: error.message, details: (error as { details?: string }).details });
-        return reply({ error: 'DECISION_FAILED', code: error.code || '', message: errorMessage(error.message || '') }, 409);
+        return reply({ error: 'DECISION_FAILED', code: error.code || '', detail: (error.message || '').slice(0, 300), message: errorMessage(error.message || '') }, 409);
       }
       return reply({ decision });
     }

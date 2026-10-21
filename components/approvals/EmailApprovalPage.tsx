@@ -16,6 +16,7 @@ interface ApprovalRequest {
 interface ApiError {
   error?: string;
   code?: string;
+  detail?: string;
   message?: string;
 }
 
@@ -57,6 +58,7 @@ export function EmailApprovalPage() {
   const [submitting, setSubmitting] = useState(false);
   const [decision, setDecision] = useState<'approved' | 'rejected' | null>(null);
   const [errorCode, setErrorCode] = useState('');
+  const [errorDetail, setErrorDetail] = useState('');
   const started = useRef(false);
 
   const decide = async (action: 'approve' | 'reject') => {
@@ -72,6 +74,7 @@ export function EmailApprovalPage() {
       const payload = await response.json().catch(() => null) as (ApiError & { decision?: 'approved' | 'rejected' }) | null;
       if (!response.ok || !payload?.decision) {
         setErrorCode(payload?.code || '');
+        setErrorDetail(payload?.detail || '');
         setError(payload?.message || 'Keputusan gagal disimpan. Silakan buka aplikasi GESIT People.');
         return;
       }
@@ -176,6 +179,7 @@ export function EmailApprovalPage() {
                 <div>
                   <p>{error}</p>
                   {errorCode && <p className="mt-1 font-mono text-xs text-amber-700">Kode: {errorCode}</p>}
+                  {errorDetail && <p className="mt-1 break-words font-mono text-xs text-amber-700">{errorDetail}</p>}
                 </div>
               </div>
               {request?.action && (
