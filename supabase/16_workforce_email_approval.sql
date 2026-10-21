@@ -1,4 +1,4 @@
-﻿-- The email token is verified by the Edge Function and re-validated here against
+-- The email token is verified by the Edge Function and re-validated here against
 -- the live approval chain, so a stale, forwarded or reused link cannot decide a
 -- request that has already moved on.
 begin;
