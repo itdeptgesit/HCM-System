@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { authorizeGmail, HR_SENDER, renderEmail, sendGmail } from '../supabase/functions/send-workforce-emails/email.ts';
+import { authorizeGmail, HR_SENDER, renderEmail, sendGmail, signActionToken, verifyActionToken } from '../supabase/functions/send-workforce-emails/email.ts';
 import { createEmailWorker } from '../supabase/functions/send-workforce-emails/worker.ts';
 
 const secret = 'TEST_ONLY_WORKER_SECRET_NOT_A_REAL_CREDENTIAL_123456';
@@ -185,4 +185,51 @@ test('invalid configuration fails closed without invoking Gmail', async t => {
   const { handle, calls } = fixture({ options: { appUrl: 'http://localhost:3000' } });
   assert.equal((await handle(request())).status, 503);
   assert.equal(calls.http.length, 0);
+});
+
+test('emailed leave approvals link to a signed confirmation page, attendance stays in the app', async () => {
+  const actionBaseUrl = 'https://project.supabase.co/functions/v1/send-workforce-emails';
+  const { handle, calls } = fixture({
+    options: { actionBaseUrl },
+    store: { async prepare() { return { ...envelope, recipient_id: '77' }; } },
+  });
+  assert.equal((await handle(request())).status, 200);
+  const send = calls.http.find(call => call.url.includes('/messages/send'));
+  const { html, text } = decodeMail(JSON.parse(send.init.body).raw);
+  const links = [...html.matchAll(/href="(https:\/\/project\.supabase\.co[^"]+)"/g)].map(match => match[1]);
+  assert.equal(links.length, 2);
+  const token = new URL(links[0]).searchParams.get('t');
+  assert.ok(token);
+  const payload = await verifyActionToken(token, secret);
+  assert.deepEqual(payload, {
+    event: job.id, table: 'leave_requests', request: envelope.request_id,
+    state: envelope.state, approver: '77', exp: payload.exp,
+  });
+  assert.ok(payload.exp > Date.now() / 1000);
+  assert.match(text, /Setujui atau tolak melalui tautan berikut/);
+  assert.match(text, /tidak dapat dipakai ulang/);
+
+  // Tampering, another secret and expiry all invalidate the link.
+  assert.equal(await verifyActionToken(token.slice(0, -2), secret), null);
+  assert.equal(await verifyActionToken(token, `${secret}-other`), null);
+  const expired = await signActionToken({ ...payload, exp: 1 }, secret);
+  assert.equal(await verifyActionToken(expired, secret), null);
+
+  const attendance = fixture({
+    options: { actionBaseUrl },
+    store: { async prepare() { return { ...envelope, request_table: 'attendance_requests', recipient_id: '77' }; } },
+  });
+  await attendance.handle(request());
+  const attendanceSend = attendance.calls.http.find(call => call.url.includes('/messages/send'));
+  const attendanceMail = decodeMail(JSON.parse(attendanceSend.init.body).raw);
+  assert.equal(attendanceMail.html.includes('project.supabase.co'), false);
+  assert.match(attendanceMail.html, /approvals/);
+
+  const final = fixture({
+    options: { actionBaseUrl },
+    store: { async prepare() { return { ...envelope, state: 'approved', level: null, recipient_id: '1' }; } },
+  });
+  await final.handle(request());
+  const finalSend = final.calls.http.find(call => call.url.includes('/messages/send'));
+  assert.equal(decodeMail(JSON.parse(finalSend.init.body).raw).html.includes('project.supabase.co'), false);
 });

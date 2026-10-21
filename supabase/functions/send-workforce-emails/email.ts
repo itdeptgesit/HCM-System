@@ -15,6 +15,16 @@ export interface EmailEnvelope {
   reason?: string | null;
   days?: number | string | null;
   balance_days?: number | string | null;
+  recipient_id?: string | null;
+}
+
+export interface EmailActionToken {
+  event: string;
+  table: string;
+  request: string;
+  state: string;
+  approver: string;
+  exp: number;
 }
 
 export interface GmailCredentials {
@@ -38,7 +48,59 @@ function base64(text: string): string {
   return btoa(binary);
 }
 
-function escapeHtml(text: string): string {
+function base64Url(bytes: Uint8Array): string {
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function fromBase64Url(value: string): Uint8Array<ArrayBuffer> | null {
+  try {
+    const binary = atob(value.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (value.length % 4)) % 4));
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index++) bytes[index] = binary.charCodeAt(index);
+    return bytes;
+  } catch {
+    return null;
+  }
+}
+
+function hmacKey(secret: string): Promise<CryptoKey> {
+  return crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify']);
+}
+
+export async function signActionToken(token: EmailActionToken, secret: string): Promise<string> {
+  if (secret.length < 32) throw new EmailError('ACTION_SECRET_TOO_SHORT');
+  const body = base64Url(new TextEncoder().encode(JSON.stringify(token)));
+  const signature = new Uint8Array(await crypto.subtle.sign('HMAC', await hmacKey(secret), new TextEncoder().encode(body)));
+  return `${body}.${base64Url(signature)}`;
+}
+
+export async function verifyActionToken(value: string, secret: string): Promise<EmailActionToken | null> {
+  if (secret.length < 32 || typeof value !== 'string') return null;
+  const parts = value.split('.');
+  if (parts.length !== 2 || !parts[0] || !parts[1]) return null;
+  const signature = fromBase64Url(parts[1]);
+  if (!signature) return null;
+  const valid = await crypto.subtle.verify('HMAC', await hmacKey(secret), signature, new TextEncoder().encode(parts[0]));
+  if (!valid) return null;
+  const decoded = fromBase64Url(parts[0]);
+  if (!decoded) return null;
+  let payload: Partial<EmailActionToken>;
+  try {
+    payload = JSON.parse(new TextDecoder().decode(decoded));
+  } catch {
+    return null;
+  }
+  if (typeof payload?.exp !== 'number' || payload.exp * 1000 < Date.now()) return null;
+  const fields: Array<keyof EmailActionToken> = ['event', 'table', 'request', 'state', 'approver'];
+  if (!fields.every(field => typeof payload[field] === 'string' && (payload[field] as string).length > 0)) return null;
+  if (!/^[a-f0-9-]{36}$/i.test(payload.event as string)) return null;
+  if (!/^pending_level_[1-4]$/.test(payload.state as string)) return null;
+  return payload as EmailActionToken;
+}
+
+export function escapeHtml(text: string): string {
   return text.replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!);
 }
 
@@ -103,7 +165,7 @@ function actionButton(href: string, label: string, primary: boolean): string {
     + style + '">' + escapeHtml(label) + '</a>';
 }
 
-export function renderEmail(envelope: EmailEnvelope, appUrl: string): string {
+export function renderEmail(envelope: EmailEnvelope, appUrl: string, options: { actionUrl?: string } = {}): string {
   if (!/^[a-f0-9-]{36}$/i.test(envelope.id)) throw new EmailError('INVALID_EVENT_ID');
   if (!/^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/.test(envelope.recipient_email)) {
     throw new EmailError('INVALID_RECIPIENT_EMAIL');
@@ -154,13 +216,19 @@ export function renderEmail(envelope: EmailEnvelope, appUrl: string): string {
     '',
     ...details.map(([label, value]) => `${label}: ${value}`),
     '',
-    pending ? 'Setujui atau tolak melalui GESIT People (login diperlukan):' : 'Lihat pengajuan di GESIT People (login diperlukan):',
-    url,
+    pending
+      ? options.actionUrl
+        ? 'Setujui atau tolak melalui tautan berikut:'
+        : 'Setujui atau tolak melalui GESIT People (login diperlukan):'
+      : 'Lihat pengajuan di GESIT People (login diperlukan):',
+    options.actionUrl || url,
     '',
     `Nomor pengajuan: ${envelope.request_id}`,
     '',
     pending
-      ? 'Tombol di email hanya membuka halaman persetujuan. Keputusan tercatat setelah Anda login dan mengonfirmasi di aplikasi.'
+      ? options.actionUrl
+        ? 'Tautan hanya berlaku untuk tahap ini dan tidak dapat dipakai ulang setelah pengajuan diproses.'
+        : 'Tombol di email hanya membuka halaman persetujuan. Keputusan tercatat setelah Anda login dan mengonfirmasi di aplikasi.'
       : 'Email ini dikirim otomatis oleh HR. Keputusan tidak dapat diubah melalui email.',
     '',
     'Salam,',
@@ -168,13 +236,17 @@ export function renderEmail(envelope: EmailEnvelope, appUrl: string): string {
   ].join('\n');
 
   const rowsHtml = details.map(([label, value]) => detailRow(label, value)).join('');
+  const actionHref = options.actionUrl || url;
   const actionsHtml = pending
     ? '<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 0;"><tr>'
-      + '<td style="padding:0 12px 0 0;">' + actionButton(url, 'Setujui', true) + '</td>'
-      + '<td>' + actionButton(url, 'Tolak', false) + '</td>'
+      + '<td style="padding:0 12px 0 0;">' + actionButton(actionHref, 'Setujui', true) + '</td>'
+      + '<td>' + actionButton(actionHref, 'Tolak', false) + '</td>'
       + '</tr></table>'
       + '<p style="margin:16px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;color:#6b7280;">'
-      + 'Tombol di atas membuka halaman persetujuan di GESIT People. Keputusan hanya tercatat setelah Anda login dan mengonfirmasi di aplikasi.</p>'
+      + (options.actionUrl
+        ? 'Tombol di atas membuka halaman konfirmasi. Tautan hanya berlaku untuk tahap ini dan tidak dapat dipakai ulang setelah pengajuan diproses.'
+        : 'Tombol di atas membuka halaman persetujuan di GESIT People. Keputusan hanya tercatat setelah Anda login dan mengonfirmasi di aplikasi.')
+      + '</p>'
     : '';
 
   const html = '<!doctype html><html lang="id"><head><meta charset="utf-8">'

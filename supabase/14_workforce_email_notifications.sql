@@ -20,6 +20,7 @@ create table if not exists public.workforce_email_outbox (
   lease_token uuid,
   lease_until timestamptz,
   recipient_email text,
+  recipient_account_id text,
   provider_message_id text,
   last_error text,
   created_at timestamptz not null default now(),
@@ -153,7 +154,9 @@ begin
     update public.workforce_email_outbox set status='blocked',last_error='RECIPIENT_MISSING_INVALID_OR_INACTIVE',lease_token=null,lease_until=null where id=p_id;
     return null;
   end if;
-  update public.workforce_email_outbox set recipient_email=lower(v_recipient->>'email') where id=p_id;
+  update public.workforce_email_outbox
+    set recipient_email=lower(v_recipient->>'email'),recipient_account_id=v_recipient->>'id'
+    where id=p_id;
   -- Duration and balance are best effort: an absent column or balance table must
   -- never block the notification itself.
   v_start := coalesce((v_request->>'start_date')::date,(v_request->>'attendance_date')::date,
@@ -175,6 +178,7 @@ begin
     'id',v_job.id,'request_table',v_job.request_table,'request_id',v_job.request_id,
     'state',v_state,'level',v_level,'recipient_email',lower(v_recipient->>'email'),
     'recipient_name',v_recipient->>'full_name','requester_name',v_requester->>'full_name',
+    'recipient_id',v_recipient->>'id',
     'start_date',coalesce(v_request->>'start_date',v_request->>'attendance_date',v_request->>'request_date',v_request->>'date'),
     'end_date',v_request->>'end_date',
     'leave_type',v_request->>'leave_type',

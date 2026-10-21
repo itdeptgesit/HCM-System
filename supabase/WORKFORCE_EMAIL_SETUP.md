@@ -10,7 +10,10 @@ Konfigurasi Google Drive dan akun login Supabase tidak perlu diubah.
 - Keputusan final approved/rejected dikirim ke karyawan pemohon, bukan ke seluruh approver sekaligus.
 - Clock-in/out biasa, lembur, reimbursement, dan data historis tidak diikutkan.
 - Notifikasi membaca status yang sudah disimpan. Fitur ini tidak mengganti RPC, aturan kewenangan, atau urutan approval yang sudah berjalan.
-- Email berformat kartu: logo GESIT, judul pengajuan, sapaan, rincian (jenis cuti, tanggal, durasi, alasan, sisa saldo cuti bila tersedia), tombol Setujui/Tolak, dan tautan ke aplikasi. Foto, koordinat, lampiran, serta berkas medis tidak disertakan. Tombol hanya membuka halaman persetujuan; keputusan tetap wajib login dan konfirmasi di aplikasi.
+- Email berformat kartu: logo GESIT, judul pengajuan, sapaan, rincian (jenis cuti, tanggal, durasi, alasan, sisa saldo cuti bila tersedia), tombol Setujui/Tolak, dan tautan ke aplikasi. Foto, koordinat, lampiran, serta berkas medis tidak disertakan.
+- **Cuti dapat diputuskan langsung dari email.** Tombol membuka halaman konfirmasi di Edge Function (tanpa login), lalu keputusan disimpan setelah tombol Setujui/Tolak ditekan. Tautan ditandatangani (HMAC), berlaku 7 hari, hanya untuk satu tahap, dan diverifikasi ulang ke database saat dibuka/ditekan sehingga tidak bisa dipakai setelah pengajuan diproses, dialihkan, atau kedaluwarsa.
+- Request/koreksi absen dan live attendance **belum** bisa diputuskan dari email; tombolnya membuka halaman persetujuan aplikasi dan tetap wajib login. Alasannya keputusan absen menulis ke rekap presensi sehingga perlu diuji terpisah.
+- Jangan meneruskan email persetujuan: siapa pun yang memegang tautan dapat mengambil keputusan untuk tahap itu sampai pengajuan diproses.
 - Logo diambil dari `{HR_APP_URL}/image/logo.png`. Pastikan file `public/image/logo.png` ikut ter-deploy dan dapat diakses publik tanpa login; bila tidak, gambar tidak tampil tetapi teks email tetap terbaca.
 
 ## 1. Pasang antrean database
@@ -20,6 +23,8 @@ Pada proyek Supabase yang dipakai **kedua aplikasi**, jalankan `14_workforce_ema
 SQL ini hanya menambahkan tabel/fungsi/trigger notifikasi. Tidak memigrasikan atau mengubah pengajuan lama dan tidak mengaktifkan pengiriman. Perubahan pengajuan baru dan enqueue berada dalam transaksi yang sama. Kegagalan Gmail tidak membatalkan pengajuan.
 
 File ini aman dijalankan ulang. Setelah pembaruan template email (jenis cuti, durasi, alasan, saldo), jalankan ulang `14_...sql` agar fungsi `prepare_workforce_email` mengirim data tambahan itu, lalu deploy ulang function-nya.
+
+Setelah `14_...sql`, jalankan juga `16_workforce_email_approval.sql` (urutan: 14 → 16 → 15). File ini menambah kolom penerima, fungsi keputusan cuti dari email, dan membungkus ulang `review_workforce_request` agar logika approval aplikasi tetap satu sumber. Aman dijalankan ulang, tidak mengubah pengajuan lama, dan tidak mengaktifkan pengiriman.
 
 ## 2. Izin Gmail dari akun HR
 
@@ -72,6 +77,8 @@ supabase functions deploy send-workforce-emails
 
 `config.toml` mematikan JWT gateway hanya untuk function ini. Endpoint tetap menolak pemanggil tanpa header rahasia `x-email-worker-secret`; anon key atau sesi karyawan tidak memberikan izin mengirim email. Endpoint tidak menerima alamat penerima/pengirim dari request body.
 
+Function yang sama juga melayani halaman konfirmasi approval cuti dari tautan `?t=...`. Halaman itu hanya bisa dibuka dengan tautan bertanda tangan; `GET` tidak mengubah data, keputusan baru disimpan lewat `POST` dari tombol di halaman. Tanda tangan memakai `HR_EMAIL_WORKER_SECRET` yang sama, jadi merotasi secret akan membatalkan tautan email yang belum dipakai. Halaman memakai `SUPABASE_URL` dan service role bawaan function, tidak perlu secret tambahan.
+
 Aktifkan **Cron (pg_cron)** dan **pg_net** melalui Supabase dashboard. Di **Vault**, simpan dua secret berikut lewat UI agar nilainya tidak ditulis ke riwayat SQL:
 
 | Nama secret Vault | Isi |
@@ -97,10 +104,10 @@ commit;
 Lalu uji dengan karyawan dan approver yang sudah disepakati:
 
 1. Ajukan satu cuti baru. Hanya approver tahap pertama yang menerima email dari HR.
-2. Setujui tahap pertama. Approver berikutnya menerima email, bukan semua atasan sekaligus.
-3. Selesaikan approval atau tolak. Karyawan menerima hasil final.
+2. Setujui dari halaman konfirmasi email (atau dari aplikasi). Approver berikutnya menerima email, bukan semua atasan sekaligus.
+3. Selesaikan approval atau tolak. Karyawan menerima hasil final. Coba klik ulang tautan lama: harus tampil "sudah diproses", bukan keputusan kedua.
 4. Ulangi untuk request/koreksi absen dan pengajuan di luar lokasi. Clock-in/out normal tidak mengirim email.
-5. Pastikan tautan mengarah ke domain HR yang benar dan meminta login jika belum memiliki sesi.
+5. Pastikan tautan approval mengarah ke `https://PROJECT_REF.supabase.co/functions/v1/send-workforce-emails`, sedangkan tautan "Lihat di aplikasi" mengarah ke domain HR yang benar.
 
 Keberhasilan Gmail API berarti Gmail menerima pesan untuk dikirim, bukan jaminan email masuk inbox; periksa spam, kebijakan organisasi, dan email log Workspace jika diperlukan.
 
@@ -144,8 +151,7 @@ node --test tests/workforce-email-worker.mjs
 # Install @electric-sql/pglite di lokasi QA, lalu arahkan PGLITE_MODULE ke package itu:
 node --test tests/workforce-email-outbox.mjs
 deno check supabase/functions/send-workforce-emails/index.ts
-deno lint --rules-exclude=no-import-prefix supabase/functions/send-workforce-emails
-```
+deno lint --rules-exclude=no-import-prefix supabase/functions/send-workforce-emails```
 
 SQL test menjalankan PostgreSQL embedded (PGlite) dan fungsi hierarchy dari repo. Worker test menggunakan Google API tiruan; tidak mengirim email nyata dan tidak membuktikan credential/deployment produksi sudah aktif. Jadwal pg_cron/pg_net tetap perlu diverifikasi pada proyek Supabase tujuan.
 

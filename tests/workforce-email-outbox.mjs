@@ -6,6 +6,7 @@ const require = createRequire(import.meta.url);
 const { PGlite } = require(process.env.PGLITE_MODULE || '@electric-sql/pglite');
 const db = new PGlite();
 const migration = readFileSync(new URL('../supabase/14_workforce_email_notifications.sql', import.meta.url), 'utf8');
+const approvalMigration = readFileSync(new URL('../supabase/16_workforce_email_approval.sql', import.meta.url), 'utf8');
 const chainSource = readFileSync(new URL('../supabase/09_master_fix_all_bugs.sql', import.meta.url), 'utf8');
 const query = async (sql, args = []) => (await db.query(sql, args)).rows;
 const claim = () => query('select * from claim_workforce_emails()');
@@ -17,13 +18,30 @@ before(async () => {
     create role anon; create role authenticated; create role service_role bypassrls;
     create table user_accounts (
       id bigint primary key, email text, full_name text, status text default 'Active', employment_status text default 'Active',
+      role text, groups text[],
       supervisor_id bigint, attendance_supervisor_id bigint, attendance_hr_id bigint,
       manager_id bigint, attendance_manager_id bigint, vp_id bigint, attendance_vp_id bigint
     );
     create table leave_requests (
       id uuid primary key default gen_random_uuid(), user_id text, status text default 'pending',
       approval_status text default 'pending', current_approval_level integer default 1,
-      start_date date, end_date date, reason text
+      start_date date, end_date date, reason text, leave_type text default 'annual',
+      approved_by text, approved_at timestamptz, rejection_reason text,
+      line1_approved_by text, line1_approved_at timestamptz, line2_approved_by text, line2_approved_at timestamptz,
+      senior_approved_by text, senior_approved_at timestamptz, office_approved_by text, office_approved_at timestamptz,
+      updated_at timestamptz default now()
+    );
+    create table approval_records (
+      id uuid primary key default gen_random_uuid(), request_type text not null,
+      request_id uuid not null, level_number integer not null, approver_id text not null,
+      approver_name text, status text not null, notes text, decided_at timestamptz default now(),
+      unique(request_type,request_id,level_number)
+    );
+    create table leave_balance_periods (
+      id bigint generated always as identity primary key, user_id bigint, period_start date, period_end date,
+      entitlement_days numeric default 0, carry_forward_days numeric default 0, collective_leave_days numeric default 0,
+      used_days numeric default 0, expired_days numeric default 0, status text default 'active',
+      updated_at timestamptz default now()
     );
     create table attendance_correction_requests (
       id uuid primary key default gen_random_uuid(), user_id text, status text default 'pending',
@@ -39,11 +57,12 @@ before(async () => {
   await db.exec(chain);
   await db.exec("insert into leave_requests(user_id) values('1')");
   await db.exec(migration);
+  await db.exec(approvalMigration);
   assert.equal((await query('select count(*)::integer as count from workforce_email_outbox'))[0].count, 0, 'No historical backfill');
 });
 beforeEach(async () => {
   await db.exec(`
-    truncate workforce_email_outbox,leave_requests,attendance_requests,attendance_correction_requests,user_accounts;
+    truncate workforce_email_outbox,leave_requests,attendance_requests,attendance_correction_requests,user_accounts,approval_records,leave_balance_periods;
     insert into user_accounts(id,email,full_name) values
       (1,'employee@example.invalid','TEST Employee'),(2,'spv@example.invalid','TEST Supervisor'),
       (3,'hr@example.invalid','TEST HR'),(4,'manager@example.invalid','TEST Manager');
@@ -195,6 +214,66 @@ test('anonymous and authenticated clients cannot read queues or call sending RPC
       await assert.rejects(query('select * from workforce_email_outbox'), /permission denied/);
       await assert.rejects(query('select * from claim_workforce_emails()'), /permission denied/);
       await assert.rejects(query('update workforce_email_settings set enabled=true'), /permission denied/);
+      await assert.rejects(query("select decide_leave_via_email(gen_random_uuid(),'2','pending_level_1','approved')"), /permission denied/);
     } finally { await db.exec('reset role'); }
   }
+});
+
+const decide = (id, approver, state, decision) =>
+  query('select decide_leave_via_email($1,$2,$3,$4) as result', [id, approver, state, decision]);
+const liveState = async id => (await query('select workforce_email_state(to_jsonb(r)) as state from leave_requests r where id=$1', [id]))[0].state;
+
+test('email approval advances one stage, records the decision and cannot be replayed', async () => {
+  const [{ id }] = await query("insert into leave_requests(user_id,start_date,end_date,leave_type) values('1','2027-01-04','2027-01-06','annual') returning id");
+  assert.equal(await liveState(id), 'pending_level_1');
+
+  const [{ result }] = await decide(id, '2', 'pending_level_1', 'approved');
+  assert.equal(result.current_approval_level, 2);
+  assert.equal(result.approval_status, 'pending_level_2');
+  assert.equal(result.line1_approved_by, 'TEST Supervisor');
+  assert.equal(await liveState(id), 'pending_level_2');
+  const [record] = await query('select approver_id,level_number,status from approval_records where request_id=$1', [id]);
+  assert.deepEqual(record, { approver_id: '2', level_number: 1, status: 'approved' });
+
+  // Replaying the emailed link after the stage moved on is refused.
+  await assert.rejects(decide(id, '2', 'pending_level_1', 'approved'), /REQUEST_STATE_CHANGED/);
+  // An approver who is not the assignee for the named stage is refused.
+  await assert.rejects(decide(id, '4', 'pending_level_2', 'approved'), /NOT_DESIGNATED_APPROVER/);
+  // Self-approval is refused even when the hierarchy points at the requester.
+  await db.exec('update user_accounts set attendance_supervisor_id=1 where id=1');
+  const [{ id: selfId }] = await query("insert into leave_requests(user_id) values('1') returning id");
+  await assert.rejects(decide(selfId, '1', 'pending_level_1', 'approved'), /CANNOT_REVIEW_OWN_REQUEST/);
+
+  const jobs = await claim();
+  const nextJob = jobs.find(item => item.request_id === id && item.request_state === 'pending_level_2');
+  assert.ok(nextJob, 'the next stage is queued for email');
+  assert.equal((await prepare(nextJob)).recipient_email, 'hr@example.invalid');
+});
+
+test('email approval of the final stage deducts annual leave once and notifies the employee', async () => {
+  await db.exec("insert into leave_balance_periods(user_id,period_start,period_end,entitlement_days) values(1,'2027-01-01','2027-12-31',12)");
+  const [{ id }] = await query("insert into leave_requests(user_id,start_date,end_date,leave_type) values('1','2027-01-04','2027-01-06','annual') returning id");
+  await decide(id, '2', 'pending_level_1', 'approved');
+  await decide(id, '3', 'pending_level_2', 'approved');
+  await decide(id, '4', 'pending_level_3', 'approved');
+
+  assert.equal(await liveState(id), 'approved');
+  assert.equal(Number((await query('select used_days from leave_balance_periods'))[0].used_days), 3);
+  await assert.rejects(decide(id, '4', 'pending_level_3', 'approved'), /REQUEST_STATE_CHANGED/);
+
+  const jobs = await claim();
+  const approvalJob = jobs.find(item => item.request_id === id && item.request_state === 'approved');
+  assert.ok(approvalJob, 'the employee result is queued');
+  const envelope = await prepare(approvalJob);
+  assert.equal(envelope.state, 'approved');
+  assert.equal(envelope.recipient_email, 'employee@example.invalid');
+});
+
+test('email approval rejects annual leave without sufficient period balance', async () => {
+  await db.exec("insert into leave_balance_periods(user_id,period_start,period_end,entitlement_days,used_days) values(1,'2027-01-01','2027-12-31',2,2)");
+  const [{ id }] = await query("insert into leave_requests(user_id,start_date,end_date,leave_type) values('1','2027-01-04','2027-01-06','annual') returning id");
+  await decide(id, '2', 'pending_level_1', 'approved');
+  await decide(id, '3', 'pending_level_2', 'approved');
+  await assert.rejects(decide(id, '4', 'pending_level_3', 'approved'), /INSUFFICIENT_LEAVE_BALANCE/);
+  assert.equal(await liveState(id), 'pending_level_3');
 });

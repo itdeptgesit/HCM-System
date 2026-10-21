@@ -1,4 +1,4 @@
-import { authorizeGmail, EmailError, renderEmail, sendGmail } from './email.ts';
+import { authorizeGmail, EmailError, renderEmail, sendGmail, signActionToken } from './email.ts';
 import type { EmailEnvelope, GmailCredentials } from './email.ts';
 
 export interface EmailJob { id: string; lease_token: string }
@@ -13,9 +13,31 @@ export interface EmailStore {
 interface WorkerOptions {
   secret: string;
   appUrl: string;
+  actionBaseUrl?: string;
+  actionTtlSeconds?: number;
   credentials: GmailCredentials;
   store: EmailStore;
   fetcher?: typeof fetch;
+}
+
+async function buildActionUrl(
+  envelope: EmailEnvelope,
+  secret: string,
+  baseUrl: string | undefined,
+  ttlSeconds: number,
+): Promise<string | undefined> {
+  // Attendance requests still require the application UI.
+  if (!baseUrl || envelope.request_table !== 'leave_requests') return undefined;
+  if (!envelope.recipient_id || !/^pending_level_[1-4]$/.test(envelope.state)) return undefined;
+  const token = await signActionToken({
+    event: envelope.id,
+    table: envelope.request_table,
+    request: envelope.request_id,
+    state: envelope.state,
+    approver: envelope.recipient_id,
+    exp: Math.floor(Date.now() / 1000) + ttlSeconds,
+  }, secret);
+  return `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}t=${encodeURIComponent(token)}`;
 }
 
 const respond = (body: object, status = 200) => Response.json(body, { status, headers: { 'Cache-Control': 'no-store' } });
@@ -28,7 +50,9 @@ function authorized(request: Request, secret: string): boolean {
   return difference === 0;
 }
 
-export function createEmailWorker({ secret, appUrl, credentials, store, fetcher = fetch }: WorkerOptions) {
+export function createEmailWorker({
+  secret, appUrl, actionBaseUrl, actionTtlSeconds = 7 * 24 * 60 * 60, credentials, store, fetcher = fetch,
+}: WorkerOptions) {
   return async (request: Request): Promise<Response> => {
     if (request.method !== 'POST') return respond({ error: 'Method not allowed' }, 405);
     if (!authorized(request, secret)) return respond({ error: 'Unauthorized' }, 401);
@@ -46,7 +70,8 @@ export function createEmailWorker({ secret, appUrl, credentials, store, fetcher 
         if (!envelope) return 'skipped';
         let messageId: string;
         try {
-          messageId = await sendGmail(token, renderEmail(envelope, appUrl), fetcher);
+          const actionUrl = await buildActionUrl(envelope, secret, actionBaseUrl, actionTtlSeconds);
+          messageId = await sendGmail(token, renderEmail(envelope, appUrl, { actionUrl }), fetcher);
         } catch (error) {
           const failure = error instanceof EmailError ? error : new EmailError('EMAIL_DELIVERY_ERROR', true);
           await store.finish(job, { error: failure.message, retryable: failure.retryable });
