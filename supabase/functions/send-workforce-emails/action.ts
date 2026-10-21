@@ -31,13 +31,18 @@ interface QueryBuilder {
 /** Surface of the Supabase client used by the confirmation page. */
 export interface ActionDatabase {
   from(table: string): QueryBuilder;
-  rpc(name: string, args?: Record<string, unknown>): PromiseLike<{ data: unknown; error: { message?: string } | null }>;
+  rpc(name: string, args?: Record<string, unknown>): PromiseLike<{ data: unknown; error: RpcFailure | null }>;
 }
 
 interface ActionOptions {
   secret: string;
   appUrl: string;
   database: ActionDatabase;
+}
+
+interface RpcFailure {
+  message?: string;
+  code?: string;
 }
 
 function errorMessage(code: string): string {
@@ -113,7 +118,8 @@ export function createEmailAction({ secret, appUrl, database }: ActionOptions) {
         p_decision: decision,
       });
       if (error) {
-        return reply({ error: 'DECISION_FAILED', message: errorMessage(error.message || '') }, 409);
+        console.error('decide_leave_via_email failed', { request: payload.request, code: error.code, message: error.message, details: (error as { details?: string }).details });
+        return reply({ error: 'DECISION_FAILED', code: error.code || '', message: errorMessage(error.message || '') }, 409);
       }
       return reply({ decision });
     }
