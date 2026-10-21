@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Check, ChevronLeft, ChevronRight, X, CheckCircle2, Info, GraduationCap, Upload, ExternalLink, FileText, Loader2, Camera, Trash2, Clock, Lock, Crop } from '@/components/ui/icons';
 import { uploadFileToGoogleDrive } from '../lib/googleDriveUpload';
 import { UserAccount, UserGroup, Company, DocumentCategory } from '../types';
@@ -13,6 +13,7 @@ import { normalizeGender, normalizeReligion } from '../lib/utils';
 import { EmployeeAppointmentSKModal, getCompanyAbbr } from './hr/EmployeeAppointmentSKModal';
 import { ImageCropModal } from '@/components/ui/ImageCropModal';
 import { standardShiftOptions, type ShiftSchedule } from '../lib/standardShifts';
+import { prepareProfileImage } from '../lib/profileImage';
 
 interface UserFormModalProps {
   isOpen: boolean;
@@ -215,6 +216,8 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
   const [saving, setSaving] = useState(false); 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [preparingAvatar, setPreparingAvatar] = useState(false);
+  const photoTaskRef = useRef(0);
   const [avatarError, setAvatarError] = useState('');
   const [schedules, setSchedules] = useState<ShiftSchedule[]>([]);
   const shiftOptions = standardShiftOptions(schedules, form.scheduleId);
@@ -230,28 +233,27 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
   const [cropModalOpen, setCropModalOpen] = useState(false);
   const [rawCropImageSrc, setRawCropImageSrc] = useState<string>('');
 
-  const handleAvatarFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+  useEffect(() => () => {
+    if (rawCropImageSrc.startsWith('blob:')) URL.revokeObjectURL(rawCropImageSrc);
+  }, [rawCropImageSrc]);
+
+  const handleAvatarFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (file.size > 15 * 1024 * 1024) {
-      setAvatarError('Ukuran file foto maksimal 15MB.');
-      return;
-    }
-
-    setAvatarError('');
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        setRawCropImageSrc(reader.result);
-        setCropModalOpen(true);
-      }
-    };
-    reader.onerror = () => {
-      setAvatarError('Gagal membaca file gambar.');
-    };
-    reader.readAsDataURL(file);
     e.target.value = '';
+    if (!file) return;
+    const task = ++photoTaskRef.current;
+    setPreparingAvatar(true);
+    setAvatarError('');
+    try {
+      const prepared = await prepareProfileImage(file);
+      if (task !== photoTaskRef.current) return;
+      setRawCropImageSrc(URL.createObjectURL(prepared));
+      setCropModalOpen(true);
+    } catch (err) {
+      if (task === photoTaskRef.current) setAvatarError(err instanceof Error ? err.message : 'Gagal membaca atau memperkecil foto.');
+    } finally {
+      if (task === photoTaskRef.current) setPreparingAvatar(false);
+    }
   };
 
   const handleCropExistingAvatar = () => {
@@ -261,6 +263,7 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
   };
 
   const handleCropComplete = async (croppedBlob: Blob, croppedDataUrl: string) => {
+    const previousAvatar = form.avatarUrl || '';
     // Show immediate optimistic preview
     setField('avatarUrl', croppedDataUrl);
     setUploadingAvatar(true);
@@ -277,14 +280,16 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
       });
       if (result.success && result.fileUrl) {
         setField('avatarUrl', result.fileUrl);
-        showToast('Foto profil karyawan berhasil di-crop dan disimpan', 'success');
+        showToast(`Foto profil karyawan berhasil di-crop dan disimpan (${Math.ceil(croppedBlob.size / 1024)} KB)`, 'success');
       } else {
         throw new Error(result.error || 'Gagal mengunggah foto profil.');
       }
     } catch (err: any) {
       const msg = err.message || 'Gagal mengunggah foto';
       setAvatarError(msg);
+      setField('avatarUrl', previousAvatar);
       showToast('Gagal simpan foto: ' + msg, 'error');
+      throw new Error(msg);
     } finally {
       setUploadingAvatar(false);
     }
@@ -341,6 +346,10 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
   };
 
   useEffect(() => {
+    photoTaskRef.current++;
+    setCropModalOpen(false);
+    setRawCropImageSrc('');
+    setPreparingAvatar(false);
     if (!isOpen) return;
     setStep(1);
     setIsManualEmployeeId(Boolean(initialData?.employeeCode));
@@ -462,6 +471,10 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
 
   const save = async (event?: React.FormEvent) => {
     if (event) event.preventDefault();
+    if (preparingAvatar || uploadingAvatar) {
+      showToast('Tunggu hingga foto selesai diproses dan diunggah.', 'info');
+      return;
+    }
     if (step !== 5) return; // Hanya boleh disimpan jika pengguna secara sadar sudah di Step 5
     if (!validate(1) || !validate(2) || !validate(3) || !validate(4)) return;
     setSaving(true);
@@ -605,25 +618,25 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
                         )}
                       </div>
                       <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
-                        Foto resmi karyawan untuk profil HCM, ID Card, dan direktori tim. Format JPG, PNG, atau WEBP (Maksimal 10MB). Tersimpan otomatis ke Google Drive.
+                        Foto profil dan ID Card: JPG, PNG, atau WebP asli maksimal 20 MB. Foto otomatis diperkecil dan dikompresi maksimal 200 KB sebelum diunggah ke Google Drive.
                       </p>
 
                       <div className="mt-3 flex flex-wrap items-center justify-center sm:justify-start gap-2.5">
                         <label className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold cursor-pointer transition-all shadow-xs ${
-                          uploadingAvatar 
+                          uploadingAvatar || preparingAvatar
                             ? 'bg-muted text-muted-foreground cursor-not-allowed' 
                             : 'bg-primary hover:bg-primary/90 text-primary-foreground'
                         }`}>
-                          {uploadingAvatar ? (
+                          {uploadingAvatar || preparingAvatar ? (
                             <Loader2 size={14} className="animate-spin text-white" />
                           ) : (
                             <Camera size={14} className="text-white" />
                           )}
-                          <span>{uploadingAvatar ? 'Mengunggah ke Drive...' : form.avatarUrl ? 'Ganti Foto Karyawan' : 'Upload Foto Karyawan'}</span>
+                          <span>{preparingAvatar ? 'Memperkecil foto...' : uploadingAvatar ? 'Mengunggah ke Drive...' : form.avatarUrl ? 'Ganti Foto Karyawan' : 'Upload Foto Karyawan'}</span>
                           <input 
                             type="file" 
                             accept="image/png,image/jpeg,image/jpg,image/webp" 
-                            disabled={uploadingAvatar} 
+                            disabled={uploadingAvatar || preparingAvatar}
                             onChange={handleAvatarFile} 
                             className="hidden" 
                           />
@@ -633,6 +646,7 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
                           <button
                             type="button"
                             onClick={handleCropExistingAvatar}
+                            disabled={uploadingAvatar || preparingAvatar}
                             className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 border border-emerald-200 dark:border-emerald-800 transition-colors cursor-pointer"
                             title="Crop, perbesar, dan geser posisi wajah agar pas"
                           >
@@ -645,6 +659,7 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
                           <button
                             type="button"
                             onClick={() => setField('avatarUrl', '')}
+                            disabled={uploadingAvatar || preparingAvatar}
                             className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-rose-700 hover:text-rose-800 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
                           >
                             <Trash2 size={13} />
@@ -654,7 +669,7 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
                       </div>
 
                       {avatarError && (
-                        <p className="mt-2 text-xs font-medium text-rose-600">{avatarError}</p>
+                        <p role="alert" className="mt-2 text-xs font-medium text-rose-600 dark:text-rose-400">{avatarError}</p>
                       )}
                     </div>
                   </div>
@@ -1620,17 +1635,16 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
             )}
           </div>
         </form>
-      </DialogContent>
-    </Dialog>
-
-    {/* Interactive Image Cropper Modal */}
+    {/* Keep the crop dialog inside its parent dialog context for focus and stacking. */}
     <ImageCropModal
       isOpen={cropModalOpen}
       imageSrc={rawCropImageSrc}
-      onClose={() => setCropModalOpen(false)}
+      onClose={() => { setCropModalOpen(false); setRawCropImageSrc(''); }}
       onCropComplete={handleCropComplete}
       title="Crop & Posisikan Foto Profil Karyawan"
     />
+      </DialogContent>
+    </Dialog>
 
     {/* Modal Pratinjau & Cetak SK Pengangkatan Karyawan Tetap */}
     <EmployeeAppointmentSKModal

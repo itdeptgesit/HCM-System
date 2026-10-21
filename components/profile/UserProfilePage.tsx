@@ -47,6 +47,7 @@ import { Badge } from '@/components/ui/badge';
 import { ImageCropModal } from '@/components/ui/ImageCropModal';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { prepareProfileImage } from '../../lib/profileImage';
 
 interface UserProfilePageProps {
   currentUser: any;
@@ -58,6 +59,7 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({ currentUser, o
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [isPreparingAvatar, setIsPreparingAvatar] = useState(false);
 
   // Security Tab States
   const [newPassword, setNewPassword] = useState('');
@@ -158,35 +160,29 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({ currentUser, o
 
   const [cropModalOpen, setCropModalOpen] = useState(false);
   const [rawCropImageSrc, setRawCropImageSrc] = useState<string>('');
+  useEffect(() => () => {
+    if (rawCropImageSrc.startsWith('blob:')) URL.revokeObjectURL(rawCropImageSrc);
+  }, [rawCropImageSrc]);
 
   // Handle Avatar Selection & Open Cropper
-  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
-
-    if (!file.type.startsWith('image/')) {
-      toast.error('Harap pilih file gambar (JPG, PNG, WebP).');
-      return;
+    setIsPreparingAvatar(true);
+    try {
+      const prepared = await prepareProfileImage(file);
+      setRawCropImageSrc(URL.createObjectURL(prepared));
+      setCropModalOpen(true);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Gagal membaca atau memperkecil foto.');
+    } finally {
+      setIsPreparingAvatar(false);
     }
-
-    if (file.size > 15 * 1024 * 1024) {
-      toast.error('Ukuran foto maksimal 15MB.');
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        setRawCropImageSrc(reader.result);
-        setCropModalOpen(true);
-      }
-    };
-    reader.readAsDataURL(file);
-    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleCropExistingAvatar = () => {
-    const currentSrc = avatarImgUrl || rawAvatarUrl;
+    const currentSrc = rawAvatarUrl || avatarImgUrl;
     if (!currentSrc) return;
     setRawCropImageSrc(currentSrc);
     setCropModalOpen(true);
@@ -236,6 +232,7 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({ currentUser, o
     } catch (err: any) {
       console.error('Error avatar upload:', err);
       toast.error('Gagal memperbarui foto profil: ' + (err.message || 'Error'), { id: toastId });
+      throw new Error(err.message || 'Gagal memperbarui foto profil.');
     } finally {
       setIsUploadingAvatar(false);
     }
@@ -449,10 +446,10 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({ currentUser, o
                     </div>
                   )}
 
-                  {isUploadingAvatar && (
+                  {(isUploadingAvatar || isPreparingAvatar) && (
                     <div className="absolute inset-0 bg-background/80 backdrop-blur-xs flex flex-col items-center justify-center gap-1 z-20">
                       <Loader2 className="h-5 w-5 animate-spin text-primary" />
-                      <span className="text-[10px] font-semibold text-foreground">Upload...</span>
+                      <span className="text-[10px] font-semibold text-foreground">{isPreparingAvatar ? 'Memperkecil...' : 'Upload...'}</span>
                     </div>
                   )}
                 </div>
@@ -463,7 +460,7 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({ currentUser, o
                     <button
                       type="button"
                       onClick={handleCropExistingAvatar}
-                      disabled={isUploadingAvatar}
+                      disabled={isUploadingAvatar || isPreparingAvatar}
                       className="p-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-md transition-transform hover:scale-105 active:scale-95 ring-2 ring-card cursor-pointer"
                       title="Crop & Sesuaikan Posisi Foto"
                     >
@@ -473,7 +470,7 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({ currentUser, o
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    disabled={isUploadingAvatar}
+                    disabled={isUploadingAvatar || isPreparingAvatar}
                     className="p-2 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground shadow-md transition-transform hover:scale-105 active:scale-95 ring-2 ring-card cursor-pointer"
                     title="Ganti Foto Profil (Google Drive)"
                   >
@@ -483,7 +480,8 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({ currentUser, o
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/*"
+                  accept="image/jpeg,image/png,image/webp"
+                  disabled={isUploadingAvatar || isPreparingAvatar}
                   className="hidden"
                   onChange={handleAvatarChange}
                 />
@@ -1273,7 +1271,7 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({ currentUser, o
       <ImageCropModal
         isOpen={cropModalOpen}
         imageSrc={rawCropImageSrc}
-        onClose={() => setCropModalOpen(false)}
+        onClose={() => { setCropModalOpen(false); setRawCropImageSrc(''); }}
         onCropComplete={handleCropComplete}
         title="Sesuaikan & Crop Foto Profil Anda"
       />
