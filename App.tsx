@@ -199,7 +199,7 @@ export default function App() {
         onLoginSuccess={(user) => {
           setCurrentUser(user);
           if (isHRAccount(user)) {
-            navigate('/attendance/report');
+            navigate('/');
           } else {
             navigate('/requests');
           }
@@ -283,14 +283,14 @@ export default function App() {
   };
 
   return (
-    <SidebarProvider className="h-screen w-screen overflow-hidden bg-[#F8FAFC] dark:bg-[#09090B] text-slate-900 dark:text-zinc-100 font-sans selection:bg-[#12346a]/15 selection:text-[#12346a]">
+    <SidebarProvider className="h-screen w-screen overflow-hidden bg-[#e9edf2] dark:bg-[#090c10] text-slate-900 dark:text-zinc-100 font-sans selection:bg-[#12346a]/15 selection:text-[#12346a]">
       <NexoraSidebar
         currentUser={currentUser}
         isHR={isHR}
         canView={canView}
         onLogout={handleLogout}
       />
-      <SidebarInset className="overflow-hidden flex flex-col min-w-0 bg-[#F8FAFC] dark:bg-[#09090B]">
+      <SidebarInset className="overflow-hidden flex flex-col min-w-0 bg-[#f8fafc] dark:bg-[#0e1219] my-2.5 mr-2.5 rounded-[26px] border border-neutral-300/60 dark:border-zinc-800 shadow-[0_8px_30px_rgba(0,0,0,0.03)]">
         <NexoraHeader
           currentUser={currentUser}
           breadcrumbLabel={getBreadcrumbLabel()}
@@ -316,6 +316,10 @@ export default function App() {
                   />
                 )
               }
+            />
+            <Route
+              path="/modern-dashboard"
+              element={<Navigate to="/" replace />}
             />
             <Route
               path="/employees"

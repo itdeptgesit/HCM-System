@@ -135,6 +135,72 @@ serve(async (req) => {
 
     const action = body.action || "upload";
 
+    // --- Verifikasi sesi pemanggil -------------------------------------------
+    // Sebelumnya fungsi ini terbuka: siapa pun yang memegang anon key bisa
+    // menulis ke Drive perusahaan, bahkan meminta izin "anyone" pada file.
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!supabaseUrl || !anonKey || !serviceKey) {
+      throw new Error("Konfigurasi Supabase belum lengkap di secrets fungsi.");
+    }
+
+    const authHeader = req.headers.get("Authorization") || "";
+    if (!authHeader) throw new Error("Authentication required");
+
+    const callerClient = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const { data: { user: callerUser }, error: authError } = await callerClient.auth.getUser();
+    if (authError || !callerUser?.email) throw new Error("Invalid or expired session");
+
+    const admin = createClient(supabaseUrl, serviceKey, {
+      auth: { persistSession: false },
+    });
+    const { data: caller } = await admin
+      .from("user_accounts")
+      .select("id, auth_user_id, email, full_name, employee_code, role, groups, status")
+      .ilike("email", callerUser.email)
+      .maybeSingle();
+    if (!caller) throw new Error("Account profile not found in HCM");
+
+    const callerRole = String(caller.role || "").toLowerCase();
+    const callerGroups: string[] = Array.isArray(caller.groups) ? caller.groups : [];
+    const isHR =
+      ["admin", "super admin", "super_admin", "hr", "hr manager", "hr staff", "office_management"].includes(callerRole) ||
+      callerGroups.some((g) => ["hr", "hrd", "it_management", "csl_admin"].includes(String(g).toLowerCase()));
+
+    // Dokumen pribadi (termasuk foto absensi) hanya boleh diunggah untuk diri sendiri.
+    const personalCategories = [
+      "attendance_photo",
+      "payment_proof",
+      "foto_profil",
+      "ktp",
+      "ijazah",
+      "bpjs",
+      "sk_karyawan",
+    ];
+    if (personalCategories.includes(category) && !isHR) {
+      // `employeeId` tidak konsisten antar pemanggil: mobile mengirim
+      // user_accounts.id / auth.uid, web profil mengirim employee_code.
+      // Terima ketiganya, tolak hanya bila jelas milik orang lain.
+      const requestedOwner = String(employeeId || caller.id);
+      const ownIds = new Set([
+        String(caller.id),
+        String(caller.auth_user_id || ""),
+        String(caller.employee_code || ""),
+        String(callerUser.id),
+      ]);
+      if (employeeId && !ownIds.has(requestedOwner)) {
+        throw new Error("Anda hanya boleh mengunggah dokumen milik sendiri.");
+      }
+    }
+
+    // Dokumen perusahaan hanya untuk HR.
+    if (["sk_perusahaan", "news_attachment", "news_image", "internal_hr"].includes(category) && !isHR) {
+      throw new Error("Hanya HR yang boleh mengunggah dokumen perusahaan.");
+    }
+
     let serviceAccountRaw = Deno.env.get("GDRIVE_SERVICE_ACCOUNT_JSON");
     const rootFolderId = Deno.env.get("GDRIVE_FOLDER_ID");
 
@@ -158,6 +224,7 @@ serve(async (req) => {
 
     // Aksi: Update izin akses file yang sudah ada (make_public / share)
     if (action === "make_public" || action === "share") {
+      if (!isHR) throw new Error("Hanya HR yang boleh mengubah izin file.");
       const fileId = body.fileId;
       if (!fileId) throw new Error("Missing fileId");
       const accessToken = await getAccessToken(credentials);
@@ -190,6 +257,12 @@ serve(async (req) => {
       throw new Error("Missing fileName or fileBase64 payload");
     }
 
+    // Batas aman payload (base64 membengkak ~33%). Edge Function tidak cocok
+    // untuk file besar; foto absensi setelah kompresi jauh di bawah batas ini.
+    if (actualBase64.length > 8_000_000) {
+      throw new Error("File terlalu besar. Maksimal sekitar 6 MB.");
+    }
+
     const accessToken = await getAccessToken(credentials);
 
     // Tentukan folder tujuan berdasarkan HR folderType / category
@@ -209,6 +282,18 @@ serve(async (req) => {
       targetFolderId = await getOrCreateSubfolder(accessToken, rootFolderId, "SK & Kebijakan");
     } else if (folderType === "hr_internal" || category === "internal_hr") {
       targetFolderId = await getOrCreateSubfolder(accessToken, rootFolderId, "Internal HR");
+    } else if (folderType === "attendance" || category === "attendance_photo") {
+      // Foto absensi dikelompokkan per karyawan agar mudah ditelusuri HR.
+      const parentAbsensi = await getOrCreateSubfolder(accessToken, rootFolderId, "Absensi");
+      const ownerName = employeeName || caller.full_name || caller.email;
+      const ownerCode = employeeCode || caller.employee_code || caller.id;
+      targetFolderId = await getOrCreateSubfolder(accessToken, parentAbsensi, `[${ownerCode}] ${ownerName}`.trim());
+    } else if (folderType === "reimbursement" || category === "payment_proof") {
+      // Bukti reimbursement bersifat medis/keuangan: pisahkan dari foto absensi.
+      const parentReimb = await getOrCreateSubfolder(accessToken, rootFolderId, "Reimbursement");
+      const ownerName = employeeName || caller.full_name || caller.email;
+      const ownerCode = employeeCode || caller.employee_code || caller.id;
+      targetFolderId = await getOrCreateSubfolder(accessToken, parentReimb, `[${ownerCode}] ${ownerName}`.trim());
     } else if (folderType === "document") {
       targetFolderId = await getOrCreateSubfolder(accessToken, rootFolderId, "CSL Documents");
     } else if (folderType === "request") {
@@ -259,11 +344,18 @@ serve(async (req) => {
 
     // Atur izin akses Google Drive:
     // 1. Jika dokumen pengumuman / publik / SK perusahaan / foto profil -> beri izin reader ke 'anyone' (agar gambar/dokumen bisa dilihat semua orang di web app)
+    // Foto absensi & bukti reimbursement saat ini diset "anyone with link" agar
+    // bisa dirender langsung oleh <img> di app-hr dan Image.network di app-absen
+    // (setara bucket publik yang dipakai sebelumnya). Set env
+    // GDRIVE_ATTENDANCE_PUBLIC=false untuk menutupnya, tapi aplikasi lalu wajib
+    // memakai proxy/signed URL agar foto tetap tampil.
+    const attendancePublic = (Deno.env.get("GDRIVE_ATTENDANCE_PUBLIC") ?? "true") !== "false";
     const isPublicResource =
       visibility === "all_active" ||
       folderType === "news_published" ||
       folderType === "sk_published" ||
-      ["news_image", "news_attachment", "sk_perusahaan", "foto_profil"].includes(category);
+      ["news_image", "news_attachment", "sk_perusahaan", "foto_profil"].includes(category) ||
+      (attendancePublic && ["attendance_photo", "payment_proof"].includes(category));
 
     if (isPublicResource) {
       try {
@@ -298,6 +390,10 @@ serve(async (req) => {
 
     const finalUrl = fileData.webViewLink || `https://drive.google.com/file/d/${fileData.id}/view`;
     const finalDownload = fileData.webContentLink || `https://drive.google.com/uc?export=download&id=${fileData.id}`;
+    // URL yang bisa langsung dipakai <img>/Image.network tanpa redirect 302.
+    const imageUrl = actualMimeType.startsWith("image/")
+      ? `https://lh3.googleusercontent.com/d/${fileData.id}=w1024`
+      : null;
 
     return new Response(
       JSON.stringify({
@@ -305,6 +401,7 @@ serve(async (req) => {
         fileId: fileData.id,
         fileUrl: finalUrl,
         gdriveUrl: finalUrl,
+        imageUrl,
         downloadUrl: finalDownload,
         folderId: targetFolderId,
         fileName: actualFileName,

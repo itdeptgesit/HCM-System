@@ -1,0 +1,189 @@
+/* ==========================================================================
+   DESIGN SYSTEM — DASHBOARD (Rekomendasi Terbaik)
+   Cocok untuk: HCM / HR dashboard, admin panel, CRM
+   Cara pakai: copy file ini sebagai dashboard.css lalu import di project.
+   Untuk Tailwind v4: blok @theme ada di bagian paling bawah (dalam komentar).
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. DESIGN TOKENS — semua warna, ukuran, radius, shadow ada di sini.
+      Ganti nilai di sini = seluruh dashboard ikut berubah.
+   -------------------------------------------------------------------------- */
+:root {
+  /* === WARNA UTAMA (Brand) === */
+  --color-primary:        #2563eb;  /* biru utama: tombol, link, menu aktif */
+  --color-primary-hover:  #1d4ed8;
+  --color-primary-active: #1e40af;
+  --color-primary-soft:   #eff6ff;  /* latar chip / menu aktif */
+  --color-navy:           #0f2b46;  /* sidebar gelap / header teks */
+  --color-navy-soft:      #16324f;
+
+  /* === WARNA AKSEN (Status & Statistik) === */
+  --color-success:        #16a34a;
+  --color-success-soft:   #f0fdf4;
+  --color-warning:        #d97706;
+  --color-warning-soft:   #fffbeb;
+  --color-danger:         #dc2626;
+  --color-danger-soft:    #fef2f2;
+  --color-info:           #0891b2;
+  --color-info-soft:      #ecfeff;
+  --color-violet:         #7c3aed;
+  --color-violet-soft:    #f5f3ff;
+
+  /* === WARNA NETRAL (Teks & Latar) === */
+  --color-bg:             #f4f6fb;  /* latar halaman */
+  --color-surface:        #ffffff;  /* latar card */
+  --color-surface-2:      #f8fafc;  /* latar baris tabel / hover */
+  --color-border:         #e5eaf1;
+  --color-border-strong:  #cbd5e1;
+  --color-text:           #0f172a;  /* teks utama */
+  --color-text-2:         #475569;  /* teks sekunder */
+  --color-text-3:         #94a3b8;  /* teks redup / placeholder */
+
+  /* === TIPOGRAFI === */
+  --font-family: "Inter", "Poppins", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --fs-display: 28px;   /* angka besar di kartu statistik */
+  --fs-h1: 24px;        /* judul halaman */
+  --fs-h2: 20px;        /* judul section */
+  --fs-h3: 16px;        /* judul card */
+  --fs-body: 14px;      /* teks utama */
+  --fs-small: 12.5px;   /* teks pendukung */
+  --fs-tiny: 11px;      /* label kecil / badge */
+  --lh-body: 1.55;
+
+  /* === SPACING (kelipatan 4px) === */
+  --sp-1: 4px;  --sp-2: 8px;   --sp-3: 12px;  --sp-4: 16px;
+  --sp-5: 20px; --sp-6: 24px;  --sp-8: 32px;  --sp-10: 40px;
+
+  /* === RADIUS (kunci tampilan modern) === */
+  --radius-xs: 6px;     /* badge, chip kecil */
+  --radius-sm: 10px;    /* tombol, input */
+  --radius-md: 14px;    /* dropdown, panel kecil */
+  --radius-lg: 18px;    /* CARD utama */
+  --radius-xl: 24px;    /* card besar / modal */
+  --radius-full: 999px; /* avatar, pill */
+
+  /* === SHADOW (lembut, jangan keras) === */
+  --shadow-card:  0 1px 2px rgba(15, 23, 42, .04), 0 8px 24px -12px rgba(15, 23, 42, .12);
+  --shadow-hover: 0 2px 4px rgba(15, 23, 42, .05), 0 16px 32px -12px rgba(15, 23, 42, .18);
+  --shadow-pop:   0 12px 40px -8px rgba(15, 23, 42, .25); /* dropdown, modal */
+
+  /* === LAYOUT === */
+  --sidebar-w: 260px;         /* lebar sidebar */
+  --sidebar-w-mini: 76px;     /* sidebar diciutkan (ikon saja) */
+  --topbar-h: 64px;           /* tinggi header atas */
+  --content-max: 1440px;      /* lebar maksimum konten */
+  --transition: .2s ease;
+}
+
+/* === DARK MODE (aktifkan: <html data-theme="dark"> atau .dark) === */
+[data-theme="dark"], .dark {
+  --color-bg: #0b1220;
+  --color-surface: #111c30;
+  --color-surface-2: #16233c;
+  --color-border: #22314d;
+  --color-border-strong: #33456b;
+  --color-text: #e8eef8;
+  --color-text-2: #a7b4c9;
+  --color-text-3: #64748b;
+  --color-primary-soft: #16294d;
+  --shadow-card: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.5);
+  --shadow-hover: 0 2px 4px rgba(0,0,0,.35), 0 16px 32px -12px rgba(0,0,0,.6);
+}
+
+/* --------------------------------------------------------------------------
+   3. LAYOUT UTILITIES
+   -------------------------------------------------------------------------- */
+.page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--sp-4); margin-bottom: var(--sp-6); flex-wrap: wrap; }
+.page-head .subtitle { color: var(--color-text-2); font-size: var(--fs-small); margin-top: var(--sp-1); }
+
+/* Grid konten dashboard */
+.grid-kpi   { display: grid; gap: var(--sp-5); grid-template-columns: repeat(4, 1fr); }
+.grid-2     { display: grid; gap: var(--sp-5); grid-template-columns: repeat(2, 1fr); }
+.grid-3     { display: grid; gap: var(--sp-5); grid-template-columns: repeat(3, 1fr); }
+.grid-main-side { display: grid; gap: var(--sp-5); grid-template-columns: 2fr 1fr; }
+
+/* --------------------------------------------------------------------------
+   6. CARD — rounded 18px, border tipis + shadow lembut
+   -------------------------------------------------------------------------- */
+.dashboard-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  padding: var(--sp-5);
+  transition: box-shadow var(--transition), transform var(--transition);
+}
+.dashboard-card:hover {
+  box-shadow: var(--shadow-hover);
+  transform: translateY(-2px);
+}
+.card-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); margin-bottom: var(--sp-4); }
+.card-head .hint { font-size: var(--fs-small); color: var(--color-text-3); }
+
+/* Kartu statistik (KPI) */
+.stat { display: flex; flex-direction: column; gap: var(--sp-2); }
+.stat .stat-label { font-size: var(--fs-small); color: var(--color-text-2); font-weight: 500; }
+.stat .stat-value { font-size: var(--fs-display); font-weight: 800; line-height: 1.1; letter-spacing: -.01em; color: var(--color-text); }
+.stat .stat-delta { font-size: var(--fs-small); font-weight: 600; }
+.stat .stat-delta.up { color: var(--color-success); }
+.stat .stat-delta.down { color: var(--color-danger); }
+.stat-icon {
+  width: 44px; height: 44px; border-radius: var(--radius-md);
+  display: grid; place-items: center; font-size: 20px;
+  background: var(--color-primary-soft); color: var(--color-primary);
+}
+.stat-icon.green  { background: var(--color-success-soft); color: var(--color-success); }
+.stat-icon.amber  { background: var(--color-warning-soft); color: var(--color-warning); }
+.stat-icon.red    { background: var(--color-danger-soft);  color: var(--color-danger); }
+.stat-icon.violet { background: var(--color-violet-soft);  color: var(--color-violet); }
+
+/* Panel profil / highlight (radius lebih besar) */
+.card-lg { border-radius: var(--radius-xl); padding: var(--sp-6); }
+
+/* --------------------------------------------------------------------------
+   8. BADGE / CHIP / STATUS
+   -------------------------------------------------------------------------- */
+.badge-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: var(--fs-tiny); font-weight: 700; letter-spacing: .02em;
+  padding: 3px 10px; border-radius: var(--radius-full);
+  background: var(--color-primary-soft); color: var(--color-primary);
+}
+.badge-chip.green { background: var(--color-success-soft); color: var(--color-success); }
+.badge-chip.amber { background: var(--color-warning-soft); color: var(--color-warning); }
+.badge-chip.red   { background: var(--color-danger-soft);  color: var(--color-danger); }
+.badge-chip.gray  { background: var(--color-surface-2);    color: var(--color-text-2); }
+.badge-chip .dot { width: 6px; height: 6px; border-radius: var(--radius-full); background: currentColor; }
+
+/* --------------------------------------------------------------------------
+   10. TABEL
+   -------------------------------------------------------------------------- */
+.table-wrap { overflow-x: auto; border-radius: var(--radius-md); }
+.table-clean { width: 100%; border-collapse: collapse; font-size: var(--fs-body); min-width: 640px; }
+.table-clean th {
+  text-align: left; font-size: var(--fs-tiny); font-weight: 700;
+  letter-spacing: .06em; text-transform: uppercase; color: var(--color-text-3);
+  padding: 10px var(--sp-4); border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface-2); white-space: nowrap;
+}
+.table-clean td { padding: 12px var(--sp-4); border-bottom: 1px solid var(--color-border); vertical-align: middle; }
+.table-clean tbody tr { transition: background var(--transition); }
+.table-clean tbody tr:hover { background: var(--color-surface-2); }
+.table-clean tbody tr:last-child td { border-bottom: none; }
+.table-clean .num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* --------------------------------------------------------------------------
+   RESPONSIVE
+   -------------------------------------------------------------------------- */
+@media (max-width: 1200px) {
+  .grid-kpi { grid-template-columns: repeat(2, 1fr); }
+  .grid-3 { grid-template-columns: repeat(2, 1fr); }
+  .grid-main-side { grid-template-columns: 1fr; }
+}
+@media (max-width: 860px) {
+  .grid-2, .grid-3 { grid-template-columns: 1fr; }
+}
+@media (max-width: 520px) {
+  .grid-kpi { grid-template-columns: 1fr; }
+}

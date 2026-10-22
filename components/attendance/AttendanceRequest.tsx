@@ -28,6 +28,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { StatCard } from '../StatCard';
 import { UserAvatar } from '../UserAvatar';
+import { toDriveImageUrl } from '../../lib/driveImage';
 import {
   LeaveRequest, OvertimeRequest, ReimbursementRequest, UserAccount,
   LEAVE_TYPES, STATUS_CONFIG, REIMBURSEMENT_TYPES, isPendingApprovalStatus,
@@ -36,6 +37,7 @@ import {
 import {
   calculateEmployeeLeaveQuota,
   fetchLeaveAdjustments,
+  getCompanyCollectiveLeavePolicy,
   ARTICLE_22_LEAVE_TYPES,
   LeaveQuotaSummary,
   LeaveQuotaAdjustment
@@ -94,6 +96,10 @@ export const AttendanceRequest: React.FC<AttendanceRequestProps> = ({ currentUse
   const [previewPhotoModal, setPreviewPhotoModal] = useState<{ url: string; title: string; meta?: string; mapUrl?: string } | null>(null);
 
   const currentYear = useMemo(() => new Date().getFullYear(), []);
+  const [collectivePolicy, setCollectivePolicy] = useState<{ totalDeductDays: number; activeDates: string[] }>({
+    totalDeductDays: 8,
+    activeDates: []
+  });
 
   const userMap = useMemo(() => {
     const map = new Map<string, UserAccount>();
@@ -104,9 +110,16 @@ export const AttendanceRequest: React.FC<AttendanceRequestProps> = ({ currentUse
   // Compute live leave quotas for each employee
   const employeeLeaveQuotas = useMemo<LeaveQuotaSummary[]>(() => {
     return allUsers.map(user => {
-      return calculateEmployeeLeaveQuota(user, currentYear, leaveAdjustments, leaveRequests);
+      return calculateEmployeeLeaveQuota(
+        user,
+        currentYear,
+        leaveAdjustments,
+        leaveRequests,
+        collectivePolicy.totalDeductDays,
+        collectivePolicy.activeDates
+      );
     });
-  }, [allUsers, leaveRequests, leaveAdjustments, currentYear]);
+  }, [allUsers, leaveRequests, leaveAdjustments, currentYear, collectivePolicy]);
 
   const myQuota = useMemo(() => {
     return employeeLeaveQuotas.find(q => String(q.userId) === userId) || null;
@@ -116,15 +129,20 @@ export const AttendanceRequest: React.FC<AttendanceRequestProps> = ({ currentUse
     setLoading(true);
     setLoadError('');
     try {
-      const [users, leaves, overtime, reimb, corrections, outside, adjustments] = await Promise.all([
+      const [users, leaves, overtime, reimb, corrections, outside, adjustments, colPolicy] = await Promise.all([
         loadWorkforceAccounts(),
         fetchAllRows((from, to) => supabase.from('leave_requests').select('*').order('id').range(from, to)),
         fetchAllRows((from, to) => supabase.from('overtime_requests').select('*').order('id').range(from, to)),
         fetchAllRows((from, to) => supabase.from('reimbursements').select('*').order('id').range(from, to)),
         fetchAllRows((from, to) => supabase.from('attendance_correction_requests').select('*').order('id').range(from, to)),
         fetchAllRows((from, to) => supabase.from('attendance_requests').select('*').order('id').range(from, to)),
-        fetchLeaveAdjustments().catch(e => { console.warn('Gagal memuat adjustments cuti:', e); return []; })
+        fetchLeaveAdjustments().catch(e => { console.warn('Gagal memuat adjustments cuti:', e); return []; }),
+        getCompanyCollectiveLeavePolicy(currentYear).catch(e => {
+          console.warn('Gagal memuat kebijakan cuti bersama:', e);
+          return { totalDeductDays: 8, activeDates: [], items: [] };
+        })
       ]);
+      setCollectivePolicy({ totalDeductDays: colPolicy.totalDeductDays, activeDates: colPolicy.activeDates });
       const recentFirst = (a: any, b: any) => String(b.created_at || b.requested_at || '').localeCompare(String(a.created_at || a.requested_at || ''));
       setAllUsers(users);
       setLeaveRequests(leaves.map(normalizeRequest).sort(recentFirst) as LeaveRequest[]);
@@ -2540,7 +2558,7 @@ export const AttendanceRequest: React.FC<AttendanceRequestProps> = ({ currentUse
             )}
             <div className="mt-3 overflow-hidden rounded-xl border border-border/60 bg-black/5 dark:bg-white/5">
               <img
-                src={previewPhotoModal.url}
+                src={toDriveImageUrl(previewPhotoModal.url) || previewPhotoModal.url}
                 alt="Bukti Presensi"
                 className="max-h-[380px] w-full object-contain"
               />

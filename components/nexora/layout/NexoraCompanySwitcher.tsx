@@ -19,20 +19,22 @@ export function NexoraCompanySwitcher({
   return (
     <div
       onClick={() => navigate('/')}
-      className="w-full rounded-2xl bg-[#f4f4f6] dark:bg-zinc-800/80 p-3 flex items-center gap-3.5 cursor-pointer hover:bg-[#eaebee] dark:hover:bg-zinc-800 transition-colors select-none group-data-[collapsible=icon]:p-2 group-data-[collapsible=icon]:justify-center"
+      className="w-full rounded-[10px] bg-[#16324f]/60 hover:bg-[#16324f] border border-white/10 p-3 flex items-center gap-3 cursor-pointer transition-all duration-200 select-none group-data-[collapsible=icon]:p-2 group-data-[collapsible=icon]:justify-center group"
       title="Gesit People - HCM Enterprise System"
     >
-      <img
-        src="/image/logo.png"
-        alt="Gesit People"
-        className="h-9 w-auto object-contain shrink-0"
-      />
+      <div className="relative shrink-0">
+        <img
+          src="/image/logo.png"
+          alt="Gesit People"
+          className="h-8 w-auto object-contain shrink-0 group-hover:scale-105 transition-transform"
+        />
+      </div>
       <div className="flex flex-col text-left leading-tight group-data-[collapsible=icon]:hidden">
-        <span className="font-bold text-[14.5px] tracking-tight text-slate-900 dark:text-white leading-tight">
-          Gesit People
+        <span className="font-bold text-[15px] tracking-tight text-white leading-tight flex items-center gap-1">
+          Gesit<span className="text-[#3b82f6]">People</span>
         </span>
-        <span className="text-[11.5px] text-slate-500 dark:text-zinc-400 font-normal leading-tight mt-0.5">
-          HCM Enterprise System
+        <span className="text-[11px] text-[#7d94b3] font-normal leading-tight mt-0.5">
+          HCM Workspace System
         </span>
       </div>
     </div>

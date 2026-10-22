@@ -6,9 +6,7 @@ import {
   Breadcrumb,
   BreadcrumbList,
   BreadcrumbItem,
-  BreadcrumbLink,
   BreadcrumbPage,
-  BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
 import {
   DropdownMenu,
@@ -27,7 +25,6 @@ import {
   Sun,
   Moon,
   Sparkles,
-  Home,
   User,
   Users,
   LogOut,
@@ -57,30 +54,17 @@ export function NexoraHeader({
   const { t, isEn } = useLanguage();
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between border-b border-slate-200/80 dark:border-[#222225] bg-white/95 dark:bg-[#0c0c0e]/95 backdrop-blur-md px-4 sm:px-6 transition-colors">
+    <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between border-b border-neutral-300/60 dark:border-white/10 bg-[#edf0f4] dark:bg-[#121622] px-4 sm:px-6 transition-colors rounded-t-[26px] w-full">
       {/* ── LEFT: SIDEBAR TRIGGER + SEPARATOR + BREADCRUMBS ── */}
-      <div className="flex items-center gap-3 min-w-0">
-        <SidebarTrigger className="size-8.5 rounded-lg text-slate-500 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-white cursor-pointer" />
+      <div className="flex items-center gap-3.5 min-w-0">
+        <SidebarTrigger className="size-9 rounded-xl bg-white hover:bg-neutral-100 text-neutral-700 hover:text-black dark:bg-[#1a2030] dark:text-neutral-200 dark:hover:text-white transition-all cursor-pointer border border-neutral-300/60 dark:border-white/10 shadow-2xs" />
 
-        <div className="h-4 w-px bg-slate-200 dark:bg-zinc-800" />
+        <div className="h-4 w-px bg-neutral-300/80 dark:bg-zinc-700" />
 
-        <Breadcrumb className="truncate">
-          <BreadcrumbList className="text-xs">
+        <Breadcrumb>
+          <BreadcrumbList className="text-xs sm:text-sm">
             <BreadcrumbItem>
-              <BreadcrumbLink
-                onClick={(e) => {
-                  e.preventDefault();
-                  navigate('/');
-                }}
-                className="flex items-center gap-1.5 cursor-pointer text-slate-500 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-white transition-colors"
-              >
-                <Home className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">{t.nav.workspace}</span>
-              </BreadcrumbLink>
-            </BreadcrumbItem>
-            <BreadcrumbSeparator />
-            <BreadcrumbItem>
-              <BreadcrumbPage className="font-semibold text-slate-900 dark:text-white truncate max-w-[200px] sm:max-w-none">
+              <BreadcrumbPage className="font-bold text-neutral-900 dark:text-white">
                 {breadcrumbLabel}
               </BreadcrumbPage>
             </BreadcrumbItem>
@@ -89,16 +73,16 @@ export function NexoraHeader({
       </div>
 
       {/* ── RIGHT: SEARCH BUTTON (Ctrl K) + LANG + THEME + NOTIF + QUICK CTA + AVATAR ── */}
-      <div className="flex items-center gap-2 sm:gap-2.5">
-        {/* Search button styled clean & modern */}
+      <div className="flex items-center gap-2 sm:gap-3">
+        {/* Search button styled to match sidebar tokens */}
         <button
           type="button"
           onClick={onSearchClick}
-          className="relative hidden md:flex items-center gap-2.5 h-9 w-56 lg:w-72 rounded-full border border-slate-200/90 dark:border-[#27272a] bg-slate-50/60 hover:bg-slate-100/80 dark:bg-[#18181b]/60 dark:hover:bg-[#18181b] px-3.5 text-xs text-slate-500 dark:text-zinc-400 shadow-2xs transition-all cursor-pointer hover:border-slate-300 dark:hover:border-slate-700"
+          className="relative hidden md:flex items-center gap-2.5 h-9.5 w-60 lg:w-80 max-w-[420px] rounded-full border border-neutral-300/60 dark:border-white/10 bg-white dark:bg-[#1a2030] px-3.5 text-xs text-neutral-700 dark:text-neutral-300 shadow-2xs transition-all cursor-pointer hover:border-neutral-400 hover:ring-2 hover:ring-neutral-200/50 dark:hover:ring-neutral-800"
         >
-          <Search className="h-4 w-4 text-slate-400 dark:text-zinc-500 shrink-0" />
-          <span className="truncate text-slate-500 dark:text-zinc-400">{t.common.searchPlaceholder}</span>
-          <kbd className="ml-auto pointer-events-none inline-flex items-center rounded-md border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-1.5 py-0.5 text-[10px] font-sans font-medium text-slate-500 dark:text-zinc-400 shadow-2xs">
+          <Search className="h-4 w-4 text-neutral-400 dark:text-neutral-500 shrink-0" />
+          <span className="truncate text-neutral-600 dark:text-neutral-300 font-medium">{t.common.searchPlaceholder}</span>
+          <kbd className="ml-auto pointer-events-none inline-flex items-center rounded-md border border-neutral-200 dark:border-zinc-700 bg-neutral-100 dark:bg-zinc-800 px-1.5 py-0.5 text-[10px] font-sans font-bold text-neutral-500 shadow-2xs">
             {t.common.ctrlK}
           </kbd>
         </button>
@@ -108,7 +92,7 @@ export function NexoraHeader({
           variant="ghost"
           size="icon"
           onClick={onSearchClick}
-          className="h-8.5 w-8.5 rounded-lg text-slate-500 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-white md:hidden cursor-pointer"
+          className="h-9 w-9 rounded-[10px] bg-[#f8fafc] dark:bg-[#16233c] text-[#475569] hover:text-[#2563eb] dark:text-[#a7b4c9] dark:hover:text-white md:hidden cursor-pointer"
           title={`${t.common.search} (${t.common.ctrlK})`}
         >
           <Search className="h-4 w-4" />
@@ -123,10 +107,10 @@ export function NexoraHeader({
             variant="ghost"
             size="icon"
             onClick={onToggleTheme}
-            className="h-8.5 w-8.5 rounded-lg text-slate-500 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-white cursor-pointer"
+            className="h-9 w-9 rounded-[10px] bg-[#f8fafc] dark:bg-[#16233c] text-[#475569] hover:text-[#2563eb] dark:text-[#a7b4c9] dark:hover:text-white cursor-pointer transition-colors border border-[#e5eaf1] dark:border-[#22314d]"
             title={isDark ? t.common.themeLight : t.common.themeDark}
           >
-            {isDark ? <Sun className="h-4 w-4 text-amber-400" /> : <Moon className="h-4 w-4 text-slate-600" />}
+            {isDark ? <Sun className="h-4 w-4 text-amber-400" /> : <Moon className="h-4 w-4 text-[#475569]" />}
           </Button>
         )}
 
@@ -138,16 +122,15 @@ export function NexoraHeader({
           <DropdownMenu>
             <DropdownMenuTrigger
               render={
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8.5 w-8.5 rounded-lg text-slate-500 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-white cursor-pointer"
+                <button
+                  type="button"
+                  className="h-9.5 w-9.5 rounded-full bg-[#eff6ff] text-[#2563eb] font-bold text-xs flex items-center justify-center ring-1 ring-[#cbd5e1] hover:ring-2 hover:ring-[#2563eb] transition-all shadow-xs cursor-pointer"
                   title={`${t.nav.myProfile}: ${currentUser?.fullName || 'User'}`}
-                />
+                >
+                  {currentUser?.fullName?.[0] || 'U'}
+                </button>
               }
-            >
-              <User className="h-4 w-4" />
-            </DropdownMenuTrigger>
+            />
 
             <DropdownMenuContent
               align="end"

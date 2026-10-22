@@ -98,11 +98,47 @@ export interface LeaveQuotaSummary {
  */
 export const DEFAULT_COLLECTIVE_LEAVE_DAYS = 4;
 
-/**
- * Cuti bersama resmi SKB 3 Menteri per tahun (jumlah hari).
- * Sumber: tabel SKB yang sama dengan aplikasi absensi. Tahun yang belum
- * tercantum memakai DEFAULT_COLLECTIVE_LEAVE_DAYS sebagai estimasi.
- */
+export interface CollectiveLeaveDefinition {
+  date: string; // YYYY-MM-DD
+  name: string;
+  defaultDeduct: boolean;
+}
+
+export const OFFICIAL_SKB_COLLECTIVE_LEAVES: Record<number, CollectiveLeaveDefinition[]> = {
+  2025: [
+    { date: '2025-01-28', name: 'Cuti Bersama Tahun Baru Imlek 2576 Kongzili', defaultDeduct: true },
+    { date: '2025-03-03', name: 'Cuti Bersama Hari Raya Idul Fitri 1446 H', defaultDeduct: true },
+    { date: '2025-03-04', name: 'Cuti Bersama Hari Raya Idul Fitri 1446 H', defaultDeduct: true },
+    { date: '2025-03-07', name: 'Cuti Bersama Hari Raya Idul Fitri 1446 H', defaultDeduct: true },
+    { date: '2025-03-28', name: 'Cuti Bersama Hari Suci Nyepi', defaultDeduct: true },
+    { date: '2025-04-01', name: 'Cuti Bersama Hari Raya Idul Fitri 1446 H', defaultDeduct: true },
+    { date: '2025-04-02', name: 'Cuti Bersama Hari Raya Idul Fitri 1446 H', defaultDeduct: true },
+    { date: '2025-05-13', name: 'Cuti Bersama Hari Raya Waisak 2569 BE', defaultDeduct: true },
+    { date: '2025-05-30', name: 'Cuti Bersama Kenaikan Yesus Kristus', defaultDeduct: true },
+    { date: '2025-12-26', name: 'Cuti Bersama Kelahiran Yesus Kristus', defaultDeduct: true },
+  ],
+  2026: [
+    { date: '2026-02-16', name: 'Cuti Bersama Tahun Baru Imlek 2577 Kongzili', defaultDeduct: true },
+    { date: '2026-03-18', name: 'Cuti Bersama Hari Suci Nyepi (Tahun Baru Saka 1948)', defaultDeduct: true },
+    { date: '2026-03-20', name: 'Cuti Bersama Hari Raya Idul Fitri 1447 H', defaultDeduct: true },
+    { date: '2026-03-23', name: 'Cuti Bersama Hari Raya Idul Fitri 1447 H', defaultDeduct: true },
+    { date: '2026-03-24', name: 'Cuti Bersama Hari Raya Idul Fitri 1447 H', defaultDeduct: true },
+    { date: '2026-05-15', name: 'Cuti Bersama Kenaikan Yesus Kristus', defaultDeduct: true },
+    { date: '2026-05-28', name: 'Cuti Bersama Idul Adha 1447 H', defaultDeduct: true },
+    { date: '2026-12-24', name: 'Cuti Bersama Kelahiran Yesus Kristus', defaultDeduct: true },
+  ],
+  2027: [
+    { date: '2027-02-05', name: 'Cuti Bersama Tahun Baru Imlek 2578 Kongzili', defaultDeduct: true },
+    { date: '2027-03-09', name: 'Cuti Bersama Idul Fitri 1448 Hijriah', defaultDeduct: true },
+    { date: '2027-03-12', name: 'Cuti Bersama Idul Fitri 1448 Hijriah', defaultDeduct: true },
+    { date: '2027-03-15', name: 'Cuti Bersama Idul Fitri 1448 Hijriah', defaultDeduct: true },
+    { date: '2027-03-25', name: 'Cuti Bersama Wafat Yesus Kristus', defaultDeduct: true },
+    { date: '2027-05-18', name: 'Cuti Bersama Idul Adha 1448 Hijriah', defaultDeduct: true },
+    { date: '2027-05-19', name: 'Cuti Bersama Hari Raya Waisak 2571 BE', defaultDeduct: true },
+    { date: '2027-12-24', name: 'Cuti Bersama Kelahiran Yesus Kristus', defaultDeduct: true },
+  ],
+};
+
 const SKB_COLLECTIVE_LEAVE_DAYS: Record<number, number> = {
   2025: 10,
   2026: 8,
@@ -119,13 +155,192 @@ export function collectiveLeaveDaysForYear(year: number): number {
   return SKB_COLLECTIVE_LEAVE_DAYS[year] ?? DEFAULT_COLLECTIVE_LEAVE_DAYS;
 }
 
+export interface CollectiveLeaveItemState {
+  date: string;
+  name: string;
+  isActive: boolean;
+  deductAnnualLeave: boolean;
+  isCustom?: boolean;
+  id?: number | string;
+}
+
+/**
+ * Mengambil kebijakan cuti bersama perusahaan dari tabel company_holidays di Supabase.
+ * Menggabungkan daftar SKB resmi dengan override / kustomisasi dari tim HR.
+ */
+export async function getCompanyCollectiveLeavePolicy(year: number): Promise<{
+  totalDeductDays: number;
+  activeDates: string[];
+  items: CollectiveLeaveItemState[];
+}> {
+  try {
+    const { data, error } = await supabase
+      .from('company_holidays')
+      .select('*')
+      .gte('holiday_date', `${year}-01-01`)
+      .lte('holiday_date', `${year}-12-31`)
+      .order('holiday_date');
+
+    const dbHolidays = (data || []).filter((h: any) => {
+      const type = (h.holiday_type || '').toLowerCase();
+      return type === 'collective_leave' || type === 'joint_leave';
+    });
+
+    const skbList = OFFICIAL_SKB_COLLECTIVE_LEAVES[year] || [];
+    const dbMap = new Map<string, any>();
+    dbHolidays.forEach((dh: any) => {
+      dbMap.set(dh.holiday_date, dh);
+    });
+
+    const mergedItems: CollectiveLeaveItemState[] = [];
+
+    // 1. Process Official SKB List with DB Overrides
+    skbList.forEach((skb) => {
+      const dbMatch = dbMap.get(skb.date);
+      if (dbMatch) {
+        mergedItems.push({
+          date: skb.date,
+          name: dbMatch.name || dbMatch.holiday_name || skb.name,
+          isActive: dbMatch.is_active !== false,
+          deductAnnualLeave: dbMatch.deduct_annual_leave !== false,
+          isCustom: false,
+          id: dbMatch.id
+        });
+      } else {
+        mergedItems.push({
+          date: skb.date,
+          name: skb.name,
+          isActive: true,
+          deductAnnualLeave: skb.defaultDeduct,
+          isCustom: false
+        });
+      }
+    });
+
+    // 2. Add extra company-specific collective leaves
+    dbHolidays.forEach((dh: any) => {
+      if (!skbList.some(s => s.date === dh.holiday_date)) {
+        mergedItems.push({
+          date: dh.holiday_date,
+          name: dh.name || dh.holiday_name || 'Cuti Bersama Khusus Perusahaan',
+          isActive: dh.is_active !== false,
+          deductAnnualLeave: dh.deduct_annual_leave !== false,
+          isCustom: true,
+          id: dh.id
+        });
+      }
+    });
+
+    mergedItems.sort((a, b) => a.date.localeCompare(b.date));
+
+    // Active dates that actually deduct annual leave
+    const activeDeductItems = mergedItems.filter(i => i.isActive && i.deductAnnualLeave);
+    const activeDates = activeDeductItems.map(i => i.date.slice(5)); // MM-DD
+
+    return {
+      totalDeductDays: activeDeductItems.length,
+      activeDates,
+      items: mergedItems
+    };
+  } catch (err) {
+    console.error('Error fetching company collective leave policy:', err);
+    const defaultDates = SKB_COLLECTIVE_LEAVE_DATES[year] || [];
+    return {
+      totalDeductDays: defaultDates.length,
+      activeDates: defaultDates,
+      items: (OFFICIAL_SKB_COLLECTIVE_LEAVES[year] || []).map(s => ({
+        date: s.date,
+        name: s.name,
+        isActive: true,
+        deductAnnualLeave: s.defaultDeduct
+      }))
+    };
+  }
+}
+
+/**
+ * Menyimpan konfigurasi cuti bersama perusahaan oleh tim HR ke company_holidays & sinkron ke leave_balance_periods
+ */
+export async function saveCompanyCollectiveLeavePolicy(params: {
+  year: number;
+  items: CollectiveLeaveItemState[];
+  adminName?: string;
+}): Promise<{ success: boolean; totalDeductDays: number; error?: string }> {
+  try {
+    const totalDeductDays = params.items.filter(i => i.isActive && i.deductAnnualLeave).length;
+
+    // 1. Simpan setiap item ke company_holidays
+    for (const item of params.items) {
+      const payload: any = {
+        holiday_date: item.date,
+        name: item.name,
+        holiday_name: item.name,
+        holiday_type: 'collective_leave',
+        year: params.year,
+        is_active: item.isActive,
+        deduct_annual_leave: item.deductAnnualLeave,
+        source: 'company_policy',
+        updated_at: new Date().toISOString()
+      };
+
+      if (item.id) {
+        await supabase.from('company_holidays').update(payload).eq('id', item.id);
+      } else {
+        await supabase.from('company_holidays').upsert(payload, { onConflict: 'holiday_date' });
+      }
+    }
+
+    // 2. Sinkronkan nilai collective_leave_days baru ke leave_balance_periods di database
+    try {
+      await supabase
+        .from('leave_balance_periods')
+        .update({
+          collective_leave_days: totalDeductDays,
+          updated_at: new Date().toISOString()
+        })
+        .gte('period_start', `${params.year}-01-01`)
+        .lte('period_start', `${params.year}-12-31`);
+    } catch (dbErr) {
+      console.warn('Could not update leave_balance_periods directly:', dbErr);
+    }
+
+    // 3. Catat ke user_activity_logs untuk audit trail HR
+    try {
+      await supabase.from('user_activity_logs').insert({
+        action: 'COLLECTIVE_LEAVE_POLICY_UPDATE',
+        details: JSON.stringify({
+          year: params.year,
+          totalDeductDays,
+          itemsCount: params.items.length,
+          adjustedBy: params.adminName || 'Admin HR',
+          adjustedAt: new Date().toISOString()
+        })
+      });
+    } catch {
+      // ignore log failure
+    }
+
+    return { success: true, totalDeductDays };
+  } catch (err: any) {
+    console.error('Failed to save collective leave policy:', err);
+    return { success: false, totalDeductDays: 0, error: err.message || 'Unknown error' };
+  }
+}
+
 /**
  * Menghitung jumlah hari cuti bersama resmi yang jatuh SETELAH tanggal genap 1 tahun (anniversary).
  * Karyawan yang baru berhak cuti di tahun berjalan tidak dipotong cuti bersama yang sudah lewat sebelum anniversary.
  */
-export function getCollectiveLeaveDaysAfterDate(year: number, joinMonth: number, joinDateStr?: string | null): number {
+export function getCollectiveLeaveDaysAfterDate(
+  year: number,
+  joinMonth: number,
+  joinDateStr?: string | null,
+  activeDatesList?: string[]
+): number {
+  const dates = activeDatesList && activeDatesList.length > 0 ? activeDatesList : SKB_COLLECTIVE_LEAVE_DATES[year];
+  const total = dates ? dates.length : collectiveLeaveDaysForYear(year);
+
   if (!joinDateStr) {
-    const total = collectiveLeaveDaysForYear(year);
     const remainingMonths = Math.max(0, 12 - joinMonth);
     return Math.max(0, Math.round((remainingMonths / 12) * total));
   }
@@ -133,9 +348,7 @@ export function getCollectiveLeaveDaysAfterDate(year: number, joinMonth: number,
   if (isNaN(joinDate.getTime())) return 0;
 
   const anniversary = new Date(year, joinDate.getMonth(), joinDate.getDate());
-  const dates = SKB_COLLECTIVE_LEAVE_DATES[year];
-  if (!dates) {
-    const total = collectiveLeaveDaysForYear(year);
+  if (!dates || dates.length === 0) {
     const remainingMonths = Math.max(0, 12 - (joinDate.getMonth() + 1));
     return Math.max(0, Math.round((remainingMonths / 12) * total));
   }
@@ -270,7 +483,8 @@ export function calculateEmployeeLeaveQuota(
   year = new Date().getFullYear(),
   adjustments: LeaveAdjustmentRecord[] = [],
   leaveRequests: any[] = [],
-  collectiveLeaveDeduction = collectiveLeaveDaysForYear(year)
+  collectiveLeaveDeduction = collectiveLeaveDaysForYear(year),
+  customActiveDates?: string[]
 ): LeaveQuotaSummary {
   const userId = String(employee.id || '');
   const rawType = String(employee.contract_type || employee.contractType || employee.employment_type || '').toUpperCase();
@@ -427,7 +641,10 @@ export function calculateEmployeeLeaveQuota(
   // cuti bersama yang sudah lewat sebelum tanggal anniversary TIDAK memotong hak cuti karyawan.
   let actualCollectiveDeduction = collectiveLeaveDeduction;
   if (contractType === 'PKWTT' && (joinYear + 1) === year) {
-    actualCollectiveDeduction = getCollectiveLeaveDaysAfterDate(year, joinMonth, joinDateStr);
+    actualCollectiveDeduction = getCollectiveLeaveDaysAfterDate(year, joinMonth, joinDateStr, customActiveDates);
+  } else if (contractType === 'Probation' || contractType === 'Magang') {
+    // Karyawan masa percobaan / magang tidak dipotong cuti bersama tahunan agar hak evaluasinya utuh
+    actualCollectiveDeduction = 0;
   }
 
   // Hitung total sisa saldo cuti

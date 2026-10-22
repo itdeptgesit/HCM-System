@@ -37,6 +37,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
 import { UserAvatar } from '@/components/UserAvatar';
 import { toast } from 'sonner';
+import { CollectiveLeaveConfigModal } from '../../attendance/CollectiveLeaveConfigModal';
 
 // Official Indonesian Holidays Reference (SKB 2026 & SKB 2027)
 const OFFICIAL_SKB_HOLIDAYS: Record<number, Array<{ holiday_date: string; name: string; holiday_type: 'national' | 'collective_leave' }>> = {
@@ -210,6 +211,7 @@ export function HRWorkforceCalendar({ currentUser }: HRWorkforceCalendarProps) {
   const [selectedEvent, setSelectedEvent] = useState<HREvent | null>(null);
   const [selectedDayEvents, setSelectedDayEvents] = useState<{ date: string; events: HREvent[] } | null>(null);
   const [addHolidayOpen, setAddHolidayOpen] = useState(false);
+  const [collectiveModalOpen, setCollectiveModalOpen] = useState(false);
 
   // New Holiday Form State
   const [newHolidayDate, setNewHolidayDate] = useState('');
@@ -259,11 +261,11 @@ export function HRWorkforceCalendar({ currentUser }: HRWorkforceCalendarProps) {
         .order('holiday_date');
       setDbHolidays(holidaysData || []);
 
-      // 3. Fetch approved & pending leave requests
+      // 3. Fetch approved leave requests only (pending requests must NOT appear as scheduled leave)
       const { data: leavesData } = await supabase
         .from('leave_requests')
         .select('*')
-        .not('status', 'in', '("rejected","cancelled")')
+        .eq('status', 'approved')
         .order('start_date');
       setLeaveRequests(leavesData || []);
 
@@ -340,8 +342,10 @@ export function HRWorkforceCalendar({ currentUser }: HRWorkforceCalendarProps) {
       });
     });
 
-    // 2. Process Employee Leave Requests
+    // 2. Process Employee Leave Requests (Approved only)
     leaveRequests.forEach((req) => {
+      const reqStatus = String(req.status || req.approval_status || '').toLowerCase();
+      if (reqStatus !== 'approved') return;
       const reqUid = String(req.user_id || '');
       const u = usersMap[reqUid] || {
         name: req.user_name || 'Karyawan',
@@ -582,6 +586,16 @@ export function HRWorkforceCalendar({ currentUser }: HRWorkforceCalendarProps) {
           >
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
             <span>Segarkan</span>
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCollectiveModalOpen(true)}
+            className="h-9 px-3.5 text-xs gap-1.5 shadow-2xs font-semibold border-amber-500/40 bg-amber-500/5 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10 cursor-pointer"
+          >
+            <SlidersHorizontal className="h-3.5 w-3.5" />
+            <span>Atur Cuti Bersama</span>
           </Button>
 
           <Button
@@ -1283,6 +1297,13 @@ export function HRWorkforceCalendar({ currentUser }: HRWorkforceCalendarProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <CollectiveLeaveConfigModal
+        open={collectiveModalOpen}
+        onOpenChange={setCollectiveModalOpen}
+        year={currentYear}
+        onSuccess={() => loadCalendarData()}
+      />
     </div>
   );
 }

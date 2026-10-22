@@ -20,6 +20,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { StatCard } from '../StatCard';
 import { UserAvatar } from '../UserAvatar';
+import { toDriveImageUrl } from '../../lib/driveImage';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -289,7 +290,11 @@ export const AttendanceReport: React.FC<AttendanceReportProps> = ({ currentUser,
 
   const filteredDailyRecords = useMemo(() => {
     const scopedIds = new Set(reportUsers.map(user => String(user.id)));
-    let list = reportRecords.filter(record => scopedIds.has(String(record.user_id)));
+    let list = reportRecords.filter(record =>
+      scopedIds.has(String(record.user_id)) &&
+      (!reportStart || record.date >= reportStart) &&
+      (!reportEnd || record.date <= reportEnd)
+    );
     if (reportDept !== 'all') {
       const deptUserIds = new Set(allUsers.filter(u => u.department === reportDept).map(u => String(u.id)));
       list = list.filter(r => deptUserIds.has(String(r.user_id)));
@@ -306,7 +311,7 @@ export const AttendanceReport: React.FC<AttendanceReportProps> = ({ currentUser,
       list = list.filter(r => r.status === reportLogStatus);
     }
     return list;
-  }, [reportRecords, reportUsers, reportDept, reportSearch, reportLogStatus, allUsers, userMap]);
+  }, [reportRecords, reportUsers, reportDept, reportSearch, reportLogStatus, reportStart, reportEnd, allUsers, userMap]);
 
   const renderReport = () => (
     <div className="w-full min-w-0 space-y-6 animate-in fade-in duration-500">
@@ -826,7 +831,7 @@ export const AttendanceReport: React.FC<AttendanceReportProps> = ({ currentUser,
                                                     onClick={(e) => { e.stopPropagation(); setViewAttendancePhoto(r.photo_url || null); }}
                                                     className="group relative block h-10 w-14 overflow-hidden rounded-lg border border-border/60 bg-muted shadow-2xs hover:border-primary transition-all"
                                                   >
-                                                    <img src={r.photo_url} alt="Bukti absensi" className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-110" />
+                                                    <img src={toDriveImageUrl(r.photo_url) || r.photo_url} alt="Bukti absensi" className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-110" />
                                                     <span className="absolute inset-x-0 bottom-0 bg-black/60 py-0.5 text-center text-[8px] font-bold text-white">Lihat</span>
                                                   </button>
                                                 ) : (
@@ -1067,7 +1072,7 @@ export const AttendanceReport: React.FC<AttendanceReportProps> = ({ currentUser,
                                 onClick={() => setViewAttendancePhoto(r.photo_url || null)}
                                 className="group relative inline-block h-9 w-12 overflow-hidden rounded-md border border-border/50 bg-muted shadow-2xs hover:border-primary transition-all"
                               >
-                                <img src={r.photo_url} alt="Bukti" className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-110" />
+                                <img src={toDriveImageUrl(r.photo_url) || r.photo_url} alt="Bukti" className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-110" />
                                 <span className="absolute inset-x-0 bottom-0 bg-black/60 py-0.5 text-center text-[7px] font-bold text-white">Lihat</span>
                               </button>
                             ) : (
@@ -1102,10 +1107,10 @@ export const AttendanceReport: React.FC<AttendanceReportProps> = ({ currentUser,
       {viewAttendancePhoto && (
         <Dialog open onOpenChange={(open) => { if (!open) setViewAttendancePhoto(null); }}>
           <DialogContent className="max-w-3xl overflow-hidden rounded-2xl border border-border/60 dark:border-zinc-800 bg-background dark:bg-zinc-900 p-2 text-foreground">
-            <img src={viewAttendancePhoto} alt="Bukti foto absensi" className="max-h-[78vh] w-full rounded-xl object-contain bg-black/40" />
+            <img src={toDriveImageUrl(viewAttendancePhoto) || viewAttendancePhoto} alt="Bukti foto absensi" className="max-h-[78vh] w-full rounded-xl object-contain bg-black/40" />
             <div className="flex items-center justify-between px-2 pb-1 text-[11px] text-muted-foreground">
               <span>Foto bukti absensi dengan watermark GPS</span>
-              <a href={viewAttendancePhoto} target="_blank" rel="noreferrer" className="font-bold text-primary dark:text-blue-400 hover:underline">Buka Cloudinary</a>
+              <a href={viewAttendancePhoto} target="_blank" rel="noreferrer" className="font-bold text-primary dark:text-blue-400 hover:underline">Buka file</a>
             </div>
           </DialogContent>
         </Dialog>

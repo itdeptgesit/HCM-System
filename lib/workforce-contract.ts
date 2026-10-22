@@ -98,11 +98,25 @@ export function isActiveEmployee(account: { status?: string; employment_status?:
 }
 
 export function isEmployeeAccount(account: {
-  full_name?: string; fullName?: string; role?: string; is_employee?: boolean;
+  full_name?: string;
+  fullName?: string;
+  username?: string;
+  email?: string;
+  role?: string;
+  is_employee?: boolean;
 }): boolean {
   if (account.is_employee === false) return false;
   const name = String(account.full_name || account.fullName || '').trim().toLowerCase();
   const role = String(account.role || '').toLowerCase().replace(/[\s_-]/g, '');
-  // This is the system-only Administrator, not employees with admin access.
-  return !(name === 'administrator' && role === 'superadmin');
+  const username = String(account.username || '').trim().toLowerCase();
+  const email = String(account.email || '').trim().toLowerCase();
+
+  // Exclude system Administrator, technical/service/dev accounts
+  if (name === 'administrator' && role === 'superadmin') return false;
+  if (['administrator', 'admin system', 'muse dev', 'hr-admin'].includes(name)) return false;
+  if (['admin', 'administrator', 'superadmin', 'tester', 'developer', 'hr-admin', 'muse dev', 'musedev'].includes(username)) return false;
+  if (['it-admin@gesit.co.id', 'hr-admin@gesit.co.id', 'admin@gesit.co.id', 'superadmin@gesit.co.id'].includes(email)) return false;
+  if (/(test|demo|staging|sandbox)@/i.test(email) || name.includes('muse dev') || email.includes('muse')) return false;
+
+  return true;
 }

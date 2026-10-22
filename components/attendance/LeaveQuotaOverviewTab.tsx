@@ -3,7 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import {
   Calendar, Award, Plus, Search, Filter, RefreshCw, FileSpreadsheet,
-  CheckCircle2, Clock, AlertTriangle, ArrowUpDown, ShieldCheck, ChevronRight
+  CheckCircle2, Clock, AlertTriangle, ArrowUpDown, ShieldCheck, ChevronRight, SlidersHorizontal
 } from '@/components/ui/icons';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { exportToExcel } from '../../lib/excelExport';
 import { LeaveQuotaSummary } from '../../lib/leaveQuotaService';
 import { formatDateDDMMYYYY } from '../../lib/utils';
+import { CollectiveLeaveConfigModal } from './CollectiveLeaveConfigModal';
 
 interface LeaveQuotaOverviewTabProps {
   quotas: LeaveQuotaSummary[];
@@ -34,6 +35,7 @@ export const LeaveQuotaOverviewTab: React.FC<LeaveQuotaOverviewTabProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
   const [filterDept, setFilterDept] = useState<string>('all');
+  const [showCollectiveModal, setShowCollectiveModal] = useState<boolean>(false);
 
   const departments = useMemo(() => {
     const set = new Set<string>();
@@ -188,6 +190,17 @@ export const LeaveQuotaOverviewTab: React.FC<LeaveQuotaOverviewTabProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            {isAdminOrHR && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowCollectiveModal(true)}
+                className="text-xs font-semibold gap-1.5 h-8 border-amber-500/30 bg-amber-500/5 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10 cursor-pointer"
+              >
+                <SlidersHorizontal size={13} />
+                <span>Atur Cuti Bersama</span>
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"
@@ -388,6 +401,13 @@ export const LeaveQuotaOverviewTab: React.FC<LeaveQuotaOverviewTabProps> = ({
           </div>
         </CardContent>
       </Card>
+
+      <CollectiveLeaveConfigModal
+        open={showCollectiveModal}
+        onOpenChange={setShowCollectiveModal}
+        year={currentYear}
+        onSuccess={() => onRefresh()}
+      />
     </div>
   );
 };

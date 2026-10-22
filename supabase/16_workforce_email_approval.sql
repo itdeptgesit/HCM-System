@@ -62,14 +62,42 @@ begin
 
   -- Only annual leave consumes the annual ledger; the row lock prevents double deduction.
   if p_request_type='leave' and p_decision='approved' and v_final and v_request->>'leave_type'='annual' then
-    v_days := (v_request->>'end_date')::date-(v_request->>'start_date')::date+1;
+    v_days := coalesce((v_request->>'total_days')::numeric, (v_request->>'end_date')::date - (v_request->>'start_date')::date + 1);
+    if v_days <= 0 then v_days := 1; end if;
+    
     select * into v_balance from public.leave_balance_periods
       where user_id=(v_request->>'user_id')::bigint and status='active'
-        and period_start<=(v_request->>'start_date')::date and period_end>=(v_request->>'end_date')::date
+        and period_start <= (v_request->>'start_date')::date and period_end >= (v_request->>'start_date')::date
       order by period_start desc limit 1 for update;
-    if v_balance.id is null then raise exception 'LEAVE_BALANCE_PERIOD_NOT_FOUND'; end if;
-    if greatest(0,v_balance.entitlement_days+v_balance.carry_forward_days-v_balance.collective_leave_days-v_balance.used_days-v_balance.expired_days)<v_days then raise exception 'INSUFFICIENT_LEAVE_BALANCE'; end if;
-    update public.leave_balance_periods set used_days=used_days+v_days,updated_at=now() where id=v_balance.id;
+
+    -- Auto-provision active period on the fly if missing
+    if v_balance.id is null then
+      insert into public.leave_balance_periods (
+        user_id, period_kind, period_start, period_end, employment_type,
+        entitlement_days, carry_forward_days, collective_leave_days, used_days, expired_days, status, source
+      ) values (
+        (v_request->>'user_id')::bigint,
+        'calendar_year',
+        date_trunc('year', (v_request->>'start_date')::date)::date,
+        (date_trunc('year', (v_request->>'start_date')::date) + interval '1 year - 1 day')::date,
+        'PKWTT', 12, 0, 0, 0, 0, 'active', 'auto_provision_approval'
+      )
+      on conflict (user_id, period_kind, period_start) do update
+        set status = 'active', updated_at = now()
+      returning * into v_balance;
+    end if;
+
+    if v_balance.id is null then
+      select * into v_balance from public.leave_balance_periods
+      where user_id = (v_request->>'user_id')::bigint order by id desc limit 1;
+    end if;
+
+    if v_balance.id is not null then
+      if greatest(0,v_balance.entitlement_days+v_balance.carry_forward_days-v_balance.collective_leave_days-v_balance.used_days-v_balance.expired_days)<v_days then
+        raise exception 'INSUFFICIENT_LEAVE_BALANCE';
+      end if;
+      update public.leave_balance_periods set used_days=used_days+v_days,updated_at=now() where id=v_balance.id;
+    end if;
   end if;
   v_stamp_column := case v_level when 1 then 'line1_approved_by' when 2 then 'line2_approved_by' when 3 then 'senior_approved_by' else 'office_approved_by' end;
   v_stamp_at := replace(v_stamp_column,'_by','_at');

@@ -102,7 +102,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
       }).catch(console.error);
 
       onLoginSuccess(loggedInUser);
-      navigate('/attendance/report');
+      navigate('/');
     } catch (err: any) {
       console.error('Login error:', err);
       setErrorMsg(err?.message || 'Gagal masuk ke akun. Silakan periksa kembali email & kata sandi.');
