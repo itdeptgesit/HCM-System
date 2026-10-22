@@ -160,6 +160,20 @@ export function NexoraSidebar({
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               )}
+
+              {canView('Data Karyawan') && isHR && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    tooltip={isEn ? 'Employee Information' : 'Informasi Karyawan'}
+                    isActive={isExactActive('/employees/information')}
+                    className={itemClasses}
+                    onClick={() => navigate('/employees/information')}
+                  >
+                    <User className="size-4 shrink-0 text-slate-500" />
+                    <span className="group-data-[collapsible=icon]:hidden">{isEn ? 'Employee Information' : 'Informasi Karyawan'}</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
             </SidebarMenu>
           </SidebarGroup>
 
