@@ -71,6 +71,7 @@ import { NexoraSidebar } from './components/nexora/layout/NexoraSidebar';
 import { NexoraHeader } from './components/nexora/layout/NexoraHeader';
 import { CompanyNewsManager } from './components/hr/CompanyNewsManager';
 import { EmployeeDataManager } from './components/EmployeeDataManager';
+import { EmployeeInformation } from './components/hr/EmployeeInformation';
 import { EmployeeWarningManager } from './components/disciplinary/EmployeeWarningManager';
 import { AttendanceManager } from './components/AttendanceManager';
 import {
@@ -261,6 +262,7 @@ export default function App() {
 
   // Breadcrumb label helper
   const getBreadcrumbLabel = () => {
+    if (location.pathname === '/employees/information') return 'Informasi Karyawan';
     if (location.pathname === '/profile') return 'Profil Saya';
     if (location.pathname === '/disciplinary' || location.pathname.startsWith('/disciplinary')) return 'Catatan SP Karyawan';
     if (location.pathname === '/news') return 'News & Pengumuman Karyawan';
@@ -324,6 +326,23 @@ export default function App() {
                   <Navigate to="/requests" replace />
                 ) : canView('Data Karyawan') ? (
                   <EmployeeDataManager currentUser={currentUser} />
+                ) : (
+                  <AccessDenied
+                    moduleName="Data Karyawan"
+                    requiredAccess="Izin Lihat Data Karyawan"
+                    currentUser={currentUser}
+                  />
+                )
+              }
+            />
+
+            <Route
+              path="/employees/information"
+              element={
+                !isHR ? (
+                  <Navigate to="/requests" replace />
+                ) : canView('Data Karyawan') ? (
+                  <EmployeeInformation currentUser={currentUser} />
                 ) : (
                   <AccessDenied
                     moduleName="Data Karyawan"
