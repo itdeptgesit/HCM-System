@@ -65,6 +65,7 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({ currentUser, o
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showNik, setShowNik] = useState(false);
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
 
   // Editable Profile Form State
@@ -828,11 +829,27 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({ currentUser, o
                   </CardHeader>
                   <CardContent className="p-4 space-y-3 text-xs">
                     <div className="p-3 rounded-lg border border-border/70 bg-muted/20">
-                      <span className="text-[10px] font-semibold text-muted-foreground uppercase block">
-                        NIK (No. KTP)
-                      </span>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-semibold text-muted-foreground uppercase block">
+                          NIK (No. KTP)
+                        </span>
+                        {profileData.nik && (
+                          <button
+                            type="button"
+                            onClick={() => setShowNik(!showNik)}
+                            className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-[11px] font-medium cursor-pointer"
+                          >
+                            {showNik ? <EyeOff size={13} /> : <Eye size={13} />}
+                            <span>{showNik ? 'Tutup' : 'Lihat'}</span>
+                          </button>
+                        )}
+                      </div>
                       <p className="font-mono text-sm font-bold text-foreground mt-0.5">
-                        {profileData.nik || '—'}
+                        {profileData.nik
+                          ? (showNik
+                              ? profileData.nik
+                              : `•••• •••• ${String(profileData.nik).slice(-4)}`)
+                          : '—'}
                       </p>
                     </div>
 

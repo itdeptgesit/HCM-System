@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   Users, UserCheck, FileText, CreditCard, RefreshCcw, Search, Plus,
-  FileSpreadsheet, Eye, Pencil, Trash2, KeyRound, AlertTriangle,
+  FileSpreadsheet, Eye, EyeOff, Pencil, Trash2, KeyRound, AlertTriangle,
   Building2, Briefcase, Calendar, ShieldCheck, Mail, Phone, MapPin,
   Clock, ArrowUpRight, CheckCircle2, XCircle, ArrowRightLeft,
   ChevronLeft, ChevronRight, Filter, ShieldAlert, Award, Upload, GraduationCap,
@@ -90,6 +90,7 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
   const [skModalOpen, setSkModalOpen] = useState(false);
   const [selectedEmployeeForSK, setSelectedEmployeeForSK] = useState<UserAccount | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [showViewingNik, setShowViewingNik] = useState(false);
 
   // Transfer Form state
   const [transferForm, setTransferForm] = useState({
@@ -2146,8 +2147,24 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
                         <Badge variant="secondary" className="font-mono text-[11px] font-normal">
                           NIP: {viewingEmployee.employeeCode || '—'}
                         </Badge>
-                        <Badge variant="secondary" className="font-mono text-[11px] font-normal">
-                          NIK: {viewingEmployee.nik || '—'}
+                        <Badge variant="secondary" className="font-mono text-[11px] font-normal inline-flex items-center gap-1.5">
+                          <span>
+                            NIK: {viewingEmployee.nik
+                              ? (showViewingNik
+                                  ? viewingEmployee.nik
+                                  : `•••• •••• ${String(viewingEmployee.nik).slice(-4)}`)
+                              : '—'}
+                          </span>
+                          {viewingEmployee.nik && (
+                            <button
+                              type="button"
+                              onClick={() => setShowViewingNik(!showViewingNik)}
+                              className="text-muted-foreground hover:text-foreground cursor-pointer focus:outline-hidden"
+                              title={showViewingNik ? 'Sembunyikan NIK' : 'Tampilkan NIK'}
+                            >
+                              {showViewingNik ? <EyeOff size={12} /> : <Eye size={12} />}
+                            </button>
+                          )}
                         </Badge>
                         <Badge variant="outline" className="text-[11px] text-muted-foreground">
                           {viewingEmployee.employmentType || 'Full-Time'}
