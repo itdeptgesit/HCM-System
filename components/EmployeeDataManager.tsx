@@ -92,6 +92,7 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
   const [isProcessing, setIsProcessing] = useState(false);
   const [showViewingNik, setShowViewingNik] = useState(false);
   const [showViewingBank, setShowViewingBank] = useState(false);
+  const [showViewingNpwp, setShowViewingNpwp] = useState(false);
 
   // Transfer Form state
   const [transferForm, setTransferForm] = useState({
@@ -2582,8 +2583,26 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
                             <p className="font-bold text-foreground mt-1">{viewingEmployee.taxStatus || 'TK/0'}</p>
                           </div>
                           <div>
-                            <span className="text-muted-foreground font-medium">Nomor NPWP</span>
-                            <p className="font-mono font-semibold text-foreground mt-1">{viewingEmployee.npwp || '—'}</p>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-muted-foreground font-medium">Nomor NPWP</span>
+                              {viewingEmployee.npwp && (
+                                <button
+                                  type="button"
+                                  onClick={() => setShowViewingNpwp(!showViewingNpwp)}
+                                  className="text-muted-foreground hover:text-foreground cursor-pointer focus:outline-hidden"
+                                  title={showViewingNpwp ? 'Sembunyikan NPWP' : 'Tampilkan NPWP'}
+                                >
+                                  {showViewingNpwp ? <EyeOff size={12} /> : <Eye size={12} />}
+                                </button>
+                              )}
+                            </div>
+                            <p className="font-mono font-semibold text-foreground mt-1">
+                              {viewingEmployee.npwp
+                                ? (showViewingNpwp
+                                    ? viewingEmployee.npwp
+                                    : `•••• •••• ${String(viewingEmployee.npwp).slice(-4)}`)
+                                : '—'}
+                            </p>
                           </div>
                           <div className="pt-2 border-t border-border/50">
                             <span className="text-muted-foreground font-medium">BPJS Ketenagakerjaan</span>

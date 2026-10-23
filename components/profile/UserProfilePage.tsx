@@ -66,6 +66,7 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({ currentUser, o
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showNik, setShowNik] = useState(false);
+  const [showNpwp, setShowNpwp] = useState(false);
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
 
   // Editable Profile Form State
@@ -854,11 +855,27 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({ currentUser, o
                     </div>
 
                     <div className="p-3 rounded-lg border border-border/70 bg-muted/20">
-                      <span className="text-[10px] font-semibold text-muted-foreground uppercase block">
-                        NPWP Pajak
-                      </span>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-semibold text-muted-foreground uppercase block">
+                          NPWP Pajak
+                        </span>
+                        {profileData.npwp && (
+                          <button
+                            type="button"
+                            onClick={() => setShowNpwp(!showNpwp)}
+                            className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-[11px] font-medium cursor-pointer"
+                          >
+                            {showNpwp ? <EyeOff size={13} /> : <Eye size={13} />}
+                            <span>{showNpwp ? 'Tutup' : 'Lihat'}</span>
+                          </button>
+                        )}
+                      </div>
                       <p className="font-mono text-sm font-bold text-foreground mt-0.5">
-                        {profileData.npwp || '—'}
+                        {profileData.npwp
+                          ? (showNpwp
+                              ? profileData.npwp
+                              : `•••• •••• ${String(profileData.npwp).slice(-4)}`)
+                          : '—'}
                       </p>
                     </div>
 

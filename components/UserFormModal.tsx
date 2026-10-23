@@ -388,7 +388,7 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
         fullName: '', nickname: '', nik: '', email: '', dateOfBirth: '', company: '', department: '',
         employeeCode: '', joinDate: '', jobTitle: '', jobLevel: '', employmentType: 'PKWT', branch: 'HQ',
         gradeClass: '', residentialAddress: '', contractType: 'PKWT', pkwtNumber: '', contractStartDate: '',
-        contractEndDate: '', employmentStatus: 'Active', statusEffectiveDate: '', separationDate: '', separationReason: '', payrollStatus: '', taxStatus: '', bankName: '', bankAccountName: '',
+        contractEndDate: '', employmentStatus: 'Active', statusEffectiveDate: '', separationDate: '', separationReason: '', payrollStatus: '', taxStatus: '', npwp: '', bankName: '', bankAccountName: '',
         bankAccountNumber: '', bpjsTkNumber: '', bpjsHealthNumber: '', status: 'Active', avatarUrl: '',
         role: 'Employee', groups: ['employee'],
       });
@@ -535,6 +535,7 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
         statusEffectiveDate: isActive ? (form.statusEffectiveDate || form.joinDate || '') : (form.statusEffectiveDate || ''),
         employeeCode: employeeCode || generatedEmployeeId,
         nik: form.nik ? String(form.nik).trim() : '',
+        npwp: form.npwp ? String(form.npwp).trim() : '',
         avatarUrl: form.avatarUrl || '',
       };
       delete employeePayload.password;
@@ -1532,6 +1533,15 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
                   value={String(form.taxStatus || '')}
                   error={errors.taxStatus}
                   onChange={setField}
+                />
+
+                <FormField
+                  label="Nomor NPWP (16 Digit)"
+                  name="npwp"
+                  placeholder="Contoh: 3171068039410001 (hanya angka)"
+                  value={String(form.npwp || '')}
+                  error={errors.npwp}
+                  onChange={(k, v) => setField(k, v.replace(/\D/g, '').slice(0, 16))}
                 />
 
                 <FormField
