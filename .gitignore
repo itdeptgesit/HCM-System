@@ -12,3 +12,6 @@ dist/
 
 # Logs & temp
 *.log
+ 
+# Sensitive credentials
+*service-account*.json

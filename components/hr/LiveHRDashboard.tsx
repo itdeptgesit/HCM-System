@@ -686,8 +686,8 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
       return [
         {
           badge: 'HO',
-          bg: 'bg-[#eff6ff]',
-          text: 'text-[#2563eb]',
+          bg: 'bg-[#eff6ff] dark:bg-blue-950/60',
+          text: 'text-[#2563eb] dark:text-blue-400',
           name: 'Shift Kantor Pusat',
           time: '08:30 - 17:30 WIB',
           count: totalHeadcount,
@@ -696,11 +696,11 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
     }
 
     const palettes = [
-      { bg: 'bg-[#eff6ff]', text: 'text-[#2563eb]' },
-      { bg: 'bg-[#f5f3ff]', text: 'text-[#7c3aed]' },
-      { bg: 'bg-[#f0fdf4]', text: 'text-[#16a34a]' },
-      { bg: 'bg-[#ecfeff]', text: 'text-[#0891b2]' },
-      { bg: 'bg-[#fff7ed]', text: 'text-[#d97706]' },
+      { bg: 'bg-[#eff6ff] dark:bg-blue-950/60', text: 'text-[#2563eb] dark:text-blue-400' },
+      { bg: 'bg-[#f5f3ff] dark:bg-purple-950/60', text: 'text-[#7c3aed] dark:text-purple-400' },
+      { bg: 'bg-[#f0fdf4] dark:bg-emerald-950/60', text: 'text-[#16a34a] dark:text-emerald-400' },
+      { bg: 'bg-[#ecfeff] dark:bg-cyan-950/60', text: 'text-[#0891b2] dark:text-cyan-400' },
+      { bg: 'bg-[#fff7ed] dark:bg-amber-950/60', text: 'text-[#d97706] dark:text-amber-400' },
     ];
 
     const activeList = rawSchedules.filter(s => s.is_active !== false);
@@ -1659,7 +1659,7 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
   return (
     <div className="w-full space-y-6 font-sans text-slate-800 dark:text-slate-100 transition-colors duration-200">
       {/* ── NEXORA STYLE HERO GREETING BANNER ── */}
-      <div className="relative overflow-hidden rounded-2xl sm:rounded-[18px] border border-slate-200/80 dark:border-[#222225] bg-white dark:bg-[#131316] p-4.5 sm:p-7 shadow-xs transition-colors">
+      <div className="relative overflow-hidden rounded-2xl sm:rounded-[18px] border border-slate-200/80 dark:border-zinc-800/80 bg-white dark:bg-[#131622] p-4.5 sm:p-7 shadow-xs transition-colors">
         {/* Subtle Ambient Radial Mesh Glow Pattern */}
         <div
           className="pointer-events-none absolute -right-16 -top-20 h-72 w-96 rounded-full opacity-60 dark:opacity-20 blur-3xl"
@@ -1691,7 +1691,7 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
                     variant="outline"
                     size="sm"
                     disabled={exporting || loading}
-                    className="h-8.5 rounded-lg gap-1.5 text-xs font-semibold border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-slate-50 dark:hover:bg-zinc-800 text-slate-800 dark:text-zinc-200 shadow-2xs cursor-pointer"
+                    className="h-8.5 rounded-lg gap-1.5 text-xs font-semibold border-slate-200 dark:border-zinc-700/80 bg-white dark:bg-[#181d2c] hover:bg-slate-50 dark:hover:bg-[#1e2538] text-slate-800 dark:text-zinc-200 shadow-2xs cursor-pointer"
                   >
                     <FileSpreadsheet className="size-4 text-emerald-600 dark:text-emerald-400" />
                     <span>{exporting ? 'Mengunduh...' : 'Download Excel'}</span>
@@ -1699,13 +1699,13 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
                   </Button>
                 }
               />
-              <DropdownMenuContent align="end" className="w-68 p-1.5 rounded-xl shadow-2xl bg-white dark:bg-[#18181b] border border-slate-200/80 dark:border-[#27272a]">
+              <DropdownMenuContent align="end" className="w-68 p-1.5 rounded-xl shadow-2xl bg-white dark:bg-[#151926] border border-slate-200/80 dark:border-zinc-700/80">
                 <DropdownMenuLabel className="px-2.5 py-1.5 text-[11px] font-semibold text-slate-500 dark:text-zinc-400">
                   Pilihan Ekspor Data Excel (.xlsx)
                 </DropdownMenuLabel>
                 <DropdownMenuItem
                   onClick={handleExportFullExcel}
-                  className="text-xs font-medium cursor-pointer py-2 px-2.5 rounded-lg gap-2.5"
+                  className="text-xs font-medium cursor-pointer py-2 px-2.5 rounded-lg gap-2.5 hover:bg-slate-50 dark:hover:bg-[#1e2538]"
                 >
                   <div className="p-1.5 rounded-md bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 shrink-0">
                     <FileSpreadsheet className="size-4" />
@@ -1715,10 +1715,10 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
                     <span className="text-[10px] text-slate-500 dark:text-zinc-400">13 sheet lengkap sesuai filter, termasuk demografi & pengajuan</span>
                   </div>
                 </DropdownMenuItem>
-                <DropdownMenuSeparator className="my-1" />
+                <DropdownMenuSeparator className="my-1 dark:bg-zinc-800" />
                 <DropdownMenuItem
                   onClick={handleExportEmployeeMasterExcel}
-                  className="text-xs font-medium cursor-pointer py-2 px-2.5 rounded-lg gap-2.5"
+                  className="text-xs font-medium cursor-pointer py-2 px-2.5 rounded-lg gap-2.5 hover:bg-slate-50 dark:hover:bg-[#1e2538]"
                 >
                   <div className="p-1.5 rounded-md bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 shrink-0">
                     <Users className="size-4" />
@@ -1728,10 +1728,10 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
                     <span className="text-[10px] text-slate-500 dark:text-zinc-400">{totalHeadcount} karyawan aktif sesuai filter, termasuk data bank</span>
                   </div>
                 </DropdownMenuItem>
-                <DropdownMenuSeparator className="my-1" />
+                <DropdownMenuSeparator className="my-1 dark:bg-zinc-800" />
                 <DropdownMenuItem
                   onClick={handleExportContractsExcel}
-                  className="text-xs font-medium cursor-pointer py-2 px-2.5 rounded-lg gap-2.5"
+                  className="text-xs font-medium cursor-pointer py-2 px-2.5 rounded-lg gap-2.5 hover:bg-slate-50 dark:hover:bg-[#1e2538]"
                 >
                   <div className="p-1.5 rounded-md bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 shrink-0">
                     <AlertCircle className="size-4" />
@@ -1802,11 +1802,11 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
                   name={a.full_name || a.name || a.username || 'User'}
                   url={a.avatar_url || a.avatarUrl}
                   size="xs"
-                  className="size-7 text-[10px] ring-2 ring-white dark:ring-[#131316] shadow-none"
+                  className="size-7 text-[10px] ring-2 ring-white dark:ring-[#131622] shadow-none"
                 />
               ))}
               {accounts.length > 3 && (
-                <div className="inline-flex size-7 items-center justify-center rounded-full bg-slate-100 dark:bg-zinc-800 text-[10px] font-semibold text-slate-600 dark:text-zinc-300 ring-2 ring-white dark:ring-[#131316] shrink-0">
+                <div className="inline-flex size-7 items-center justify-center rounded-full bg-slate-100 dark:bg-zinc-800 text-[10px] font-semibold text-slate-600 dark:text-zinc-300 ring-2 ring-white dark:ring-[#131622] shrink-0">
                   +{accounts.length - 3}
                 </div>
               )}
@@ -1823,10 +1823,10 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
         {/* Card 1: Karyawan Aktif */}
         <div
           onClick={() => openDrilldown('Karyawan aktif', 'Ringkasan SDM', filteredEmployees, { subtitle: `Daftar karyawan aktif (${totalHeadcount} orang) berdasarkan filter terpilih` })}
-          className="bg-white rounded-[18px] p-5 border border-[#e5eaf1] shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-12px_rgba(15,23,42,0.12)] hover:-translate-y-0.5 hover:shadow-[0_2px_4px_rgba(15,23,42,0.05),0_16px_32px_-12px_rgba(15,23,42,0.18)] transition-all flex flex-col justify-between cursor-pointer"
+          className="bg-white dark:bg-[#131622] rounded-[18px] p-5 border border-[#e5eaf1] dark:border-zinc-800/80 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-12px_rgba(15,23,42,0.12)] hover:-translate-y-0.5 hover:shadow-[0_2px_4px_rgba(15,23,42,0.05),0_16px_32px_-12px_rgba(15,23,42,0.18)] transition-all flex flex-col justify-between cursor-pointer"
         >
           <div className="flex items-center gap-3.5">
-            <div className="w-11 h-11 rounded-[14px] bg-[#eff6ff] text-[#2563eb] flex items-center justify-center font-bold">
+            <div className="w-11 h-11 rounded-[14px] bg-[#eff6ff] dark:bg-blue-950/60 text-[#2563eb] dark:text-blue-400 flex items-center justify-center font-bold">
               <Users className="size-5" />
             </div>
             <div>
@@ -1854,10 +1854,10 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
         {/* Card 2: Presensi Hari Ini */}
         <div
           onClick={() => navigate('/attendance/report')}
-          className="bg-white rounded-[18px] p-5 border border-[#e5eaf1] shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-12px_rgba(15,23,42,0.12)] hover:-translate-y-0.5 hover:shadow-[0_2px_4px_rgba(15,23,42,0.05),0_16px_32px_-12px_rgba(15,23,42,0.18)] transition-all flex flex-col justify-between cursor-pointer"
+          className="bg-white dark:bg-[#131622] rounded-[18px] p-5 border border-[#e5eaf1] dark:border-zinc-800/80 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-12px_rgba(15,23,42,0.12)] hover:-translate-y-0.5 hover:shadow-[0_2px_4px_rgba(15,23,42,0.05),0_16px_32px_-12px_rgba(15,23,42,0.18)] transition-all flex flex-col justify-between cursor-pointer"
         >
           <div className="flex items-center gap-3.5">
-            <div className="w-11 h-11 rounded-[14px] bg-[#f0fdf4] text-[#16a34a] flex items-center justify-center font-bold">
+            <div className="w-11 h-11 rounded-[14px] bg-[#f0fdf4] dark:bg-emerald-950/60 text-[#16a34a] dark:text-emerald-400 flex items-center justify-center font-bold">
               <Clock className="size-5" />
             </div>
             <div>
@@ -1885,10 +1885,10 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
         {/* Card 3: Antrean Persetujuan */}
         <div
           onClick={() => navigate('/attendance/approvals')}
-          className="bg-white rounded-[18px] p-5 border border-[#e5eaf1] shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-12px_rgba(15,23,42,0.12)] hover:-translate-y-0.5 hover:shadow-[0_2px_4px_rgba(15,23,42,0.05),0_16px_32px_-12px_rgba(15,23,42,0.18)] transition-all flex flex-col justify-between cursor-pointer"
+          className="bg-white dark:bg-[#131622] rounded-[18px] p-5 border border-[#e5eaf1] dark:border-zinc-800/80 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-12px_rgba(15,23,42,0.12)] hover:-translate-y-0.5 hover:shadow-[0_2px_4px_rgba(15,23,42,0.05),0_16px_32px_-12px_rgba(15,23,42,0.18)] transition-all flex flex-col justify-between cursor-pointer"
         >
           <div className="flex items-center gap-3.5">
-            <div className="w-11 h-11 rounded-[14px] bg-[#fffbeb] text-[#d97706] flex items-center justify-center font-bold">
+            <div className="w-11 h-11 rounded-[14px] bg-[#fffbeb] dark:bg-amber-950/60 text-[#d97706] dark:text-amber-400 flex items-center justify-center font-bold">
               <FileText className="size-5" />
             </div>
             <div>
@@ -1914,7 +1914,7 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
         </div>
 
         {/* Card 4: Action Banner (#0f2b46 Navy - Rounded 18px) */}
-        <div className="rounded-[18px] bg-[#0f2b46] text-white p-5 shadow-lg border border-[#16324f] flex flex-col justify-between relative overflow-hidden group">
+        <div className="rounded-[18px] bg-[#0f2b46] dark:bg-[#0c1a2e] text-white p-5 shadow-lg border border-[#16324f] dark:border-blue-900/40 flex flex-col justify-between relative overflow-hidden group">
           <div className="relative z-10">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold tracking-wider uppercase text-[#93c5fd]">
@@ -1947,12 +1947,12 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
       </div>
 
       {/* ── COMPACT FILTER & SNAPSHOT BAR (BELOW CARDS) ── */}
-      <div className="bg-white dark:bg-[#131316] border border-[#e5eaf1] dark:border-[#222225] rounded-xl px-3.5 sm:px-4 py-2.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+      <div className="bg-white dark:bg-[#131622] border border-[#e5eaf1] dark:border-zinc-800/80 rounded-xl px-3.5 sm:px-4 py-2.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] flex flex-col lg:flex-row lg:items-center justify-between gap-3">
         {/* Left: Filter Controls */}
         <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2 sm:gap-2.5 w-full lg:w-auto">
-          <div className="flex items-center gap-1.5 text-slate-400 dark:text-slate-500 mr-0.5">
+          <div className="flex items-center gap-1.5 text-slate-400 dark:text-zinc-400 mr-0.5">
             <Filter className="size-3.5" />
-            <span className="text-[11px] font-semibold tracking-wide uppercase text-slate-400 dark:text-slate-500">Filter:</span>
+            <span className="text-[11px] font-semibold tracking-wide uppercase text-slate-400 dark:text-zinc-400">Filter:</span>
           </div>
 
           {/* Perusahaan Dropdown */}
@@ -1960,16 +1960,16 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
             <select
               value={selectedCompany}
               onChange={e => setSelectedCompany(e.target.value)}
-              className="w-full appearance-none rounded-lg border border-slate-200 dark:border-[#27272a] bg-slate-50/80 hover:bg-white focus:bg-white dark:bg-[#18181b] dark:hover:bg-[#1f1f23] dark:focus:bg-[#1f1f23] px-3 py-1.5 pr-7 text-xs font-semibold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600/20 transition-all cursor-pointer"
+              className="w-full appearance-none rounded-lg border border-slate-200 dark:border-zinc-700/80 bg-slate-50/80 hover:bg-white focus:bg-white dark:bg-[#181d2c] dark:hover:bg-[#1f2639] dark:focus:bg-[#1f2639] px-3 py-1.5 pr-7 text-xs font-semibold text-slate-800 dark:text-zinc-200 focus:outline-none focus:ring-2 focus:ring-blue-600/20 transition-all cursor-pointer"
             >
-              <option value="all">Semua perusahaan</option>
+              <option value="all" className="bg-white dark:bg-[#181d2c] text-slate-800 dark:text-zinc-200">Semua perusahaan</option>
               {companyOptions.map(c => (
-                <option key={c} value={c}>
+                <option key={c} value={c} className="bg-white dark:bg-[#181d2c] text-slate-800 dark:text-zinc-200">
                   {c}
                 </option>
               ))}
             </select>
-            <ChevronDown className="absolute right-2 top-2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+            <ChevronDown className="absolute right-2 top-2 h-3.5 w-3.5 text-slate-400 dark:text-zinc-400 pointer-events-none" />
           </div>
 
           {/* Departemen Dropdown */}
@@ -1977,16 +1977,16 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
             <select
               value={selectedDepartment}
               onChange={e => setSelectedDepartment(e.target.value)}
-              className="w-full appearance-none rounded-lg border border-slate-200 dark:border-[#27272a] bg-slate-50/80 hover:bg-white focus:bg-white dark:bg-[#18181b] dark:hover:bg-[#1f1f23] dark:focus:bg-[#1f1f23] px-3 py-1.5 pr-7 text-xs font-semibold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600/20 transition-all cursor-pointer"
+              className="w-full appearance-none rounded-lg border border-slate-200 dark:border-zinc-700/80 bg-slate-50/80 hover:bg-white focus:bg-white dark:bg-[#181d2c] dark:hover:bg-[#1f2639] dark:focus:bg-[#1f2639] px-3 py-1.5 pr-7 text-xs font-semibold text-slate-800 dark:text-zinc-200 focus:outline-none focus:ring-2 focus:ring-blue-600/20 transition-all cursor-pointer"
             >
-              <option value="all">Semua departemen</option>
+              <option value="all" className="bg-white dark:bg-[#181d2c] text-slate-800 dark:text-zinc-200">Semua departemen</option>
               {departmentOptions.map(d => (
-                <option key={d} value={d}>
+                <option key={d} value={d} className="bg-white dark:bg-[#181d2c] text-slate-800 dark:text-zinc-200">
                   {d}
                 </option>
               ))}
             </select>
-            <ChevronDown className="absolute right-2 top-2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+            <ChevronDown className="absolute right-2 top-2 h-3.5 w-3.5 text-slate-400 dark:text-zinc-400 pointer-events-none" />
           </div>
 
           {/* Snapshot Date Picker + Reset */}
@@ -1996,7 +1996,7 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
                 type="date"
                 value={snapshotDate}
                 onChange={e => setSnapshotDate(e.target.value)}
-                className="w-full sm:w-auto appearance-none rounded-lg border border-slate-200 dark:border-[#27272a] bg-slate-50/80 hover:bg-white focus:bg-white dark:bg-[#18181b] dark:hover:bg-[#1f1f23] dark:focus:bg-[#1f1f23] px-2.5 py-1.5 text-xs font-semibold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600/20 transition-all cursor-pointer"
+                className="w-full sm:w-auto appearance-none rounded-lg border border-slate-200 dark:border-zinc-700/80 bg-slate-50/80 hover:bg-white focus:bg-white dark:bg-[#181d2c] dark:hover:bg-[#1f2639] dark:focus:bg-[#1f2639] px-2.5 py-1.5 text-xs font-semibold text-slate-800 dark:text-zinc-200 dark:[color-scheme:dark] focus:outline-none focus:ring-2 focus:ring-blue-600/20 transition-all cursor-pointer"
                 title="Pilih tanggal snapshot data"
               />
             </div>
@@ -2016,14 +2016,14 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
         </div>
 
         {/* Right: Snapshot sub-indicator & DB Status */}
-        <div className="flex items-center justify-between lg:justify-start gap-3 text-[11px] text-slate-500 dark:text-slate-400 shrink-0 w-full lg:w-auto pt-2 lg:pt-0 border-t border-slate-100 dark:border-zinc-800/60 lg:border-t-0">
+        <div className="flex items-center justify-between lg:justify-start gap-3 text-[11px] text-slate-500 dark:text-zinc-400 shrink-0 w-full lg:w-auto pt-2 lg:pt-0 border-t border-slate-100 dark:border-zinc-800/60 lg:border-t-0">
           <div className="flex items-center gap-1.5">
             <span className="size-2 rounded-full bg-emerald-500 shadow-xs shrink-0" />
             <span>
-              Snapshot {snapshotDate} · <strong className="font-bold text-slate-800 dark:text-slate-200">{totalHeadcount} karyawan aktif</strong>
+              Snapshot {snapshotDate} · <strong className="font-bold text-slate-800 dark:text-zinc-200">{totalHeadcount} karyawan aktif</strong>
             </span>
           </div>
-          <span className="hidden xl:inline text-[10px] text-slate-400 dark:text-slate-500 font-mono border-l border-slate-200 dark:border-slate-800 pl-3">
+          <span className="hidden xl:inline text-[10px] text-slate-400 dark:text-zinc-500 font-mono border-l border-slate-200 dark:border-zinc-800 pl-3">
             Database PostgreSQL Terverifikasi
           </span>
         </div>
@@ -2032,29 +2032,29 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
       {/* ── ROW 2: AKTIVITAS KEHADIRAN + JADWAL HARI INI ── */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-5">
         {/* Aktivitas Kehadiran (Bar Chart - 7 Cols) */}
-        <div className="lg:col-span-7 bg-white dark:bg-[#131316] rounded-2xl sm:rounded-[18px] p-4 sm:p-6 border border-[#e5eaf1] dark:border-[#222225] shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-12px_rgba(15,23,42,0.12)] flex flex-col justify-between">
+        <div className="lg:col-span-7 bg-white dark:bg-[#131622] rounded-2xl sm:rounded-[18px] p-4 sm:p-6 border border-[#e5eaf1] dark:border-zinc-800/80 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-12px_rgba(15,23,42,0.12)] flex flex-col justify-between">
           <div>
             <div className="flex items-start sm:items-center justify-between gap-2">
               <div>
-                <h3 className="text-[15px] sm:text-[16px] font-semibold text-[#0f172a] dark:text-slate-100">Aktivitas Kehadiran</h3>
+                <h3 className="text-[15px] sm:text-[16px] font-semibold text-[#0f172a] dark:text-white">Aktivitas Kehadiran</h3>
                 <div className="flex items-center gap-1.5 text-[11.5px] sm:text-[12.5px] mt-0.5">
                   {attendanceActivity.hasComparison && attendanceActivity.diffPercent !== null ? (
                     <>
-                      <span className={`font-semibold ${attendanceActivity.diffPercent >= 0 ? 'text-[#16a34a]' : 'text-[#e11d48]'}`}>
+                      <span className={`font-semibold ${attendanceActivity.diffPercent >= 0 ? 'text-[#16a34a] dark:text-emerald-400' : 'text-[#e11d48] dark:text-rose-400'}`}>
                         {attendanceActivity.diffPercent >= 0 ? '↗ +' : '↘ '}
                         {Math.abs(attendanceActivity.diffPercent)}%
                       </span>
-                      <span className="text-[#64748b] dark:text-slate-400 font-normal">{attendanceActivity.comparisonLabel}</span>
+                      <span className="text-[#64748b] dark:text-zinc-400 font-normal">{attendanceActivity.comparisonLabel}</span>
                     </>
                   ) : (
-                    <span className="text-[#64748b] dark:text-slate-400 font-normal">Data presensi real terverifikasi</span>
+                    <span className="text-[#64748b] dark:text-zinc-400 font-normal">Data presensi real terverifikasi</span>
                   )}
                 </div>
               </div>
 
               <button
                 onClick={() => setChartPeriod(p => p === 'weekly' ? 'monthly' : 'weekly')}
-                className="px-2.5 sm:px-3 py-1.5 rounded-[10px] bg-[#f8fafc] dark:bg-[#1e1e24] border border-[#cbd5e1] dark:border-zinc-700 text-[11.5px] sm:text-[12px] font-semibold text-[#475569] dark:text-zinc-300 hover:text-[#0f172a] dark:hover:text-white hover:bg-[#f1f5f9] dark:hover:bg-zinc-800 flex items-center gap-1.5 cursor-pointer transition-colors shrink-0"
+                className="px-2.5 sm:px-3 py-1.5 rounded-[10px] bg-[#f8fafc] dark:bg-[#181d2c] border border-[#cbd5e1] dark:border-zinc-700 text-[11.5px] sm:text-[12px] font-semibold text-[#475569] dark:text-zinc-300 hover:text-[#0f172a] dark:hover:text-white hover:bg-[#f1f5f9] dark:hover:bg-[#1e2538] flex items-center gap-1.5 cursor-pointer transition-colors shrink-0"
               >
                 <span>{chartPeriod === 'weekly' ? 'Mingguan' : 'Bulanan'}</span>
                 <ChevronDown className="size-3.5" />
@@ -2064,11 +2064,11 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
             {/* Vertical Bar Chart with Slim Rounded Bars */}
             <div className="mt-6 sm:mt-8 h-40 sm:h-44 flex items-end justify-between gap-1 sm:gap-3 px-1 sm:px-3 relative">
               <div className="absolute inset-0 flex flex-col justify-between pointer-events-none border-b border-[#e5eaf1] dark:border-zinc-800">
-                <div className="border-b border-[#f1f5f9] dark:border-zinc-800/60 w-full flex justify-end pr-1 text-[10px] text-[#94a3b8]">8h</div>
-                <div className="border-b border-[#f1f5f9] dark:border-zinc-800/60 w-full flex justify-end pr-1 text-[10px] text-[#94a3b8]">6h</div>
-                <div className="border-b border-[#f1f5f9] dark:border-zinc-800/60 w-full flex justify-end pr-1 text-[10px] text-[#94a3b8]">4h</div>
-                <div className="border-b border-[#f1f5f9] dark:border-zinc-800/60 w-full flex justify-end pr-1 text-[10px] text-[#94a3b8]">2h</div>
-                <div className="w-full flex justify-end pr-1 text-[10px] text-[#94a3b8]">0h</div>
+                <div className="border-b border-[#f1f5f9] dark:border-zinc-800/60 w-full flex justify-end pr-1 text-[10px] text-[#94a3b8] dark:text-zinc-500">8h</div>
+                <div className="border-b border-[#f1f5f9] dark:border-zinc-800/60 w-full flex justify-end pr-1 text-[10px] text-[#94a3b8] dark:text-zinc-500">6h</div>
+                <div className="border-b border-[#f1f5f9] dark:border-zinc-800/60 w-full flex justify-end pr-1 text-[10px] text-[#94a3b8] dark:text-zinc-500">4h</div>
+                <div className="border-b border-[#f1f5f9] dark:border-zinc-800/60 w-full flex justify-end pr-1 text-[10px] text-[#94a3b8] dark:text-zinc-500">2h</div>
+                <div className="w-full flex justify-end pr-1 text-[10px] text-[#94a3b8] dark:text-zinc-500">0h</div>
               </div>
 
               {attendanceActivity.items.map((item, idx) => {
@@ -2079,7 +2079,7 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
                     {/* Tooltip on hover or when highlighted with edge-safe alignment */}
                     <div className={`absolute -top-11 ${
                       isFirst ? 'left-0' : isLast ? 'right-0' : 'left-1/2 -translate-x-1/2'
-                    } bg-[#0f172a] dark:bg-zinc-800 text-white px-2.5 py-1 rounded-[8px] text-[10px] font-bold whitespace-nowrap shadow-md flex items-center gap-1 transition-all pointer-events-none ${
+                    } bg-[#0f172a] dark:bg-zinc-800 dark:border dark:border-zinc-700 text-white px-2.5 py-1 rounded-[8px] text-[10px] font-bold whitespace-nowrap shadow-md flex items-center gap-1 transition-all pointer-events-none ${
                       item.isHighlight ? 'opacity-100 z-20' : 'opacity-0 group-hover:opacity-100 z-20'
                     }`}>
                       <span>⏱️ {item.tooltip}</span>
@@ -2108,18 +2108,18 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
           </div>
 
           <div className="mt-4 pt-3 border-t border-[#e5eaf1] dark:border-zinc-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1.5 text-[11.5px] sm:text-[12.5px] text-[#64748b] dark:text-zinc-400">
-            <span>Total Terpantau: <strong className="text-[#0f172a] dark:text-slate-100">{attendanceActivity.totalTerpantauStr}</strong></span>
+            <span>Total Terpantau: <strong className="text-[#0f172a] dark:text-white">{attendanceActivity.totalTerpantauStr}</strong></span>
             <span className="text-[#2563eb] dark:text-blue-400 font-bold">{attendanceActivity.stabilitasStr}</span>
           </div>
         </div>
 
         {/* Jadwal Hari Ini (5 Cols) */}
-        <div className="lg:col-span-5 bg-white dark:bg-[#131316] rounded-2xl sm:rounded-[18px] p-4 sm:p-6 border border-[#e5eaf1] dark:border-[#222225] shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-12px_rgba(15,23,42,0.12)] flex flex-col justify-between">
+        <div className="lg:col-span-5 bg-white dark:bg-[#131622] rounded-2xl sm:rounded-[18px] p-4 sm:p-6 border border-[#e5eaf1] dark:border-zinc-800/80 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-12px_rgba(15,23,42,0.12)] flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-[15px] sm:text-[16px] font-semibold text-[#0f172a] dark:text-slate-100">Jadwal Hari Ini</h3>
-                <p className="text-[11.5px] sm:text-[12.5px] text-[#475569] dark:text-slate-400 mt-0.5">Shift kerja & penugasan aktif</p>
+                <h3 className="text-[15px] sm:text-[16px] font-semibold text-[#0f172a] dark:text-white">Jadwal Hari Ini</h3>
+                <p className="text-[11.5px] sm:text-[12.5px] text-[#475569] dark:text-zinc-400 mt-0.5">Shift kerja & penugasan aktif</p>
               </div>
               <button
                 onClick={() => navigate('/calendar')}
@@ -2135,28 +2135,28 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
                 <div
                   key={i}
                   onClick={() => navigate('/calendar')}
-                  className="flex items-center justify-between p-2.5 rounded-[10px] bg-[#f8fafc] dark:bg-[#18181b] hover:bg-[#eff6ff] dark:hover:bg-blue-950/20 transition-colors cursor-pointer group border border-transparent hover:border-[#bfdbfe] dark:hover:border-blue-800/40"
+                  className="flex items-center justify-between p-2.5 rounded-[10px] bg-[#f8fafc] dark:bg-[#181d2c] hover:bg-[#eff6ff] dark:hover:bg-blue-950/20 transition-colors cursor-pointer group border border-transparent hover:border-[#bfdbfe] dark:hover:border-blue-800/40"
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <div className={`w-8 h-8 rounded-[8px] ${sch.bg} ${sch.text} flex items-center justify-center font-bold text-[11px] shrink-0`}>
                       {sch.badge}
                     </div>
                     <div className="min-w-0">
-                      <h4 className="text-[12px] sm:text-[12.5px] font-semibold text-[#0f172a] dark:text-slate-200 group-hover:text-[#2563eb] dark:group-hover:text-blue-400 transition-colors truncate">
+                      <h4 className="text-[12px] sm:text-[12.5px] font-semibold text-[#0f172a] dark:text-zinc-200 group-hover:text-[#2563eb] dark:group-hover:text-blue-400 transition-colors truncate">
                         {sch.name}
                       </h4>
-                      <p className="text-[10.5px] sm:text-[11px] text-[#64748b] dark:text-slate-400 truncate">{sch.time} • {sch.count} Karyawan</p>
+                      <p className="text-[10.5px] sm:text-[11px] text-[#64748b] dark:text-zinc-400 truncate">{sch.time} • {sch.count} Karyawan</p>
                     </div>
                   </div>
-                  <ChevronRight className="size-4 text-[#94a3b8] group-hover:text-[#2563eb] dark:group-hover:text-blue-400 transition-colors shrink-0" />
+                  <ChevronRight className="size-4 text-[#94a3b8] dark:text-zinc-500 group-hover:text-[#2563eb] dark:group-hover:text-blue-400 transition-colors shrink-0" />
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="mt-4 pt-3 border-t border-[#e5eaf1] dark:border-zinc-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1 text-[11.5px] sm:text-[12px] text-[#64748b] dark:text-slate-400">
-            <span>Total Karyawan Terjadwal: <strong className="text-[#0f172a] dark:text-slate-100">{totalHeadcount} Orang</strong></span>
-            <span className="text-[#16a34a] font-semibold">Tercakup Sistem</span>
+          <div className="mt-4 pt-3 border-t border-[#e5eaf1] dark:border-zinc-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1 text-[11.5px] sm:text-[12px] text-[#64748b] dark:text-zinc-400">
+            <span>Total Karyawan Terjadwal: <strong className="text-[#0f172a] dark:text-white">{totalHeadcount} Orang</strong></span>
+            <span className="text-[#16a34a] dark:text-emerald-400 font-semibold">Tercakup Sistem</span>
           </div>
         </div>
       </div>
@@ -2164,11 +2164,11 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
       {/* ── NEXORA ADAPTED ROW: WORKFORCE HEALTH & TOP ENTITAS PERUSAHAAN ── */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-stretch">
         {/* Left (7 Cols): Sales Pipeline Health -> Kesehatan & Komposisi SDM */}
-        <div className="xl:col-span-7 bg-white dark:bg-[#131316] border border-slate-200/80 dark:border-[#222225] rounded-[18px] p-6 shadow-xs flex flex-col justify-between">
+        <div className="xl:col-span-7 bg-white dark:bg-[#131622] border border-slate-200/80 dark:border-zinc-800/80 rounded-[18px] p-6 shadow-xs flex flex-col justify-between">
           <div>
             {/* Header with Dark Square Icon */}
             <div className="flex items-center gap-3">
-              <div className="size-9 rounded-xl bg-slate-900 dark:bg-zinc-100 text-white dark:text-zinc-900 flex items-center justify-center shadow-xs shrink-0">
+              <div className="size-9 rounded-xl bg-slate-900 dark:bg-zinc-800 text-white dark:text-zinc-100 flex items-center justify-center shadow-xs shrink-0">
                 <Activity className="size-4.5" />
               </div>
               <h3 className="text-base font-bold text-slate-900 dark:text-white tracking-tight">
@@ -2240,10 +2240,10 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
               </div>
             </div>
 
-            <section aria-label="Presensi berdasarkan jadwal" className="mt-5 pt-4 border-t border-slate-100 dark:border-zinc-800/60">
+            <section aria-label="Presensi berdasarkan jadwal" className="mt-5 pt-4 border-t border-slate-100 dark:border-zinc-800">
               <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
                 <h4 className="font-bold text-slate-900 dark:text-white">Presensi {snapshotDate === today ? 'hari ini' : snapshotDate}</h4>
-                <span className="text-slate-600 dark:text-slate-400">{loading ? 'Memuat jadwal...' : attendanceContext.error ? 'Data jadwal belum tersedia' : `${checkedInCount} check-in / ${attendanceSnapshot.required} wajib hadir`}</span>
+                <span className="text-slate-600 dark:text-zinc-400">{loading ? 'Memuat jadwal...' : attendanceContext.error ? 'Data jadwal belum tersedia' : `${checkedInCount} check-in / ${attendanceSnapshot.required} wajib hadir`}</span>
               </div>
               {attendanceContext.error ? (
                 <p role="alert" className="mt-4 text-sm text-amber-800 dark:text-amber-300">{attendanceContext.error}</p>
@@ -2271,13 +2271,13 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
                         key={group.label} type="button" aria-haspopup="dialog"
                         aria-label={`Lihat presensi ${group.label.toLowerCase()}: ${group.employees.length} orang`}
                         onClick={() => openDrilldown(group.label, 'Presensi', group.employees, { subtitle: `Tanggal ${snapshotDate}, berdasarkan jadwal, kalender kerja, dan cuti yang disetujui` })}
-                        className="flex min-h-11 items-center justify-between gap-3 rounded-lg px-2 text-left text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-zinc-900 focus-visible:outline-2 focus-visible:outline-blue-600 dark:focus-visible:outline-blue-400"
+                        className="flex min-h-11 items-center justify-between gap-3 rounded-lg px-2 text-left text-xs text-slate-600 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-[#181d2c] focus-visible:outline-2 focus-visible:outline-blue-600 dark:focus-visible:outline-blue-400 cursor-pointer"
                       >
                         <span>{group.label}</span><strong className="text-slate-900 dark:text-white tabular-nums">{group.employees.length}</strong>
                       </button>
                     ))}
                   </div>
-                  <p className="mt-3 text-[11px] leading-relaxed text-slate-600 dark:text-slate-400">
+                  <p className="mt-3 text-[11px] leading-relaxed text-slate-600 dark:text-zinc-400">
                     Wajib hadir tidak termasuk cuti yang disetujui dan hari libur. Belum check-in berarti waktu masuk telah lewat, bukan penetapan mangkir.
                     {!attendanceContext.settings?.work_days && ' Hari kerja mengikuti Senin–Jumat jika belum dikonfigurasi.'}
                   </p>
@@ -2288,7 +2288,7 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
         </div>
 
         {/* Right (5 Cols): Top Open Deals -> Top Entitas Perusahaan */}
-        <div className="xl:col-span-5 bg-white dark:bg-[#131316] border border-slate-200/80 dark:border-[#222225] rounded-[18px] p-6 shadow-xs flex flex-col justify-between">
+        <div className="xl:col-span-5 bg-white dark:bg-[#131622] border border-slate-200/80 dark:border-zinc-800/80 rounded-[18px] p-6 shadow-xs flex flex-col justify-between">
           <div>
             {/* Header with Title, Badge, and More */}
             <div className="flex items-start justify-between">
@@ -2296,7 +2296,7 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
                 <h3 className="text-base font-bold text-slate-900 dark:text-white tracking-tight">
                   Top Entitas Perusahaan
                 </h3>
-                <p className="text-xs text-slate-400 dark:text-zinc-500 mt-0.5">
+                <p className="text-xs text-slate-400 dark:text-zinc-400 mt-0.5">
                   Distribusi penempatan karyawan per badan hukum
                 </p>
               </div>
@@ -2324,7 +2324,7 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
                         openDrilldown(comp.company, 'Perusahaan', comp.employeeList);
                       }
                     }}
-                    className="group rounded-xl border border-slate-100 dark:border-zinc-800/60 bg-white dark:bg-[#131316] p-3 sm:p-3.5 hover:border-slate-200 dark:hover:border-zinc-700 hover:bg-slate-50/60 dark:hover:bg-zinc-900/60 transition-all cursor-pointer flex items-center justify-between gap-3 focus-visible:outline-2 focus-visible:outline-blue-600 dark:focus-visible:outline-blue-400"
+                    className="group rounded-xl border border-slate-100 dark:border-zinc-800/60 bg-white dark:bg-[#181d2c] p-3 sm:p-3.5 hover:border-slate-200 dark:hover:border-zinc-700 hover:bg-slate-50/60 dark:hover:bg-[#1e2538] transition-all cursor-pointer flex items-center justify-between gap-3 focus-visible:outline-2 focus-visible:outline-blue-600 dark:focus-visible:outline-blue-400"
                   >
                     {/* Left: Clean Frameless Colorized Gesit Logo & Details */}
                     <div className="flex items-center gap-3.5 min-w-0">
@@ -2347,7 +2347,7 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
                           {comp.company}
                         </h4>
                         <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                          <span className="text-[11px] text-slate-600 dark:text-slate-400">
+                          <span className="text-[11px] text-slate-600 dark:text-zinc-400">
                             {new Set(comp.employeeList.map(employee => employee.department || employee.department_name).filter(Boolean)).size} departemen tercatat
                           </span>
                         </div>
@@ -2357,7 +2357,7 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
                     {/* Right: Value & Progress Bar */}
                     <div className="text-right shrink-0">
                       <div className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">
-                        {comp.employees} <span className="text-[11px] font-normal text-slate-600 dark:text-slate-400">orang</span>
+                        {comp.employees} <span className="text-[11px] font-normal text-slate-600 dark:text-zinc-400">orang</span>
                       </div>
                       <div className="flex items-center gap-1.5 justify-end mt-1">
                         <div className="w-16 sm:w-20 h-1.5 rounded-full bg-slate-100 dark:bg-zinc-800 overflow-hidden">
@@ -2366,7 +2366,7 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
                             className={`h-full rounded-full ${comp.color.bar}`}
                           />
                         </div>
-                        <span className="text-[10px] font-medium text-slate-600 dark:text-slate-400 min-w-6 text-right">
+                        <span className="text-[10px] font-medium text-slate-600 dark:text-zinc-400 min-w-6 text-right">
                           {comp.percentage}%
                         </span>
                       </div>
@@ -2375,10 +2375,10 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
                 );
               })}
             </div>
-            {topCompanies.length === 0 && <p className="mt-4 text-sm text-slate-600 dark:text-slate-400">Belum ada penempatan karyawan sesuai filter.</p>}
-            <p className="mt-3 text-[11px] text-slate-600 dark:text-slate-400">Persentase dari seluruh karyawan aktif sesuai filter.</p>
+            {topCompanies.length === 0 && <p className="mt-4 text-sm text-slate-600 dark:text-zinc-400">Belum ada penempatan karyawan sesuai filter.</p>}
+            <p className="mt-3 text-[11px] text-slate-600 dark:text-zinc-400">Persentase dari seluruh karyawan aktif sesuai filter.</p>
           </div>
-          <a href="#ringkasan-perusahaan" className="mt-4 inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-200 px-3 text-xs font-semibold text-blue-700 dark:text-blue-400 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-zinc-900 focus-visible:outline-2 focus-visible:outline-blue-600">
+          <a href="#ringkasan-perusahaan" className="mt-4 inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-200 dark:border-zinc-700 px-3 text-xs font-semibold text-blue-700 dark:text-blue-400 hover:bg-slate-50 dark:hover:bg-[#181d2c] focus-visible:outline-2 focus-visible:outline-blue-600">
             Lihat semua perusahaan
           </a>
         </div>
@@ -2387,18 +2387,18 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
       {/* ── ROW 2: OPERATIONAL CENTER (3 COLUMNS: ABSENSI, CUTI, ACTION CENTER) ── */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {/* 1. Absensi & Kehadiran */}
-        <div className="bg-white dark:bg-[#131316] border border-slate-200/80 dark:border-[#222225] rounded-[18px] p-6 shadow-xs flex flex-col justify-between">
+        <div className="bg-white dark:bg-[#131622] border border-slate-200/80 dark:border-zinc-800/80 rounded-[18px] p-6 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex items-start justify-between mb-4">
               <div>
                 <h3 className="text-sm font-bold text-slate-900 dark:text-white">Absensi & kehadiran</h3>
-                <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
+                <p className="text-[11px] text-slate-400 dark:text-zinc-400 mt-0.5">
                   Snapshot: {snapshotDate} · Log Presensi
                 </p>
               </div>
               <button
                 onClick={() => navigate('/attendance')}
-                className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-400 transition-colors cursor-pointer"
+                className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-blue-600 dark:text-zinc-400 dark:hover:text-blue-400 transition-colors cursor-pointer"
               >
                 <span>Detail</span>
                 <ArrowRight className="h-3 w-3" />
@@ -2407,31 +2407,31 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
 
             <div className="flex items-baseline justify-between mt-2">
               <div>
-                <span className="text-[11px] text-slate-400 dark:text-slate-500 block mb-1">Tingkat kehadiran</span>
+                <span className="text-[11px] text-slate-400 dark:text-zinc-400 block mb-1">Tingkat kehadiran</span>
                 <div className="flex items-baseline gap-1">
                   <span className="text-3xl font-black text-slate-900 dark:text-white">
                     {attendanceRate}
                   </span>
-                  <span className="text-sm font-bold text-slate-500">%</span>
+                  <span className="text-sm font-bold text-slate-500 dark:text-zinc-400">%</span>
                 </div>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                <p className="text-[11px] text-slate-500 dark:text-zinc-400 mt-1">
                   {attendanceContext.error ? 'Jadwal kerja belum tersedia' : `${checkedInCount} check-in dari ${attendanceSnapshot.required} wajib hadir`}
                 </p>
               </div>
 
               <div className="text-right">
-                <span className="text-[11px] text-slate-500 dark:text-slate-400 block">Masih dalam waktu masuk</span>
-                <span className="text-lg font-bold text-slate-800 dark:text-slate-200">
+                <span className="text-[11px] text-slate-500 dark:text-zinc-400 block">Masih dalam waktu masuk</span>
+                <span className="text-lg font-bold text-slate-800 dark:text-zinc-200">
                   {attendanceContext.error ? '-' : attendanceSnapshot.upcoming.length} orang
                 </span>
-                <span className="text-[10px] text-slate-400 dark:text-slate-500 block mt-0.5">
+                <span className="text-[10px] text-slate-400 dark:text-zinc-500 block mt-0.5">
                   Berdasarkan batas masuk shift
                 </span>
               </div>
             </div>
 
             {/* Stacked Progress Bar with smooth entry animation */}
-            <div className="w-full h-3 bg-slate-100 dark:bg-[#1F1F24] rounded-full overflow-hidden flex gap-0.5 mt-6 p-0.5">
+            <div className="w-full h-3 bg-slate-100 dark:bg-zinc-800 rounded-full overflow-hidden flex gap-0.5 mt-6 p-0.5">
               <div
                 style={{ width: `${chartsReady && !attendanceContext.error && attendanceSnapshot.required > 0 ? (onTimeCount / attendanceSnapshot.required) * 100 : 0}%` }}
                 className="h-full bg-emerald-600 dark:bg-emerald-500 rounded-l-full transition-all duration-1000 ease-out"
@@ -2458,42 +2458,42 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
             <div className="grid grid-cols-2 gap-2.5 mt-4 text-[11px]">
               <div className="flex items-center gap-1.5">
                 <span className="h-2 w-2 rounded-full bg-emerald-600 dark:bg-emerald-500 shrink-0" />
-                <span className="text-slate-500 dark:text-slate-400">Tepat waktu</span>
+                <span className="text-slate-500 dark:text-zinc-400">Tepat waktu</span>
                 <strong className="font-bold text-slate-900 dark:text-white ml-auto">{onTimeCount}</strong>
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="h-2 w-2 rounded-full bg-amber-500 dark:bg-amber-400 shrink-0" />
-                <span className="text-slate-500 dark:text-slate-400">Terlambat</span>
+                <span className="text-slate-500 dark:text-zinc-400">Terlambat</span>
                 <strong className="font-bold text-slate-900 dark:text-white ml-auto">{lateCount}</strong>
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="h-2 w-2 rounded-full bg-blue-500 dark:bg-blue-400 shrink-0" />
-                <span className="text-slate-500 dark:text-slate-400">Cuti / Izin</span>
+                <span className="text-slate-500 dark:text-zinc-400">Cuti / Izin</span>
                 <strong className="font-bold text-slate-900 dark:text-white ml-auto">{leaveCount}</strong>
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="h-2 w-2 rounded-full bg-slate-400 dark:bg-slate-600 shrink-0" />
-                <span className="text-slate-500 dark:text-slate-400">Belum check-in</span>
+                <span className="text-slate-500 dark:text-zinc-400">Belum check-in</span>
                 <strong className="font-bold text-slate-900 dark:text-white ml-auto">{notCheckedInCount}</strong>
               </div>
             </div>
-            <p className="mt-3 text-[11px] text-slate-600 dark:text-slate-400">{attendanceContext.error || 'Persentase dari karyawan wajib hadir, tidak termasuk cuti dan hari libur.'}</p>
+            <p className="mt-3 text-[11px] text-slate-600 dark:text-zinc-400">{attendanceContext.error || 'Persentase dari karyawan wajib hadir, tidak termasuk cuti dan hari libur.'}</p>
           </div>
         </div>
 
         {/* 2. Cuti & Izin */}
-        <div className="bg-white dark:bg-[#131316] border border-slate-200/80 dark:border-[#222225] rounded-[18px] p-6 shadow-xs flex flex-col justify-between">
+        <div className="bg-white dark:bg-[#131622] border border-slate-200/80 dark:border-zinc-800/80 rounded-[18px] p-6 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex items-start justify-between mb-4">
               <div>
                 <h3 className="text-sm font-bold text-slate-900 dark:text-white">Cuti & izin</h3>
-                <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
+                <p className="text-[11px] text-slate-400 dark:text-zinc-400 mt-0.5">
                   Pengajuan tercatat di sistem
                 </p>
               </div>
               <button
                 onClick={() => navigate('/requests')}
-                className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-400 transition-colors cursor-pointer"
+                className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-blue-600 dark:text-zinc-400 dark:hover:text-blue-400 transition-colors cursor-pointer"
               >
                 <span>Kelola</span>
                 <ArrowRight className="h-3 w-3" />
@@ -2502,27 +2502,27 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
 
             <div className="flex items-baseline justify-between mt-2">
               <div>
-                <span className="text-[11px] text-slate-400 dark:text-slate-500 block mb-1">Pengajuan masuk</span>
+                <span className="text-[11px] text-slate-400 dark:text-zinc-400 block mb-1">Pengajuan masuk</span>
                 <div className="flex items-baseline gap-1.5">
                   <span className="text-3xl font-black text-slate-900 dark:text-white">
                     {totalLeaveRequests}
                   </span>
-                  <span className="text-xs font-medium text-slate-500">pengajuan</span>
+                  <span className="text-xs font-medium text-slate-500 dark:text-zinc-400">pengajuan</span>
                 </div>
               </div>
 
               <div className="text-right">
-                <span className="text-[11px] text-slate-400 dark:text-slate-500 block mb-1">Cuti / izin hari ini</span>
+                <span className="text-[11px] text-slate-400 dark:text-zinc-400 block mb-1">Cuti / izin hari ini</span>
                 <div className="flex items-baseline justify-end gap-1">
                   <span className="text-2xl font-black text-slate-900 dark:text-white">{leaveCount}</span>
-                  <span className="text-xs font-medium text-slate-500">orang</span>
+                  <span className="text-xs font-medium text-slate-500 dark:text-zinc-400">orang</span>
                 </div>
               </div>
             </div>
 
             {/* 3 Status Cards */}
             <div className="grid grid-cols-3 gap-2.5 mt-6">
-              <div className="p-3 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/40 text-center">
+              <div className="p-3 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-800/40 text-center">
                 <span className="text-xl font-black text-emerald-800 dark:text-emerald-300 block">
                   {approvedLeaves}
                 </span>
@@ -2530,7 +2530,7 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
                   Disetujui
                 </span>
               </div>
-              <div className="p-3 rounded-xl bg-amber-50/70 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/40 text-center">
+              <div className="p-3 rounded-xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-100 dark:border-amber-800/40 text-center">
                 <span className="text-xl font-black text-amber-800 dark:text-amber-300 block">
                   {pendingLeaves}
                 </span>
@@ -2538,7 +2538,7 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
                   Menunggu
                 </span>
               </div>
-              <div className="p-3 rounded-xl bg-rose-50/70 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-900/40 text-center">
+              <div className="p-3 rounded-xl bg-rose-50/70 dark:bg-rose-950/30 border border-rose-100 dark:border-rose-800/40 text-center">
                 <span className="text-xl font-black text-rose-800 dark:text-rose-300 block">
                   {rejectedLeaves}
                 </span>
@@ -2548,20 +2548,20 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
               </div>
             </div>
 
-            <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400 mt-4">
-              <span className="h-1.5 w-1.5 rounded-full bg-blue-600 dark:bg-blue-500" />
+            <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-zinc-400 mt-4">
+              <span className="h-1.5 w-1.5 rounded-full bg-blue-600 dark:bg-blue-400" />
               <span>Sinkronisasi otomatis dari permohonan aktif</span>
             </div>
           </div>
         </div>
 
         {/* 3. Perlu Perhatian HR (Action Center) */}
-        <div className="bg-white dark:bg-[#131316] border border-slate-200/80 dark:border-[#222225] rounded-[18px] p-6 shadow-xs flex flex-col justify-between">
+        <div className="bg-white dark:bg-[#131622] border border-slate-200/80 dark:border-zinc-800/80 rounded-[18px] p-6 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h3 className="text-sm font-bold text-slate-900 dark:text-white">Perlu perhatian HR</h3>
-                <p className="text-[11px] text-slate-400 dark:text-slate-500">Tindak lanjut & peringatan dini</p>
+                <p className="text-[11px] text-slate-400 dark:text-zinc-400">Tindak lanjut & peringatan dini</p>
               </div>
               <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-md uppercase border border-amber-200/50 dark:border-amber-900/40">
                 Action Center
@@ -2572,11 +2572,11 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
               {/* Row 1: Kontrak PKWT Berakhir */}
               <div
                 onClick={() => openDrilldown('Kontrak PKWT Berakhir ≤30 Hari', 'Tinjau Kontrak PKWT', expiringContracts)}
-                className="flex items-center justify-between p-2.5 rounded-xl hover:bg-slate-50 dark:hover:bg-[#18181b] transition-colors cursor-pointer border border-slate-100 dark:border-slate-800/60"
+                className="flex items-center justify-between p-2.5 rounded-xl hover:bg-slate-50 dark:hover:bg-[#181d2c] transition-colors cursor-pointer border border-slate-100 dark:border-zinc-800/60"
               >
                 <div>
                   <h4 className="text-xs font-bold text-slate-900 dark:text-white">Kontrak PKWT berakhir ≤30 hari</h4>
-                  <p className={`text-[10px] ${overdueDecisions.contracts.length > 0 ? 'font-semibold text-rose-600 dark:text-rose-400' : 'text-slate-400 dark:text-slate-500'}`}>
+                  <p className={`text-[10px] ${overdueDecisions.contracts.length > 0 ? 'font-semibold text-rose-600 dark:text-rose-400' : 'text-slate-400 dark:text-zinc-400'}`}>
                     {overdueDecisions.contracts.length > 0
                       ? `${overdueDecisions.contracts.length} sudah lewat tanggal berakhir`
                       : 'Tinjau perpanjangan PKWT'}
@@ -2584,33 +2584,33 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
                 </div>
                 <div className={`flex items-center gap-1.5 text-xs font-black ${overdueDecisions.contracts.length > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-amber-600 dark:text-amber-400'}`}>
                   <span className={`px-2 py-0.5 rounded-lg ${overdueDecisions.contracts.length > 0 ? 'bg-rose-50 dark:bg-rose-950/40' : 'bg-amber-50 dark:bg-amber-950/40'}`}>{expiringContracts.length}</span>
-                  <ArrowRight className="h-3 w-3 text-slate-400" />
+                  <ArrowRight className="h-3 w-3 text-slate-400 dark:text-zinc-500" />
                 </div>
               </div>
 
               {/* Row 2: Usia >= 55 Tahun */}
               <div
                 onClick={() => openDrilldown('Usia ≥55 Tahun', 'Monitoring Masa Pensiun', seniorEmployees)}
-                className="flex items-center justify-between p-2.5 rounded-xl hover:bg-slate-50 dark:hover:bg-[#18181b] transition-colors cursor-pointer border border-slate-100 dark:border-slate-800/60"
+                className="flex items-center justify-between p-2.5 rounded-xl hover:bg-slate-50 dark:hover:bg-[#181d2c] transition-colors cursor-pointer border border-slate-100 dark:border-zinc-800/60"
               >
                 <div>
                   <h4 className="text-xs font-bold text-slate-900 dark:text-white">Usia ≥55 tahun</h4>
-                  <p className="text-[10px] text-slate-400 dark:text-slate-500">Pemantauan persiapan pensiun</p>
+                  <p className="text-[10px] text-slate-400 dark:text-zinc-400">Pemantauan persiapan pensiun</p>
                 </div>
-                <div className="flex items-center gap-1.5 text-xs font-black text-slate-700 dark:text-slate-300">
-                  <span className="px-2 py-0.5 bg-slate-100 dark:bg-[#18181b] rounded-lg">{seniorEmployees.length}</span>
-                  <ArrowRight className="h-3 w-3 text-slate-400" />
+                <div className="flex items-center gap-1.5 text-xs font-black text-slate-700 dark:text-zinc-300">
+                  <span className="px-2 py-0.5 bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 rounded-lg">{seniorEmployees.length}</span>
+                  <ArrowRight className="h-3 w-3 text-slate-400 dark:text-zinc-500" />
                 </div>
               </div>
 
               {/* Row 3: Masa Probation Berakhir */}
               <div
                 onClick={() => openDrilldown('Probation Berakhir ≤30 Hari', 'Evaluasi Masa Percobaan', expiringProbations.length > 0 ? expiringProbations : probationEmployees)}
-                className="flex items-center justify-between p-2.5 rounded-xl hover:bg-slate-50 dark:hover:bg-[#18181b] transition-colors cursor-pointer border border-slate-100 dark:border-slate-800/60"
+                className="flex items-center justify-between p-2.5 rounded-xl hover:bg-slate-50 dark:hover:bg-[#181d2c] transition-colors cursor-pointer border border-slate-100 dark:border-zinc-800/60"
               >
                 <div>
                   <h4 className="text-xs font-bold text-slate-900 dark:text-white">Probation berakhir ≤30 hari</h4>
-                  <p className={`text-[10px] ${overdueDecisions.probations.length > 0 ? 'font-semibold text-rose-600 dark:text-rose-400' : 'text-slate-400 dark:text-slate-500'}`}>
+                  <p className={`text-[10px] ${overdueDecisions.probations.length > 0 ? 'font-semibold text-rose-600 dark:text-rose-400' : 'text-slate-400 dark:text-zinc-400'}`}>
                     {overdueDecisions.probations.length > 0
                       ? `${overdueDecisions.probations.length} sudah lewat tanggal berakhir`
                       : expiringProbations.length > 0
@@ -2620,22 +2620,22 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
                 </div>
                 <div className={`flex items-center gap-1.5 text-xs font-black ${overdueDecisions.probations.length > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-amber-600 dark:text-amber-400'}`}>
                   <span className={`px-2 py-0.5 rounded-lg ${overdueDecisions.probations.length > 0 ? 'bg-rose-50 dark:bg-rose-950/40' : 'bg-amber-50 dark:bg-amber-950/40'}`}>{expiringProbations.length}</span>
-                  <ArrowRight className="h-3 w-3 text-slate-400" />
+                  <ArrowRight className="h-3 w-3 text-slate-400 dark:text-zinc-500" />
                 </div>
               </div>
 
               {/* Row 4: Data Pendidikan Belum Lengkap */}
               <div
                 onClick={() => openDrilldown('Data Pendidikan Belum Lengkap', 'Kelengkapan Profil', incompleteEducationEmployees)}
-                className="flex items-center justify-between p-2.5 rounded-xl hover:bg-slate-50 dark:hover:bg-[#18181b] transition-colors cursor-pointer border border-slate-100 dark:border-slate-800/60"
+                className="flex items-center justify-between p-2.5 rounded-xl hover:bg-slate-50 dark:hover:bg-[#181d2c] transition-colors cursor-pointer border border-slate-100 dark:border-zinc-800/60"
               >
                 <div>
                   <h4 className="text-xs font-bold text-slate-900 dark:text-white">Data profil belum lengkap</h4>
-                  <p className="text-[10px] text-slate-400 dark:text-slate-500">Lengkapi data SDM</p>
+                  <p className="text-[10px] text-slate-400 dark:text-zinc-400">Lengkapi data SDM</p>
                 </div>
-                <div className="flex items-center gap-1.5 text-xs font-black text-slate-700 dark:text-slate-300">
-                  <span className="px-2 py-0.5 bg-slate-100 dark:bg-[#18181b] rounded-lg">{incompleteEducationEmployees.length}</span>
-                  <ArrowRight className="h-3 w-3 text-slate-400" />
+                <div className="flex items-center gap-1.5 text-xs font-black text-slate-700 dark:text-zinc-300">
+                  <span className="px-2 py-0.5 bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 rounded-lg">{incompleteEducationEmployees.length}</span>
+                  <ArrowRight className="h-3 w-3 text-slate-400 dark:text-zinc-500" />
                 </div>
               </div>
             </div>
@@ -2646,14 +2646,14 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
       {/* ── ROW 3: PROFIL DEMOGRAFI KARYAWAN (3 KOLOM SEIMBANG) ── */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {/* 1. Distribusi Usia */}
-        <div className="bg-white dark:bg-[#131316] border border-slate-200/80 dark:border-[#222225] rounded-[18px] p-5 shadow-xs flex flex-col justify-between">
+        <div className="bg-white dark:bg-[#131622] border border-slate-200/80 dark:border-zinc-800/80 rounded-[18px] p-5 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h3 className="text-sm font-bold text-slate-900 dark:text-white">Distribusi usia</h3>
-                <p className="text-[11px] text-slate-400 dark:text-slate-500">Profil usia karyawan aktif</p>
+                <p className="text-[11px] text-slate-400 dark:text-zinc-400">Profil usia karyawan aktif</p>
               </div>
-              <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-[#18181b] px-2 py-0.5 rounded-md">
+              <span className="text-[11px] font-semibold text-slate-500 dark:text-zinc-400 bg-slate-100 dark:bg-zinc-800 px-2 py-0.5 rounded-md">
                 {totalHeadcount} orang
               </span>
             </div>
@@ -2666,16 +2666,16 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
                   aria-label={`Lihat karyawan usia ${item.label}: ${item.count} orang`}
                   aria-haspopup="dialog"
                   onClick={() => openDrilldown(item.label, 'Usia', item.employees)}
-                  className="block w-full min-h-11 rounded-lg px-2 py-2 text-left hover:bg-slate-50 dark:hover:bg-[#18181b] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 dark:focus-visible:outline-blue-400 transition-colors cursor-pointer"
+                  className="block w-full min-h-11 rounded-lg px-2 py-2 text-left hover:bg-slate-50 dark:hover:bg-[#181d2c] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 dark:focus-visible:outline-blue-400 transition-colors cursor-pointer"
                 >
                   <span className="flex justify-between text-xs font-medium mb-1">
-                    <span className="text-slate-600 dark:text-slate-300">{item.label}</span>
+                    <span className="text-slate-600 dark:text-zinc-300">{item.label}</span>
                     <span className="text-slate-900 dark:text-white font-bold">
                       {item.count}{' '}
-                      <span className="text-[10px] text-slate-500 dark:text-slate-400 font-normal">({item.percentage}%)</span>
+                      <span className="text-[10px] text-slate-500 dark:text-zinc-400 font-normal">({item.percentage}%)</span>
                     </span>
                   </span>
-                  <span className="block w-full h-2 bg-slate-100 dark:bg-[#1F1F24] rounded-full overflow-hidden">
+                  <span className="block w-full h-2 bg-slate-100 dark:bg-zinc-800 rounded-full overflow-hidden">
                     <span
                       style={{ width: `${chartsReady ? item.percentage : 0}%` }}
                       className={`block h-full rounded-full transition-all duration-1000 ease-out motion-reduce:transition-none ${
@@ -2688,20 +2688,20 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
             </div>
           </div>
 
-          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-5 pt-3 border-t border-slate-100 dark:border-slate-800/80">
+          <p className="text-[11px] text-slate-500 dark:text-zinc-400 mt-5 pt-3 border-t border-slate-100 dark:border-zinc-800">
             Klik kelompok untuk melihat karyawan
           </p>
         </div>
 
         {/* 2. Pendidikan Terakhir */}
-        <div className="bg-white dark:bg-[#131316] border border-slate-200/80 dark:border-[#222225] rounded-[18px] p-5 shadow-xs flex flex-col justify-between">
+        <div className="bg-white dark:bg-[#131622] border border-slate-200/80 dark:border-zinc-800/80 rounded-[18px] p-5 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h3 className="text-sm font-bold text-slate-900 dark:text-white">Pendidikan terakhir</h3>
-                <p className="text-[11px] text-slate-400 dark:text-slate-500">Jenjang pendidikan tercatat</p>
+                <p className="text-[11px] text-slate-400 dark:text-zinc-400">Jenjang pendidikan tercatat</p>
               </div>
-              <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-[#18181b] px-2 py-0.5 rounded-md">
+              <span className="text-[11px] font-semibold text-slate-500 dark:text-zinc-400 bg-slate-100 dark:bg-zinc-800 px-2 py-0.5 rounded-md">
                 {totalHeadcount} orang
               </span>
             </div>
@@ -2714,16 +2714,16 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
                   aria-label={`Lihat karyawan pendidikan ${item.label}: ${item.count} orang`}
                   aria-haspopup="dialog"
                   onClick={() => openDrilldown(item.label, 'Pendidikan terakhir', item.employees)}
-                  className="block w-full min-h-11 rounded-lg px-2 py-2 text-left hover:bg-slate-50 dark:hover:bg-[#18181b] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 dark:focus-visible:outline-blue-400 transition-colors cursor-pointer"
+                  className="block w-full min-h-11 rounded-lg px-2 py-2 text-left hover:bg-slate-50 dark:hover:bg-[#181d2c] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 dark:focus-visible:outline-blue-400 transition-colors cursor-pointer"
                 >
                   <span className="flex justify-between text-xs font-medium mb-1">
-                    <span className="text-slate-600 dark:text-slate-300">{item.label}</span>
+                    <span className="text-slate-600 dark:text-zinc-300">{item.label}</span>
                     <span className="text-slate-900 dark:text-white font-bold">
                       {item.count}{' '}
-                      <span className="text-[10px] text-slate-500 dark:text-slate-400 font-normal">({item.percentage}%)</span>
+                      <span className="text-[10px] text-slate-500 dark:text-zinc-400 font-normal">({item.percentage}%)</span>
                     </span>
                   </span>
-                  <span className="block w-full h-2 bg-slate-100 dark:bg-[#1F1F24] rounded-full overflow-hidden">
+                  <span className="block w-full h-2 bg-slate-100 dark:bg-zinc-800 rounded-full overflow-hidden">
                     <span
                       style={{ width: `${chartsReady ? item.percentage : 0}%` }}
                       className={`block h-full rounded-full transition-all duration-1000 ease-out motion-reduce:transition-none ${
@@ -2736,20 +2736,20 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
             </div>
           </div>
 
-          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-5 pt-3 border-t border-slate-100 dark:border-slate-800/80">
+          <p className="text-[11px] text-slate-500 dark:text-zinc-400 mt-5 pt-3 border-t border-slate-100 dark:border-zinc-800">
             Klik kelompok untuk melihat karyawan
           </p>
         </div>
 
         {/* 3. Masa Kerja */}
-        <div className="bg-white dark:bg-[#131316] border border-slate-200/80 dark:border-[#222225] rounded-[18px] p-5 shadow-xs flex flex-col justify-between">
+        <div className="bg-white dark:bg-[#131622] border border-slate-200/80 dark:border-zinc-800/80 rounded-[18px] p-5 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h3 className="text-sm font-bold text-slate-900 dark:text-white">Masa kerja</h3>
-                <p className="text-[11px] text-slate-400 dark:text-slate-500">Durasi sejak tanggal bergabung</p>
+                <p className="text-[11px] text-slate-400 dark:text-zinc-400">Durasi sejak tanggal bergabung</p>
               </div>
-              <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-[#18181b] px-2 py-0.5 rounded-md">
+              <span className="text-[11px] font-semibold text-slate-500 dark:text-zinc-400 bg-slate-100 dark:bg-zinc-800 px-2 py-0.5 rounded-md">
                 {totalHeadcount} orang
               </span>
             </div>
@@ -2762,16 +2762,16 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
                   aria-label={`Lihat karyawan masa kerja ${item.label}: ${item.count} orang`}
                   aria-haspopup="dialog"
                   onClick={() => openDrilldown(item.label, 'Masa kerja', item.employees)}
-                  className="block w-full min-h-11 rounded-lg px-2 py-2 text-left hover:bg-slate-50 dark:hover:bg-[#18181b] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 dark:focus-visible:outline-blue-400 transition-colors cursor-pointer"
+                  className="block w-full min-h-11 rounded-lg px-2 py-2 text-left hover:bg-slate-50 dark:hover:bg-[#181d2c] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 dark:focus-visible:outline-blue-400 transition-colors cursor-pointer"
                 >
                   <span className="flex justify-between text-xs font-medium mb-1">
-                    <span className="text-slate-600 dark:text-slate-300">{item.label}</span>
+                    <span className="text-slate-600 dark:text-zinc-300">{item.label}</span>
                     <span className="text-slate-900 dark:text-white font-bold">
                       {item.count}{' '}
-                      <span className="text-[10px] text-slate-500 dark:text-slate-400 font-normal">({item.percentage}%)</span>
+                      <span className="text-[10px] text-slate-500 dark:text-zinc-400 font-normal">({item.percentage}%)</span>
                     </span>
                   </span>
-                  <span className="block w-full h-2 bg-slate-100 dark:bg-[#1F1F24] rounded-full overflow-hidden">
+                  <span className="block w-full h-2 bg-slate-100 dark:bg-zinc-800 rounded-full overflow-hidden">
                     <span
                       style={{ width: `${chartsReady ? item.percentage : 0}%` }}
                       className={`block h-full rounded-full transition-all duration-1000 ease-out motion-reduce:transition-none ${
@@ -2784,7 +2784,7 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
             </div>
           </div>
 
-          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-5 pt-3 border-t border-slate-100 dark:border-slate-800/80">
+          <p className="text-[11px] text-slate-500 dark:text-zinc-400 mt-5 pt-3 border-t border-slate-100 dark:border-zinc-800">
             Klik kelompok untuk melihat karyawan
           </p>
         </div>
@@ -2793,14 +2793,14 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
       {/* ── ROW 4: STRUKTUR ORGANISASI & KOMPOSISI SDM (4 KOLOM: 2 COL DEPARTEMEN + 1 COL STATUS + 1 COL GENDER) ── */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* 1. Sebaran Departemen (Mengambil 2 Kolom dengan sub-grid 2 kolom sehingga padat dan seimbang) */}
-        <div className="lg:col-span-2 bg-white dark:bg-[#131316] border border-slate-200/80 dark:border-[#222225] rounded-[18px] p-5 shadow-xs flex flex-col justify-between">
+        <div className="lg:col-span-2 bg-white dark:bg-[#131622] border border-slate-200/80 dark:border-zinc-800/80 rounded-[18px] p-5 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h3 className="text-sm font-bold text-slate-900 dark:text-white">Sebaran departemen</h3>
-                <p className="text-[11px] text-slate-400 dark:text-slate-500">Distribusi karyawan pada tiap unit fungsi</p>
+                <p className="text-[11px] text-slate-400 dark:text-zinc-400">Distribusi karyawan pada tiap unit fungsi</p>
               </div>
-              <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-[#18181b] px-2 py-0.5 rounded-md">
+              <span className="text-[11px] font-semibold text-slate-500 dark:text-zinc-400 bg-slate-100 dark:bg-zinc-800 px-2 py-0.5 rounded-md">
                 {totalHeadcount} orang · {departmentDistribution.length} divisi
               </span>
             </div>
@@ -2814,18 +2814,18 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
                   aria-label={`Lihat karyawan departemen ${item.label}: ${item.count} orang`}
                   aria-haspopup="dialog"
                   onClick={() => openDrilldown(item.label, 'Departemen', item.employees)}
-                  className="min-w-0 min-h-11 px-2 py-2 rounded-lg flex flex-col justify-center text-left hover:bg-slate-50 dark:hover:bg-[#18181b] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 dark:focus-visible:outline-blue-400 transition-colors cursor-pointer"
+                  className="min-w-0 min-h-11 px-2 py-2 rounded-lg flex flex-col justify-center text-left hover:bg-slate-50 dark:hover:bg-[#181d2c] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 dark:focus-visible:outline-blue-400 transition-colors cursor-pointer"
                 >
                   <span className="flex justify-between text-xs font-medium mb-1 w-full">
-                    <span className="text-slate-600 dark:text-slate-300 truncate pr-1" title={item.label}>
+                    <span className="text-slate-600 dark:text-zinc-300 truncate pr-1" title={item.label}>
                       {item.label}
                     </span>
                     <span className="text-slate-900 dark:text-white font-bold shrink-0">
                       {item.count}{' '}
-                      <span className="text-[10px] text-slate-500 dark:text-slate-400 font-normal">({item.percentage}%)</span>
+                      <span className="text-[10px] text-slate-500 dark:text-zinc-400 font-normal">({item.percentage}%)</span>
                     </span>
                   </span>
-                  <span className="block w-full h-1.5 bg-slate-100 dark:bg-[#1F1F24] rounded-full overflow-hidden">
+                  <span className="block w-full h-1.5 bg-slate-100 dark:bg-zinc-800 rounded-full overflow-hidden">
                     <span
                       style={{ width: `${chartsReady ? item.percentage : 0}%` }}
                       className={`block h-full rounded-full transition-all duration-1000 ease-out motion-reduce:transition-none ${
@@ -2837,22 +2837,22 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
               ))}
             </div>
             {departmentDistribution.length === 0 && (
-              <p className="py-4 text-xs text-slate-600 dark:text-slate-400">Belum ada karyawan sesuai filter terpilih.</p>
+              <p className="py-4 text-xs text-slate-600 dark:text-zinc-400">Belum ada karyawan sesuai filter terpilih.</p>
             )}
           </div>
 
-          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-5 pt-3 border-t border-slate-100 dark:border-slate-800/80">
+          <p className="text-[11px] text-slate-500 dark:text-zinc-400 mt-5 pt-3 border-t border-slate-100 dark:border-zinc-800">
             Klik kelompok untuk melihat karyawan
           </p>
         </div>
 
         {/* 2. Status Kepegawaian (1 Kolom: Donut Chart Centered & Legend Proporsional) */}
-        <div className="lg:col-span-1 bg-white dark:bg-[#131316] border border-slate-200/80 dark:border-[#222225] rounded-[18px] p-5 shadow-xs flex flex-col justify-between">
+        <div className="lg:col-span-1 bg-white dark:bg-[#131622] border border-slate-200/80 dark:border-zinc-800/80 rounded-[18px] p-5 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-3">
               <div>
                 <h3 className="text-sm font-bold text-slate-900 dark:text-white">Status kepegawaian</h3>
-                <p className="text-[11px] text-slate-400 dark:text-slate-500">Hubungan kerja</p>
+                <p className="text-[11px] text-slate-400 dark:text-zinc-400">Hubungan kerja</p>
               </div>
             </div>
 
@@ -2860,7 +2860,7 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
             <div className="flex justify-center my-2">
               <div className="relative w-28 h-28 flex items-center justify-center shrink-0">
                 <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
-                  <circle cx="50" cy="50" r="38" fill="transparent" stroke="currentColor" className="text-slate-100 dark:text-[#222225]" strokeWidth="14" />
+                  <circle cx="50" cy="50" r="38" fill="transparent" stroke="currentColor" className="text-slate-100 dark:text-zinc-800" strokeWidth="14" />
                   {/* Permanent */}
                   <circle
                     cx="50"
@@ -2916,7 +2916,7 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
                   <span className="text-lg font-black text-slate-900 dark:text-white block leading-none">
                     {totalHeadcount}
                   </span>
-                  <span className="text-[8px] text-slate-400 dark:text-slate-500 block mt-0.5">Aktif</span>
+                  <span className="text-[8px] text-slate-400 dark:text-zinc-500 block mt-0.5">Aktif</span>
                 </div>
               </div>
             </div>
@@ -2935,15 +2935,15 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
                   aria-label={`Lihat karyawan status ${item.label}: ${statusEmployees[item.label].length} orang`}
                   aria-haspopup="dialog"
                   onClick={() => openDrilldown(item.label, 'Status kepegawaian', statusEmployees[item.label])}
-                  className="flex w-full min-h-11 items-center justify-between gap-2 rounded-lg px-2 py-2 text-left border-b border-slate-50 dark:border-slate-800/40 hover:bg-slate-50 dark:hover:bg-[#18181b] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 dark:focus-visible:outline-blue-400 transition-colors cursor-pointer"
+                  className="flex w-full min-h-11 items-center justify-between gap-2 rounded-lg px-2 py-2 text-left border-b border-slate-50 dark:border-zinc-800/60 hover:bg-slate-50 dark:hover:bg-[#181d2c] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 dark:focus-visible:outline-blue-400 transition-colors cursor-pointer"
                 >
                   <span className="flex items-center gap-2">
                     <span className={`h-2 w-2 rounded-full shrink-0 ${item.color}`} />
-                    <span className="text-slate-600 dark:text-slate-300">{item.label}</span>
+                    <span className="text-slate-600 dark:text-zinc-300">{item.label}</span>
                   </span>
                   <span className="flex items-center gap-1.5">
                     <strong className="font-bold text-slate-900 dark:text-white">{statusEmployees[item.label].length}</strong>
-                    <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                    <span className="text-[10px] text-slate-500 dark:text-zinc-400">
                       ({totalHeadcount > 0 ? ((statusEmployees[item.label].length / totalHeadcount) * 100).toFixed(1) : 0}%)
                     </span>
                   </span>
@@ -2952,18 +2952,18 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
             </div>
           </div>
 
-          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-5 pt-3 border-t border-slate-100 dark:border-slate-800/80">
+          <p className="text-[11px] text-slate-500 dark:text-zinc-400 mt-5 pt-3 border-t border-slate-100 dark:border-zinc-800">
             Klik kelompok untuk melihat karyawan
           </p>
         </div>
 
         {/* 3. Komposisi Gender (1 Kolom: Donut Chart Centered & Legend Proporsional) */}
-        <div className="lg:col-span-1 bg-white dark:bg-[#131316] border border-slate-200/80 dark:border-[#222225] rounded-[18px] p-5 shadow-xs flex flex-col justify-between">
+        <div className="lg:col-span-1 bg-white dark:bg-[#131622] border border-slate-200/80 dark:border-zinc-800/80 rounded-[18px] p-5 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-3">
               <div>
                 <h3 className="text-sm font-bold text-slate-900 dark:text-white">Komposisi gender</h3>
-                <p className="text-[11px] text-slate-400 dark:text-slate-500">Gender database</p>
+                <p className="text-[11px] text-slate-400 dark:text-zinc-400">Gender database</p>
               </div>
             </div>
 
@@ -2971,7 +2971,7 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
             <div className="flex justify-center my-2">
               <div className="relative w-28 h-28 flex items-center justify-center shrink-0">
                 <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
-                  <circle cx="50" cy="50" r="38" fill="transparent" stroke="currentColor" className="text-slate-100 dark:text-[#222225]" strokeWidth="14" />
+                  <circle cx="50" cy="50" r="38" fill="transparent" stroke="currentColor" className="text-slate-100 dark:text-zinc-800" strokeWidth="14" />
                   {/* Laki-laki */}
                   <circle
                     cx="50"
@@ -3002,7 +3002,7 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
                   <span className="text-lg font-black text-slate-900 dark:text-white block leading-none">
                     {totalHeadcount}
                   </span>
-                  <span className="text-[8px] text-slate-400 dark:text-slate-500 block mt-0.5">Aktif</span>
+                  <span className="text-[8px] text-slate-400 dark:text-zinc-500 block mt-0.5">Aktif</span>
                 </div>
               </div>
             </div>
@@ -3020,15 +3020,15 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
                   aria-label={`Lihat karyawan gender ${item.label}: ${genderEmployees[item.label].length} orang`}
                   aria-haspopup="dialog"
                   onClick={() => openDrilldown(item.label, 'Gender', genderEmployees[item.label])}
-                  className="flex w-full min-h-11 items-center justify-between gap-2 rounded-lg px-2 py-2 text-left border-b border-slate-50 dark:border-slate-800/40 hover:bg-slate-50 dark:hover:bg-[#18181b] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 dark:focus-visible:outline-blue-400 transition-colors cursor-pointer"
+                  className="flex w-full min-h-11 items-center justify-between gap-2 rounded-lg px-2 py-2 text-left border-b border-slate-50 dark:border-zinc-800/60 hover:bg-slate-50 dark:hover:bg-[#181d2c] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 dark:focus-visible:outline-blue-400 transition-colors cursor-pointer"
                 >
                   <span className="flex items-center gap-2">
                     <span className={`h-2 w-2 rounded-full shrink-0 ${item.color}`} />
-                    <span className="text-slate-600 dark:text-slate-300">{item.label}</span>
+                    <span className="text-slate-600 dark:text-zinc-300">{item.label}</span>
                   </span>
                   <span className="flex items-center gap-1.5">
                     <strong className="font-bold text-slate-900 dark:text-white">{genderEmployees[item.label].length}</strong>
-                    <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                    <span className="text-[10px] text-slate-500 dark:text-zinc-400">
                       ({totalHeadcount > 0 ? ((genderEmployees[item.label].length / totalHeadcount) * 100).toFixed(1) : 0}%)
                     </span>
                   </span>
@@ -3037,20 +3037,20 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
             </div>
           </div>
 
-          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-5 pt-3 border-t border-slate-100 dark:border-slate-800/80">
+          <p className="text-[11px] text-slate-500 dark:text-zinc-400 mt-5 pt-3 border-t border-slate-100 dark:border-zinc-800">
             Klik kelompok untuk melihat karyawan
           </p>
         </div>
       </div>
 
       {/* ── ROW 5: RINGKASAN PER PERUSAHAAN (TABLE) ── */}
-      <div id="ringkasan-perusahaan" className="scroll-mt-4 bg-white dark:bg-[#131316] border border-slate-200/80 dark:border-[#222225] rounded-[18px] p-6 shadow-xs">
+      <div id="ringkasan-perusahaan" className="scroll-mt-4 bg-white dark:bg-[#131622] border border-slate-200/80 dark:border-zinc-800/80 rounded-[18px] p-6 shadow-xs">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="text-sm font-bold text-slate-900 dark:text-white">Ringkasan per perusahaan</h3>
-            <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">Karyawan aktif, demografi, dan status kerja dari database</p>
+            <p className="text-[11px] text-slate-400 dark:text-zinc-400 mt-0.5">Karyawan aktif, demografi, dan status kerja dari database</p>
           </div>
-          <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-[#18181b] px-2.5 py-1 rounded-md">
+          <span className="text-xs font-semibold text-slate-500 dark:text-zinc-400 bg-slate-100 dark:bg-zinc-800 px-2.5 py-1 rounded-md">
             {snapshotDate}
           </span>
         </div>
@@ -3058,7 +3058,7 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
         <div className="overflow-x-auto mt-4">
           <table className="w-full text-left text-xs">
             <thead>
-              <tr className="border-b border-slate-100 dark:border-slate-800 text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500 tracking-wider">
+              <tr className="border-b border-slate-100 dark:border-zinc-800 text-[10px] uppercase font-bold text-slate-400 dark:text-zinc-500 tracking-wider">
                 <th className="py-3 px-3">PERUSAHAAN</th>
                 <th className="py-3 px-3">KARYAWAN</th>
                 <th className="py-3 px-3">RATA-RATA USIA</th>
@@ -3067,28 +3067,28 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
                 <th className="py-3 px-3 text-right">KONTRAK ≤30 HARI</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-medium">
+            <tbody className="divide-y divide-slate-100 dark:divide-zinc-800/60 font-medium">
               {companySummaryRows.map(row => (
-                <tr key={row.company} className="hover:bg-slate-50/80 dark:hover:bg-[#18181b]/60 transition-colors">
+                <tr key={row.company} className="hover:bg-slate-50/80 dark:hover:bg-[#181d2c]/60 transition-colors">
                   <td className="py-3.5 px-3 font-bold text-slate-900 dark:text-white">
                     {row.company}
                   </td>
-                  <td className="py-3.5 px-3 font-bold text-slate-800 dark:text-slate-200">
+                  <td className="py-3.5 px-3 font-bold text-slate-800 dark:text-zinc-200">
                     {row.employees}
                   </td>
-                  <td className="py-3.5 px-3 text-slate-600 dark:text-slate-400">
+                  <td className="py-3.5 px-3 text-slate-600 dark:text-zinc-400">
                     {row.avgAge}
                   </td>
-                  <td className="py-3.5 px-3 text-slate-600 dark:text-slate-400">
+                  <td className="py-3.5 px-3 text-slate-600 dark:text-zinc-400">
                     {row.tenure}
                   </td>
-                  <td className="py-3.5 px-3 text-slate-600 dark:text-slate-400">
+                  <td className="py-3.5 px-3 text-slate-600 dark:text-zinc-400">
                     {row.breakdown}
                   </td>
                   <td className="py-3.5 px-3 text-right">
                     <button
                       onClick={() => openDrilldown(row.company, 'Perusahaan', row.employeeList)}
-                      className="inline-flex items-center gap-1 text-xs font-semibold text-slate-600 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-400 cursor-pointer"
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-slate-600 hover:text-blue-600 dark:text-zinc-400 dark:hover:text-blue-400 cursor-pointer"
                     >
                       <span>{row.expiringContract}</span>
                       <ArrowRight className="h-3 w-3" />
@@ -3106,41 +3106,41 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
           <DialogContent
             showCloseButton={false}
             finalFocus={drilldownTriggerRef}
-            className="sm:max-w-xl bg-white dark:bg-[#131316] border-slate-200 dark:border-[#27272a] flex flex-col max-h-[85dvh]"
+            className="sm:max-w-xl bg-white dark:bg-[#131622] border-slate-200 dark:border-zinc-800 flex flex-col max-h-[85dvh]"
           >
-            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800/80 bg-slate-50/70 dark:bg-[#18181b]/50">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-zinc-800 bg-slate-50/70 dark:bg-[#181d2c]/70">
               <div>
                 <DialogTitle className="text-sm font-bold text-slate-900 dark:text-white">{drilldownModal.title}</DialogTitle>
-                <DialogDescription className="text-[11px] text-slate-600 dark:text-slate-400">{drilldownModal.subtitle}</DialogDescription>
+                <DialogDescription className="text-[11px] text-slate-600 dark:text-zinc-400">{drilldownModal.subtitle}</DialogDescription>
               </div>
               <button
                 type="button"
                 aria-label="Tutup daftar karyawan"
                 onClick={() => setDrilldownModal(prev => ({ ...prev, open: false }))}
-                className="min-h-11 min-w-11 shrink-0 flex items-center justify-center rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 focus-visible:outline-2 focus-visible:outline-blue-600 transition-colors cursor-pointer"
+                className="min-h-11 min-w-11 shrink-0 flex items-center justify-center rounded-lg text-slate-500 dark:text-zinc-400 hover:text-slate-600 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800 focus-visible:outline-2 focus-visible:outline-blue-600 transition-colors cursor-pointer"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
             {/* Modal Internal Search Bar */}
-            <div className="px-4 pt-3 pb-1 border-b border-slate-100 dark:border-slate-800/60 bg-white dark:bg-[#131316]">
+            <div className="px-4 pt-3 pb-1 border-b border-slate-100 dark:border-zinc-800 bg-white dark:bg-[#131622]">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 dark:text-zinc-500" />
                 <input
                   type="text"
                   aria-label="Cari karyawan dalam kelompok"
                   placeholder="Cari nama karyawan, NIK, jabatan, atau perusahaan..."
                   value={drilldownSearch}
                   onChange={e => setDrilldownSearch(e.target.value)}
-                  className="w-full min-h-11 rounded-xl border border-slate-200 dark:border-[#27272a] bg-slate-50 dark:bg-[#18181b] pl-9 pr-3.5 py-1.5 text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-500 dark:placeholder:text-slate-400 focus-visible:outline-2 focus-visible:outline-blue-600 dark:focus-visible:outline-blue-400"
+                  className="w-full min-h-11 rounded-xl border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-[#181d2c] pl-9 pr-3.5 py-1.5 text-xs text-slate-800 dark:text-zinc-200 placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus-visible:outline-2 focus-visible:outline-blue-600 dark:focus-visible:outline-blue-400"
                 />
               </div>
             </div>
 
-            <div className="min-h-0 p-4 overflow-y-auto space-y-2.5 divide-y divide-slate-100 dark:divide-slate-800/60">
+            <div className="min-h-0 p-4 overflow-y-auto space-y-2.5 divide-y divide-slate-100 dark:divide-zinc-800/60">
               {modalEmployeesFiltered.length === 0 ? (
-                <div className="text-center py-8 text-xs text-slate-600 dark:text-slate-400">
+                <div className="text-center py-8 text-xs text-slate-600 dark:text-zinc-400">
                   {drilldownModal.employees.length === 0
                     ? 'Belum ada karyawan dalam kelompok ini.'
                     : 'Tidak ada karyawan yang sesuai kriteria pencarian ini.'}
@@ -3154,12 +3154,12 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
                         <h4 className="text-xs font-bold text-slate-900 dark:text-white">
                           {emp.full_name || emp.name}
                         </h4>
-                        <p className="text-[10px] text-slate-600 dark:text-slate-400">
+                        <p className="text-[10px] text-slate-600 dark:text-zinc-400">
                           {emp.employee_code || emp.nik || 'EMP'} · {emp.job_title || emp.position || 'Staff'} ·{' '}
                           {emp.company || emp.company_name || 'Perusahaan belum tercatat'} ({emp.department || emp.department_name || 'Departemen belum tercatat'})
                         </p>
                         {drilldownModal.dateField && (
-                          <p className="mt-1 text-[11px] text-slate-700 dark:text-slate-300">
+                          <p className="mt-1 text-[11px] text-slate-700 dark:text-zinc-300">
                             {{ date_of_birth: 'Tanggal lahir', join_date: 'Tanggal masuk', separation_date: 'Tanggal keluar', contract_end_date: 'Kontrak berakhir' }[drilldownModal.dateField]}:{' '}
                             {new Date(emp[drilldownModal.dateField]).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
                             {drilldownModal.dateField === 'date_of_birth' && ` (${calculateAge(emp.date_of_birth)} tahun)`}
@@ -3182,13 +3182,13 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
               )}
             </div>
 
-            <div className="p-3.5 shrink-0 border-t border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-[#18181b]/50 flex items-center justify-between gap-3">
-              <span className="text-[10px] text-slate-600 dark:text-slate-400" aria-live="polite">
+            <div className="p-3.5 shrink-0 border-t border-slate-100 dark:border-zinc-800 bg-slate-50/50 dark:bg-[#181d2c]/50 flex items-center justify-between gap-3">
+              <span className="text-[10px] text-slate-600 dark:text-zinc-400" aria-live="polite">
                 Menampilkan {modalEmployeesFiltered.length} dari {drilldownModal.employees.length} karyawan
               </span>
               <button
                 onClick={() => setDrilldownModal(prev => ({ ...prev, open: false }))}
-                className="min-h-11 px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-semibold hover:bg-slate-200 dark:hover:bg-slate-700 focus-visible:outline-2 focus-visible:outline-blue-600 transition-colors cursor-pointer"
+                className="min-h-11 px-4 py-2 rounded-xl bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 text-xs font-semibold hover:bg-slate-200 dark:hover:bg-zinc-700 focus-visible:outline-2 focus-visible:outline-blue-600 transition-colors cursor-pointer"
               >
                 Tutup
               </button>

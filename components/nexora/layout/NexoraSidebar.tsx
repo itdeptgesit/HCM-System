@@ -301,7 +301,31 @@ export function NexoraSidebar({
                 </Tooltip>
               )}
 
-              {/* 7. Administrasi */}
+              {/* 7. HR Documents / Files */}
+              {isHR && (
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <button
+                        onClick={() => navigate('/files')}
+                        aria-label="Dokumen HR"
+                        className={`relative flex size-8 items-center justify-center rounded-full transition-all duration-200 cursor-pointer ${
+                          isSectionActive('/files')
+                            ? 'bg-white text-neutral-950 shadow-[0_2px_8px_rgba(0,0,0,0.08)] ring-1 ring-black/5 font-bold scale-110 dark:bg-zinc-800 dark:text-white dark:ring-white/10'
+                            : 'text-neutral-600 hover:bg-black/5 hover:text-neutral-900 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-white'
+                        }`}
+                      >
+                        <Folder className="size-4 stroke-[1.75]" />
+                      </button>
+                    }
+                  />
+                  <TooltipContent side="right" sideOffset={14} className="text-xs">
+                    {t.nav.files}
+                  </TooltipContent>
+                </Tooltip>
+              )}
+
+              {/* 8. Administrasi */}
               {isHR && (
                 <Tooltip>
                   <TooltipTrigger
@@ -573,7 +597,22 @@ export function NexoraSidebar({
             </button>
           )}
 
-          {/* 7. EXPANDABLE GROUP: Administrasi & Master */}
+          {/* 7. Dokumen HR / Files */}
+          {isHR && (
+            <button
+              onClick={() => navigate('/files')}
+              className={`flex w-full items-center gap-3 px-3.5 py-2.5 rounded-full text-[13.5px] font-medium transition-all duration-150 cursor-pointer ${
+                isSectionActive('/files')
+                  ? 'bg-white text-neutral-900 shadow-[0_2px_10px_rgba(0,0,0,0.06)] ring-1 ring-black/5 font-semibold dark:bg-zinc-800 dark:text-white'
+                  : 'text-neutral-700 hover:bg-neutral-200/60 hover:text-neutral-950 dark:text-zinc-300 dark:hover:bg-zinc-800/60 dark:hover:text-white'
+              }`}
+            >
+              <Folder className="size-4 stroke-[1.75] shrink-0" />
+              <span className="truncate">{t.nav.files}</span>
+            </button>
+          )}
+
+          {/* 8. EXPANDABLE GROUP: Administrasi & Master */}
           {isHR && (
             <div className="pt-0.5">
               <button

@@ -86,6 +86,7 @@ export interface Translations {
     requestsAndApprovals: string;
     disciplinary: string;
     news: string;
+    files: string;
     administration: string;
     adminCompany: string;
     adminDepartment: string;
@@ -182,6 +183,7 @@ export const translations: Record<Language, Translations> = {
       requestsAndApprovals: 'Requests',
       disciplinary: 'Disciplinary',
       news: 'News',
+      files: 'HR Documents',
       administration: 'Administration',
       adminCompany: 'Companies',
       adminDepartment: 'Departments',
@@ -276,6 +278,7 @@ export const translations: Record<Language, Translations> = {
       requestsAndApprovals: 'Pengajuan',
       disciplinary: 'Catatan SP',
       news: 'Pengumuman',
+      files: 'Dokumen HR',
       administration: 'Administrasi',
       adminCompany: 'Perusahaan',
       adminDepartment: 'Departemen',

@@ -70,6 +70,7 @@ import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 import { NexoraSidebar } from './components/nexora/layout/NexoraSidebar';
 import { NexoraHeader } from './components/nexora/layout/NexoraHeader';
 import { CompanyNewsManager } from './components/hr/CompanyNewsManager';
+import { HRDocumentsManager } from './components/hr/HRDocumentsManager';
 import { EmployeeDataManager } from './components/EmployeeDataManager';
 import { EmployeeWarningManager } from './components/disciplinary/EmployeeWarningManager';
 import { AttendanceManager } from './components/AttendanceManager';
@@ -446,6 +447,10 @@ export default function App() {
             <Route
               path="/news"
               element={!isHR ? <Navigate to="/requests" replace /> : <CompanyNewsManager currentUser={currentUser} />}
+            />
+            <Route
+              path="/files"
+              element={!isHR ? <Navigate to="/requests" replace /> : <HRDocumentsManager currentUser={currentUser} />}
             />
             <Route
               path="/disciplinary"
