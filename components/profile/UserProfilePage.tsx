@@ -1328,6 +1328,28 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({ currentUser, o
                     <span className="text-[11px] text-muted-foreground pt-2 border-t border-border/60">Belum diunggah</span>
                   )}
                 </div>
+
+                <div className="rounded-xl border border-border/80 bg-muted/20 p-4 flex flex-col justify-between space-y-3">
+                  <div className="space-y-1.5">
+                    <div className="h-9 w-9 rounded-lg bg-teal-500/10 text-teal-500 flex items-center justify-center font-bold">
+                      <ShieldCheck size={18} />
+                    </div>
+                    <p className="font-bold text-xs sm:text-sm text-foreground">Kartu BPJS</p>
+                    <p className="text-[11px] text-muted-foreground">Kartu kepesertaan jaminan sosial.</p>
+                  </div>
+                  {(profileData.bpjs_file_url || profileData.bpjsFileUrl) ? (
+                    <a
+                      href={profileData.bpjs_file_url || profileData.bpjsFileUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline pt-2 border-t border-border/60"
+                    >
+                      <ExternalLink size={12} /> Buka Kartu BPJS
+                    </a>
+                  ) : (
+                    <span className="text-[11px] text-muted-foreground pt-2 border-t border-border/60">Belum diunggah</span>
+                  )}
+                </div>
               </div>
             </CardContent>
           </Card>
