@@ -592,7 +592,7 @@ export const AttendanceReport: React.FC<AttendanceReportProps> = ({ currentUser,
                 <Table containerProps={reportTableContainer('Rekapitulasi kehadiran karyawan, geser untuk melihat semua kolom')}>
                   <TableHeader className={reportTableHeaderClass}>
                     <TableRow className="hover:bg-transparent">
-                      <TableHead className="min-w-[240px]">Karyawan & NIK</TableHead>
+                      <TableHead className="min-w-[240px] sticky left-0 z-20 bg-card shadow-[1px_0_0_var(--border)]">Karyawan & NIK</TableHead>
                       <TableHead className="min-w-[200px]">Perusahaan & Dept</TableHead>
                       <TableHead className="text-center">Status</TableHead>
                       <TableHead className="text-center">Kehadiran</TableHead>
@@ -619,8 +619,8 @@ export const AttendanceReport: React.FC<AttendanceReportProps> = ({ currentUser,
                       return (
                         <React.Fragment key={row.user.id}>
                           <TableRow className={cn('hover:bg-muted/30 dark:hover:bg-zinc-800/40 transition-colors', isExpanded && 'bg-muted/30 dark:bg-zinc-800/50')}>
-                            {/* Karyawan & NIK */}
-                            <TableCell className="max-w-[280px] py-3">
+                            {/* Karyawan & NIK (Freeze / Sticky Column) */}
+                            <TableCell className="max-w-[280px] min-w-[240px] py-3 sticky left-0 z-10 bg-card group-hover:bg-muted/30 dark:group-hover:bg-zinc-800/40 shadow-[1px_0_0_var(--border)]">
                               <div className="flex items-center gap-3">
                                 <UserAvatar
                                   name={row.user.full_name || row.user.username || 'User'}
@@ -977,8 +977,8 @@ export const AttendanceReport: React.FC<AttendanceReportProps> = ({ currentUser,
                 <Table containerProps={reportTableContainer('Log presensi harian, geser untuk melihat semua kolom')}>
                   <TableHeader className={reportTableHeaderClass}>
                     <TableRow className="hover:bg-transparent">
-                      <TableHead className="w-[140px]">Tanggal</TableHead>
-                      <TableHead>Karyawan</TableHead>
+                      <TableHead className="w-[140px] sticky left-0 z-20 bg-card shadow-[1px_0_0_var(--border)]">Tanggal</TableHead>
+                      <TableHead className="min-w-[200px] sticky left-[140px] z-20 bg-card shadow-[1px_0_0_var(--border)]">Karyawan</TableHead>
                       <TableHead className="text-center">Clock In</TableHead>
                       <TableHead className="text-center">Clock Out</TableHead>
                       <TableHead className="text-center">Durasi</TableHead>
@@ -993,10 +993,10 @@ export const AttendanceReport: React.FC<AttendanceReportProps> = ({ currentUser,
                       const u = userMap.get(String(r.user_id));
                       return (
                         <TableRow key={r.id || idx} className="hover:bg-muted/30 dark:hover:bg-zinc-800/40 transition-colors">
-                          <TableCell className="text-xs font-semibold text-foreground whitespace-nowrap">
+                          <TableCell className="text-xs font-semibold text-foreground whitespace-nowrap sticky left-0 z-10 bg-card group-hover:bg-muted/30 dark:group-hover:bg-zinc-800/40 shadow-[1px_0_0_var(--border)]">
                             {new Date(r.date).toLocaleDateString('id-ID', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })}
                           </TableCell>
-                          <TableCell>
+                          <TableCell className="sticky left-[140px] z-10 bg-card group-hover:bg-muted/30 dark:group-hover:bg-zinc-800/40 shadow-[1px_0_0_var(--border)]">
                             <div className="flex items-center gap-2.5">
                               <UserAvatar
                                 name={u?.full_name || u?.username || 'User'}
