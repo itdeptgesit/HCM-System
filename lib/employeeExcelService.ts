@@ -580,7 +580,18 @@ export function calculateEmployeeTenure(joinDate?: string): string {
 /**
  * Format 1 record karyawan ke format lengkap (46 kolom komprehensif)
  */
-export function mapEmployeeToFullRow(emp: UserAccount): Record<string, any> {
+function maskSensitiveValue(val?: string | null): string {
+  if (!val || val === '-') return '-';
+  const clean = String(val).trim();
+  if (clean.length <= 4) return '••••';
+  return `•••• •••• ${clean.slice(-4)}`;
+}
+
+export function mapEmployeeToFullRow(emp: UserAccount, maskSensitive: boolean = false) {
+  const nikVal = maskSensitive ? maskSensitiveValue(emp.nik) : (emp.nik || '-');
+  const npwpVal = maskSensitive ? maskSensitiveValue(emp.npwp) : (emp.npwp || '-');
+  const bankAccVal = maskSensitive ? maskSensitiveValue(emp.bankAccountNumber) : (emp.bankAccountNumber || '-');
+
   return {
     'Employee ID': emp.employeeCode || '-',
     'Nama Lengkap': emp.fullName,
@@ -590,8 +601,8 @@ export function mapEmployeeToFullRow(emp: UserAccount): Record<string, any> {
     'Role Sistem': emp.role || 'Staff',
     'Status Akun': emp.status || 'Active',
     'Status Kepegawaian': emp.contractType || emp.employmentType || 'PKWTT',
-    'NIK KTP (16 Digit)': emp.nik || '-',
-    'NPWP': emp.npwp || '-',
+    'NIK KTP (16 Digit)': nikVal,
+    'NPWP': npwpVal,
     'No. Paspor': emp.passportNumber || '-',
     'Perusahaan': emp.company || '-',
     'Cabang / Lokasi Kerja': emp.branch || '-',
@@ -624,7 +635,7 @@ export function mapEmployeeToFullRow(emp: UserAccount): Record<string, any> {
     'Nomor Ijazah': emp.diplomaNumber || '-',
     'Status Payroll': emp.payrollStatus || 'Active',
     'Nama Bank': emp.bankName || '-',
-    'Nomor Rekening': emp.bankAccountNumber || '-',
+    'Nomor Rekening': bankAccVal,
     'Nama Pemilik Rekening': emp.bankAccountName || '-',
     'Status Pajak (PTKP)': emp.taxStatus || '-',
     'BPJS Ketenagakerjaan': emp.bpjsTkNumber || '-',
@@ -637,13 +648,14 @@ export function mapEmployeeToFullRow(emp: UserAccount): Record<string, any> {
  */
 export function exportComprehensiveEmployeesExcel(
   employees: UserAccount[],
-  fileNamePrefix: string = 'GESIT-DATA-KARYAWAN-FULL-LENGKAP'
+  fileNamePrefix: string = 'GESIT-DATA-KARYAWAN-FULL-LENGKAP',
+  maskSensitive: boolean = false
 ) {
   if (!employees || employees.length === 0) {
     throw new Error('Tidak ada data karyawan untuk diekspor.');
   }
 
-  const rows = employees.map(mapEmployeeToFullRow);
+  const rows = employees.map(e => mapEmployeeToFullRow(e, maskSensitive));
   const todayStr = new Date().toISOString().split('T')[0];
   const workbook = XLSX.utils.book_new();
   const worksheet = XLSX.utils.json_to_sheet(rows);
@@ -668,7 +680,8 @@ export function exportComprehensiveEmployeesExcel(
  */
 export function exportMultiSheetEmployeesExcel(
   employees: UserAccount[],
-  fileNamePrefix: string = 'GESIT-BUKU-DATA-KARYAWAN'
+  fileNamePrefix: string = 'GESIT-BUKU-DATA-KARYAWAN',
+  maskSensitive: boolean = false
 ) {
   if (!employees || employees.length === 0) {
     throw new Error('Tidak ada data karyawan untuk diekspor.');
@@ -678,7 +691,7 @@ export function exportMultiSheetEmployeesExcel(
   const todayStr = new Date().toISOString().split('T')[0];
 
   // Sheet 1: Master Lengkap
-  const fullRows = employees.map(mapEmployeeToFullRow);
+  const fullRows = employees.map(e => mapEmployeeToFullRow(e, maskSensitive));
   const sheet1 = XLSX.utils.json_to_sheet(fullRows);
   XLSX.utils.book_append_sheet(workbook, sheet1, '1. Master Data Lengkap');
 
@@ -709,9 +722,9 @@ export function exportMultiSheetEmployeesExcel(
     'Jabatan': e.jobTitle || '-',
     'Status Payroll': e.payrollStatus || 'Active',
     'Bank': e.bankName || '-',
-    'Nomor Rekening': e.bankAccountNumber || '-',
+    'Nomor Rekening': maskSensitive ? maskSensitiveValue(e.bankAccountNumber) : (e.bankAccountNumber || '-'),
     'Atas Nama Rekening': e.bankAccountName || '-',
-    'NPWP': e.npwp || '-',
+    'NPWP': maskSensitive ? maskSensitiveValue(e.npwp) : (e.npwp || '-'),
     'Status Pajak (PTKP)': e.taxStatus || '-',
     'BPJS Ketenagakerjaan': e.bpjsTkNumber || '-',
     'BPJS Kesehatan': e.bpjsHealthNumber || '-'
@@ -723,7 +736,7 @@ export function exportMultiSheetEmployeesExcel(
   const demografiRows = employees.map(e => ({
     'Employee ID': e.employeeCode || '-',
     'Nama Karyawan': e.fullName,
-    'NIK KTP': e.nik || '-',
+    'NIK KTP': maskSensitive ? maskSensitiveValue(e.nik) : (e.nik || '-'),
     'Tempat Lahir': e.birthPlace || '-',
     'Tanggal Lahir': e.dateOfBirth || '-',
     'Usia': calculateEmployeeAge(e.dateOfBirth),
@@ -762,7 +775,8 @@ export interface DynamicColumnGroups {
 export function exportDynamicEmployeesExcel(
   employees: UserAccount[],
   columnGroups: DynamicColumnGroups,
-  fileNamePrefix: string = 'GESIT-EXPORT-DINAMIS'
+  fileNamePrefix: string = 'GESIT-EXPORT-DINAMIS',
+  maskSensitive: boolean = false
 ) {
   if (!employees || employees.length === 0) {
     throw new Error('Tidak ada data karyawan untuk diekspor.');
@@ -801,8 +815,8 @@ export function exportDynamicEmployeesExcel(
     }
 
     if (columnGroups.personal) {
-      row['NIK KTP'] = emp.nik || '-';
-      row['NPWP'] = emp.npwp || '-';
+      row['NIK KTP'] = maskSensitive ? maskSensitiveValue(emp.nik) : (emp.nik || '-');
+      row['NPWP'] = maskSensitive ? maskSensitiveValue(emp.npwp) : (emp.npwp || '-');
       row['Tempat Lahir'] = emp.birthPlace || '-';
       row['Tanggal Lahir'] = formatDateDDMMYYYY(emp.dateOfBirth);
       row['Usia'] = calculateEmployeeAge(emp.dateOfBirth);
@@ -828,12 +842,12 @@ export function exportDynamicEmployeesExcel(
     if (columnGroups.payroll) {
       row['Status Payroll'] = emp.payrollStatus || 'Active';
       row['Nama Bank'] = emp.bankName || '-';
-      row['Nomor Rekening'] = emp.bankAccountNumber || '-';
+      row['Nomor Rekening'] = maskSensitive ? maskSensitiveValue(emp.bankAccountNumber) : (emp.bankAccountNumber || '-');
       row['Nama Pemilik Rekening'] = emp.bankAccountName || '-';
     }
 
     if (columnGroups.tax) {
-      row['NPWP'] = emp.npwp || '-';
+      row['NPWP'] = maskSensitive ? maskSensitiveValue(emp.npwp) : (emp.npwp || '-');
       row['Status Pajak (PTKP)'] = emp.taxStatus || '-';
       row['BPJS Ketenagakerjaan'] = emp.bpjsTkNumber || '-';
       row['BPJS Kesehatan'] = emp.bpjsHealthNumber || '-';

@@ -54,6 +54,7 @@ export const EmployeeExportModal: React.FC<EmployeeExportModalProps> = ({
   const [dataScope, setDataScope] = useState<DataScope>('filtered');
   const [exportMode, setExportMode] = useState<ExportMode>('full');
   const [isExporting, setIsExporting] = useState(false);
+  const [maskSensitive, setMaskSensitive] = useState(false);
 
   // Column Groups Selection
   const [columnGroups, setColumnGroups] = useState<DynamicColumnGroups>({
@@ -126,13 +127,15 @@ export const EmployeeExportModal: React.FC<EmployeeExportModalProps> = ({
       if (exportMode === 'full') {
         exportComprehensiveEmployeesExcel(
           targetEmployees,
-          `GESIT-DATA-KARYAWAN-FULL-${dataScope === 'all' ? 'SEMUA' : 'TERFILTER'}`
+          `GESIT-DATA-KARYAWAN-FULL-${dataScope === 'all' ? 'SEMUA' : 'TERFILTER'}`,
+          maskSensitive
         );
         showToast(`Master Data Lengkap (${targetEmployees.length} karyawan) berhasil diunduh.`, 'success');
       } else if (exportMode === 'multisheet') {
         exportMultiSheetEmployeesExcel(
           targetEmployees,
-          `GESIT-BUKU-DATA-KARYAWAN-${dataScope === 'all' ? 'SEMUA' : 'TERFILTER'}`
+          `GESIT-BUKU-DATA-KARYAWAN-${dataScope === 'all' ? 'SEMUA' : 'TERFILTER'}`,
+          maskSensitive
         );
         showToast(`Buku Kerja 4-Sheet (${targetEmployees.length} karyawan) berhasil diunduh.`, 'success');
       } else if (exportMode === 'activetab') {
@@ -165,9 +168,9 @@ export const EmployeeExportModal: React.FC<EmployeeExportModalProps> = ({
             'Jabatan': e.jobTitle || '-',
             'Status Payroll': e.payrollStatus || 'Aktif',
             'Bank': e.bankName || '-',
-            'Nomor Rekening': e.bankAccountNumber || '-',
+            'Nomor Rekening': maskSensitive && e.bankAccountNumber ? `•••• •••• ${String(e.bankAccountNumber).slice(-4)}` : (e.bankAccountNumber || '-'),
             'Nama Pemilik Rekening': e.bankAccountName || '-',
-            'NPWP': e.npwp || '-',
+            'NPWP': maskSensitive && e.npwp ? `•••• •••• ${String(e.npwp).slice(-4)}` : (e.npwp || '-'),
             'Status Pajak (PTKP)': e.taxStatus || '-',
             'BPJS Ketenagakerjaan': e.bpjsTkNumber || '-',
             'BPJS Kesehatan': e.bpjsHealthNumber || '-'
@@ -196,7 +199,8 @@ export const EmployeeExportModal: React.FC<EmployeeExportModalProps> = ({
         exportDynamicEmployeesExcel(
           targetEmployees,
           columnGroups,
-          `GESIT-DATA-KARYAWAN-KUSTOM-${dataScope === 'all' ? 'SEMUA' : 'TERFILTER'}`
+          `GESIT-DATA-CUSTOM-${dataScope === 'all' ? 'SEMUA' : 'TERFILTER'}`,
+          maskSensitive
         );
         showToast(`Data karyawan pilihan (${targetEmployees.length} karyawan) berhasil diunduh.`, 'success');
       }
@@ -523,6 +527,30 @@ export const EmployeeExportModal: React.FC<EmployeeExportModalProps> = ({
               </div>
             </div>
           )}
+
+          {/* OPSI KEAMANAN / PRIVASI DATA (MASKING PII) */}
+          <div className="rounded-lg border border-amber-200/80 bg-amber-50/50 dark:border-amber-500/30 dark:bg-amber-950/20 p-3.5 mt-4">
+            <label className="flex items-start gap-3 cursor-pointer">
+              <Checkbox
+                checked={maskSensitive}
+                onCheckedChange={(checked) => setMaskSensitive(Boolean(checked))}
+                className="mt-0.5"
+              />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-amber-900 dark:text-amber-200">
+                    Sensor Data Sensitif (Masking NIK, NPWP & No. Rekening)
+                  </span>
+                  <Badge variant="outline" className="text-[9px] bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 border-amber-300">
+                    Rekomendasi Privasi
+                  </Badge>
+                </div>
+                <p className="text-[11px] text-amber-800/80 dark:text-amber-300/80 mt-1 leading-relaxed">
+                  Jika dicentang, nomor NIK, NPWP, dan rekening bank di berkas Excel otomatis disamarkan (contoh: <code>•••• •••• 1234</code>). Cocok jika file ingin dibagikan ke pihak eksternal, audit, atau kepala divisi.
+                </p>
+              </div>
+            </label>
+          </div>
         </div>
 
         {/* FOOTER STRIP */}
