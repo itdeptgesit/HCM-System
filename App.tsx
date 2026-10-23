@@ -421,7 +421,7 @@ export default function App() {
             />
             <Route
               path="/attendance/requests"
-              element={<AttendanceRequest currentUser={currentUser} />}
+              element={<Navigate to="/requests" replace />}
             />
             <Route
               path="/attendance/locations"

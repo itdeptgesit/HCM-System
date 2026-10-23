@@ -513,19 +513,6 @@ export function NexoraSidebar({
                     <span className="truncate">{t.nav.attendanceMap}</span>
                   </button>
 
-                  {/* Request Absen */}
-                  <button
-                    onClick={() => navigate('/attendance/requests')}
-                    className={`flex w-full items-center gap-2.5 px-3 py-1.5 rounded-full text-[13px] font-medium transition-all duration-150 cursor-pointer ${
-                      isExactActive('/attendance/requests')
-                        ? 'bg-white text-neutral-950 shadow-[0_2px_10px_rgba(0,0,0,0.06)] ring-1 ring-black/5 font-semibold scale-102 dark:bg-zinc-800 dark:text-white'
-                        : 'text-neutral-600 hover:text-neutral-950 hover:bg-neutral-200/50 dark:text-zinc-400 dark:hover:text-white'
-                    }`}
-                  >
-                    <Clock className="size-3.5 stroke-[1.75] shrink-0 opacity-80" />
-                    <span className="truncate">{t.nav.attendanceRequests}</span>
-                  </button>
-
                   {/* Kalender Kerja */}
                   <button
                     onClick={() => navigate('/attendance/calendar')}
