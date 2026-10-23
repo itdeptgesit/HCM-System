@@ -431,6 +431,12 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
     if (targetStep === 1) {
       if (!form.fullName?.trim()) nextErrors.fullName = 'Nama lengkap wajib diisi.';
       if (!form.email?.trim()) nextErrors.email = 'Email resmi wajib diisi.';
+      if (form.nik && form.nik.trim()) {
+        const cleanNik = form.nik.trim();
+        if (!/^\d{16}$/.test(cleanNik)) {
+          nextErrors.nik = 'NIK KTP harus terdiri dari tepat 16 digit angka.';
+        }
+      }
     }
     if (targetStep === 2) {
       // Step 2: Pendidikan (Opsional / Tidak memblokir)
@@ -722,7 +728,7 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
                     placeholder="Nomor Induk Kependudukan (contoh: 3171068039410001)"
                     value={String(form.nik || '')}
                     error={errors.nik}
-                    onChange={setField}
+                    onChange={(k, v) => setField(k, v.replace(/\D/g, '').slice(0, 16))}
                   />
                   <p className="mt-1 text-[11px] text-muted-foreground">
                     Nomor identitas kependudukan resmi Republik Indonesia (16 digit).
