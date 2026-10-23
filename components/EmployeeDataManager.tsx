@@ -93,6 +93,7 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
   const [showViewingNik, setShowViewingNik] = useState(false);
   const [showViewingBank, setShowViewingBank] = useState(false);
   const [showViewingNpwp, setShowViewingNpwp] = useState(false);
+  const [showViewingBpjs, setShowViewingBpjs] = useState(false);
 
   // Transfer Form state
   const [transferForm, setTransferForm] = useState({
@@ -2605,12 +2606,48 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
                             </p>
                           </div>
                           <div className="pt-2 border-t border-border/50">
-                            <span className="text-muted-foreground font-medium">BPJS Ketenagakerjaan</span>
-                            <p className="font-mono font-semibold text-foreground mt-1">{viewingEmployee.bpjsTkNumber || '—'}</p>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-muted-foreground font-medium">BPJS Ketenagakerjaan</span>
+                              {viewingEmployee.bpjsTkNumber && (
+                                <button
+                                  type="button"
+                                  onClick={() => setShowViewingBpjs(!showViewingBpjs)}
+                                  className="text-muted-foreground hover:text-foreground cursor-pointer focus:outline-hidden"
+                                  title={showViewingBpjs ? 'Sembunyikan BPJS' : 'Tampilkan BPJS'}
+                                >
+                                  {showViewingBpjs ? <EyeOff size={12} /> : <Eye size={12} />}
+                                </button>
+                              )}
+                            </div>
+                            <p className="font-mono font-semibold text-foreground mt-1">
+                              {viewingEmployee.bpjsTkNumber
+                                ? (showViewingBpjs
+                                    ? viewingEmployee.bpjsTkNumber
+                                    : `•••• •••• ${String(viewingEmployee.bpjsTkNumber).slice(-4)}`)
+                                : '—'}
+                            </p>
                           </div>
                           <div className="pt-2 border-t border-border/50">
-                            <span className="text-muted-foreground font-medium">BPJS Kesehatan</span>
-                            <p className="font-mono font-semibold text-foreground mt-1">{viewingEmployee.bpjsHealthNumber || '—'}</p>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-muted-foreground font-medium">BPJS Kesehatan</span>
+                              {viewingEmployee.bpjsHealthNumber && (
+                                <button
+                                  type="button"
+                                  onClick={() => setShowViewingBpjs(!showViewingBpjs)}
+                                  className="text-muted-foreground hover:text-foreground cursor-pointer focus:outline-hidden"
+                                  title={showViewingBpjs ? 'Sembunyikan BPJS' : 'Tampilkan BPJS'}
+                                >
+                                  {showViewingBpjs ? <EyeOff size={12} /> : <Eye size={12} />}
+                                </button>
+                              )}
+                            </div>
+                            <p className="font-mono font-semibold text-foreground mt-1">
+                              {viewingEmployee.bpjsHealthNumber
+                                ? (showViewingBpjs
+                                    ? viewingEmployee.bpjsHealthNumber
+                                    : `•••• •••• ${String(viewingEmployee.bpjsHealthNumber).slice(-4)}`)
+                                : '—'}
+                            </p>
                           </div>
                         </div>
                       </CardContent>

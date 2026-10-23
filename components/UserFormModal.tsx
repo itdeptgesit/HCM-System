@@ -1572,17 +1572,19 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
                 <FormField
                   label="BPJS Ketenagakerjaan"
                   name="bpjsTkNumber"
+                  placeholder="Nomor kartu BPJS TK (hanya angka)"
                   value={String(form.bpjsTkNumber || '')}
                   error={errors.bpjsTkNumber}
-                  onChange={setField}
+                  onChange={(k, v) => setField(k, v.replace(/\D/g, '').slice(0, 20))}
                 />
 
                 <FormField
                   label="BPJS Kesehatan"
                   name="bpjsHealthNumber"
+                  placeholder="Nomor kartu BPJS Kesehatan (hanya angka)"
                   value={String(form.bpjsHealthNumber || '')}
                   error={errors.bpjsHealthNumber}
-                  onChange={setField}
+                  onChange={(k, v) => setField(k, v.replace(/\D/g, '').slice(0, 20))}
                 />
 
                 <div className="sm:col-span-2">

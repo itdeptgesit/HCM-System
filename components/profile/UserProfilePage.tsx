@@ -67,6 +67,7 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({ currentUser, o
   const [showPassword, setShowPassword] = useState(false);
   const [showNik, setShowNik] = useState(false);
   const [showNpwp, setShowNpwp] = useState(false);
+  const [showBpjs, setShowBpjs] = useState(false);
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
 
   // Editable Profile Form State
@@ -880,20 +881,52 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({ currentUser, o
                     </div>
 
                     <div className="p-3 rounded-lg border border-border/70 bg-muted/20">
-                      <span className="text-[10px] font-semibold text-muted-foreground uppercase block">
-                        BPJS Ketenagakerjaan
-                      </span>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-semibold text-muted-foreground uppercase block">
+                          BPJS Ketenagakerjaan
+                        </span>
+                        {(profileData.bpjs_tk_number || profileData.bpjsTkNumber) && (
+                          <button
+                            type="button"
+                            onClick={() => setShowBpjs(!showBpjs)}
+                            className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-[11px] font-medium cursor-pointer"
+                          >
+                            {showBpjs ? <EyeOff size={13} /> : <Eye size={13} />}
+                            <span>{showBpjs ? 'Tutup' : 'Lihat'}</span>
+                          </button>
+                        )}
+                      </div>
                       <p className="font-mono text-sm font-bold text-foreground mt-0.5">
-                        {profileData.bpjs_tk_number || profileData.bpjsTkNumber || '—'}
+                        {(profileData.bpjs_tk_number || profileData.bpjsTkNumber)
+                          ? (showBpjs
+                              ? (profileData.bpjs_tk_number || profileData.bpjsTkNumber)
+                              : `•••• •••• ${String(profileData.bpjs_tk_number || profileData.bpjsTkNumber).slice(-4)}`)
+                          : '—'}
                       </p>
                     </div>
 
                     <div className="p-3 rounded-lg border border-border/70 bg-muted/20">
-                      <span className="text-[10px] font-semibold text-muted-foreground uppercase block">
-                        BPJS Kesehatan
-                      </span>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-semibold text-muted-foreground uppercase block">
+                          BPJS Kesehatan
+                        </span>
+                        {(profileData.bpjs_health_number || profileData.bpjsHealthNumber) && (
+                          <button
+                            type="button"
+                            onClick={() => setShowBpjs(!showBpjs)}
+                            className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-[11px] font-medium cursor-pointer"
+                          >
+                            {showBpjs ? <EyeOff size={13} /> : <Eye size={13} />}
+                            <span>{showBpjs ? 'Tutup' : 'Lihat'}</span>
+                          </button>
+                        )}
+                      </div>
                       <p className="font-mono text-sm font-bold text-foreground mt-0.5">
-                        {profileData.bpjs_health_number || profileData.bpjsHealthNumber || '—'}
+                        {(profileData.bpjs_health_number || profileData.bpjsHealthNumber)
+                          ? (showBpjs
+                              ? (profileData.bpjs_health_number || profileData.bpjsHealthNumber)
+                              : `•••• •••• ${String(profileData.bpjs_health_number || profileData.bpjsHealthNumber).slice(-4)}`)
+                          : '—'}
                       </p>
                     </div>
                   </CardContent>
