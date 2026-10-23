@@ -91,6 +91,7 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
   const [selectedEmployeeForSK, setSelectedEmployeeForSK] = useState<UserAccount | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showViewingNik, setShowViewingNik] = useState(false);
+  const [showViewingBank, setShowViewingBank] = useState(false);
 
   // Transfer Form state
   const [transferForm, setTransferForm] = useState({
@@ -2547,8 +2548,26 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
                             <p className="font-bold text-foreground mt-1">{viewingEmployee.bankName || '—'}</p>
                           </div>
                           <div>
-                            <span className="text-muted-foreground font-medium">Nomor Rekening</span>
-                            <p className="font-mono font-bold text-foreground mt-1">{viewingEmployee.bankAccountNumber || '—'}</p>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-muted-foreground font-medium">Nomor Rekening</span>
+                              {viewingEmployee.bankAccountNumber && (
+                                <button
+                                  type="button"
+                                  onClick={() => setShowViewingBank(!showViewingBank)}
+                                  className="text-muted-foreground hover:text-foreground cursor-pointer focus:outline-hidden"
+                                  title={showViewingBank ? 'Sembunyikan No. Rekening' : 'Tampilkan No. Rekening'}
+                                >
+                                  {showViewingBank ? <EyeOff size={12} /> : <Eye size={12} />}
+                                </button>
+                              )}
+                            </div>
+                            <p className="font-mono font-bold text-foreground mt-1">
+                              {viewingEmployee.bankAccountNumber
+                                ? (showViewingBank
+                                    ? viewingEmployee.bankAccountNumber
+                                    : `•••• •••• ${String(viewingEmployee.bankAccountNumber).slice(-4)}`)
+                                : '—'}
+                            </p>
                           </div>
                           <div>
                             <span className="text-muted-foreground font-medium">Atas Nama Rekening</span>

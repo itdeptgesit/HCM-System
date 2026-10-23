@@ -1553,9 +1553,10 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
                 <FormField
                   label="Bank Account Number"
                   name="bankAccountNumber"
+                  placeholder="Contoh: 3080277368 (hanya angka)"
                   value={String(form.bankAccountNumber || '')}
                   error={errors.bankAccountNumber}
-                  onChange={setField}
+                  onChange={(k, v) => setField(k, v.replace(/\D/g, '').slice(0, 30))}
                 />
 
                 <FormField
