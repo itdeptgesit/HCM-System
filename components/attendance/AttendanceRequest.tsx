@@ -3,8 +3,8 @@ import {
   Calendar, Clock, Timer, Wallet, FileText, CheckCircle2, XCircle,
   Filter, Search, RefreshCw, Eye, Check, X, Building2, User, ChevronRight,
   Stethoscope, Gift, Receipt, AlertCircle, AlertTriangle, RotateCcw, Briefcase,
-  BookOpen, ShieldCheck, Info, Sparkles, HelpCircle, Plus,
-  MapPin, Compass, Image as ImageIcon, ExternalLink
+  BookOpen, ShieldCheck, Info, HelpCircle, Plus,
+  MapPin, Compass, Image as ImageIcon, ExternalLink, Paperclip
 } from '@/components/ui/icons';
 import { toast } from 'sonner';
 import { supabase } from '../../lib/supabaseClient';
@@ -736,11 +736,25 @@ export const AttendanceRequest: React.FC<AttendanceRequestProps> = ({ currentUse
                             </TableCell>
                             <TableCell>
                               <Badge variant="outline" className="border-border/60 bg-muted/40 text-foreground text-xs font-semibold">
-                                {days} hari
+                                {(req as any).total_days ? `${(req as any).total_days} hari` : `${days} hari`}
                               </Badge>
                             </TableCell>
-                            <TableCell className="max-w-[240px] truncate text-xs text-muted-foreground" title={req.reason}>
-                              {req.reason}
+                            <TableCell className="max-w-[240px]">
+                              <div className="truncate text-xs text-muted-foreground" title={req.reason}>
+                                {req.reason}
+                              </div>
+                              {(req as any).attachment_url && (
+                                <a
+                                  href={(req as any).attachment_url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:underline mt-0.5"
+                                >
+                                  <Paperclip size={11} />
+                                  <span>View attachment</span>
+                                </a>
+                              )}
                             </TableCell>
                             <TableCell className="text-xs tabular-nums text-muted-foreground whitespace-nowrap">
                               {new Date(req.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
@@ -2288,7 +2302,7 @@ export const AttendanceRequest: React.FC<AttendanceRequestProps> = ({ currentUse
                   {/* Summary Callout */}
                   <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-2">
                     <div className="flex items-center gap-2 text-primary font-bold text-sm">
-                      <Sparkles size={16} />
+                      <ShieldCheck size={16} />
                       <span>Ketentuan Pokok Klaim Kacamata &amp; Lensa</span>
                     </div>
                     <ul className="text-xs space-y-1.5 text-foreground/90 pl-1">
@@ -2473,7 +2487,7 @@ export const AttendanceRequest: React.FC<AttendanceRequestProps> = ({ currentUse
                 <div className="space-y-4 animate-in fade-in duration-300">
                   <div className="rounded-xl border border-blue-500/30 bg-blue-50/50 dark:bg-blue-950/20 p-4 space-y-2">
                     <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400 font-bold text-sm">
-                      <Sparkles size={16} />
+                      <BookOpen size={16} />
                       <span>Pasal 22 — Izin Meninggalkan Pekerjaan dengan Mendapat Upah</span>
                     </div>
                     <p className="text-xs text-foreground/90 leading-relaxed">

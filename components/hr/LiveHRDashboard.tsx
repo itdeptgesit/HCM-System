@@ -22,7 +22,6 @@ import {
   ChevronDown,
   Search,
   ExternalLink,
-  Sparkles,
   Activity,
   Layers,
   FileText,
@@ -1660,7 +1659,7 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
   return (
     <div className="w-full space-y-6 font-sans text-slate-800 dark:text-slate-100 transition-colors duration-200">
       {/* ── NEXORA STYLE HERO GREETING BANNER ── */}
-      <div className="relative overflow-hidden rounded-[18px] border border-slate-200/80 dark:border-[#222225] bg-white dark:bg-[#131316] p-6 sm:p-7 shadow-xs transition-colors">
+      <div className="relative overflow-hidden rounded-2xl sm:rounded-[18px] border border-slate-200/80 dark:border-[#222225] bg-white dark:bg-[#131316] p-4.5 sm:p-7 shadow-xs transition-colors">
         {/* Subtle Ambient Radial Mesh Glow Pattern */}
         <div
           className="pointer-events-none absolute -right-16 -top-20 h-72 w-96 rounded-full opacity-60 dark:opacity-20 blur-3xl"
@@ -1670,7 +1669,7 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
         />
 
         {/* Top Header: Date & Weather on Left, Download Excel on Right */}
-        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
           <div className="flex items-center gap-2.5 flex-wrap">
             <span className="flex items-center gap-1.5 text-xs font-medium text-slate-600 dark:text-zinc-300">
               <Calendar className="size-3.5 text-slate-400 dark:text-zinc-500" />
@@ -1753,12 +1752,12 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
             Welcome back, {userGreetingName}
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 dark:text-zinc-400 font-normal max-w-3xl leading-relaxed">
-            Here's how your workforce is performing today — headcount is stable at <strong className="font-semibold text-slate-800 dark:text-zinc-200">{totalHeadcount} active employees</strong> with <strong className="font-semibold text-slate-800 dark:text-zinc-200">{attendanceRate}% attendance</strong>, and <strong className="font-semibold text-slate-800 dark:text-zinc-200">{totalPendingRequestsCount} pending requests</strong> needing your attention.
+            Ringkasan performa tenaga kerja hari ini: total karyawan aktif tercatat sebanyak <strong className="font-semibold text-slate-800 dark:text-zinc-200">{totalHeadcount} orang</strong> dengan tingkat kehadiran <strong className="font-semibold text-slate-800 dark:text-zinc-200">{attendanceRate}%</strong>, serta <strong className="font-semibold text-slate-800 dark:text-zinc-200">{totalPendingRequestsCount} pengajuan</strong> yang memerlukan perhatian Anda.
           </p>
         </div>
 
         {/* Bottom Inline Metrics in Banner */}
-        <div className="relative z-10 mt-6 sm:mt-7 pt-5 border-t border-slate-100 dark:border-zinc-800/80 flex flex-wrap items-center gap-6 sm:gap-10">
+        <div className="relative z-10 mt-5 sm:mt-7 pt-4 sm:pt-5 border-t border-slate-100 dark:border-zinc-800/80 grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-4 sm:gap-10">
           <div>
             <span className="block text-[10px] font-bold tracking-wider text-slate-400 dark:text-zinc-500 uppercase">
               TOTAL KARYAWAN
@@ -1831,23 +1830,23 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
               <Users className="size-5" />
             </div>
             <div>
-              <span className="text-[12.5px] font-medium text-[#475569] block">Karyawan Aktif</span>
-              <div className="text-[28px] font-extrabold text-[#0f172a] leading-none mt-1">
-                {totalHeadcount > 0 ? totalHeadcount : '108'}
+              <span className="text-[12.5px] font-medium text-[#475569] dark:text-zinc-400 block">Karyawan Aktif</span>
+              <div className="text-[28px] font-extrabold text-[#0f172a] dark:text-white leading-none mt-1">
+                {totalHeadcount}
               </div>
             </div>
           </div>
 
-          <div className="mt-5 pt-3 border-t border-[#e5eaf1] flex items-center justify-between text-[12.5px]">
+          <div className="mt-5 pt-3 border-t border-[#e5eaf1] dark:border-zinc-800 flex items-center justify-between text-[12.5px]">
             <div>
-              <span className="text-[11px] text-[#94a3b8] font-medium block">Retensi Organisasi</span>
-              <span className="font-bold text-[#16a34a] flex items-center gap-1 mt-0.5">
-                <span>↗</span> 98.4%
+              <span className="text-[11px] text-[#94a3b8] dark:text-zinc-500 font-medium block">Komposisi Tim</span>
+              <span className="font-semibold text-slate-700 dark:text-zinc-300 flex items-center gap-1 mt-0.5">
+                {statusPermanent} Tetap · {statusContract} PKWT
               </span>
             </div>
             <div className="text-right">
-              <span className="text-[11px] text-[#94a3b8] font-medium block">Status</span>
-              <span className="font-semibold text-[#475569] mt-0.5 block">Tetap & Kontrak</span>
+              <span className="text-[11px] text-[#94a3b8] dark:text-zinc-500 font-medium block">Status</span>
+              <span className="font-semibold text-[#475569] dark:text-zinc-400 mt-0.5 block">SDM Terdata</span>
             </div>
           </div>
         </div>
@@ -1862,23 +1861,23 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
               <Clock className="size-5" />
             </div>
             <div>
-              <span className="text-[12.5px] font-medium text-[#475569] block">Presensi Hari Ini</span>
-              <div className="text-[28px] font-extrabold text-[#0f172a] leading-none mt-1">
-                {presentTodayCount > 0 ? presentTodayCount : '4'}
+              <span className="text-[12.5px] font-medium text-[#475569] dark:text-zinc-400 block">Presensi Hari Ini</span>
+              <div className="text-[28px] font-extrabold text-[#0f172a] dark:text-white leading-none mt-1">
+                {checkedInCount}
               </div>
             </div>
           </div>
 
-          <div className="mt-5 pt-3 border-t border-[#e5eaf1] flex items-center justify-between text-[12.5px]">
+          <div className="mt-5 pt-3 border-t border-[#e5eaf1] dark:border-zinc-800 flex items-center justify-between text-[12.5px]">
             <div>
-              <span className="text-[11px] text-[#94a3b8] font-medium block">On-Time Rate</span>
-              <span className="font-bold text-[#16a34a] flex items-center gap-1 mt-0.5">
-                <span>↗</span> 94.0%
+              <span className="text-[11px] text-[#94a3b8] dark:text-zinc-500 font-medium block">On-Time Presensi</span>
+              <span className="font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1 mt-0.5">
+                {checkedInCount > 0 ? `${Math.round((onTimeCount / checkedInCount) * 100)}% (${onTimeCount} tepat waktu)` : 'Belum ada data'}
               </span>
             </div>
             <div className="text-right">
-              <span className="text-[11px] text-[#94a3b8] font-medium block">Tipe</span>
-              <span className="font-semibold text-[#475569] mt-0.5 block">Live Clock-In</span>
+              <span className="text-[11px] text-[#94a3b8] dark:text-zinc-500 font-medium block">Wajib Masuk</span>
+              <span className="font-semibold text-[#475569] dark:text-zinc-400 mt-0.5 block">{attendanceSnapshot.required} Orang</span>
             </div>
           </div>
         </div>
@@ -1893,28 +1892,28 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
               <FileText className="size-5" />
             </div>
             <div>
-              <span className="text-[12.5px] font-medium text-[#475569] block">Antrean Persetujuan</span>
-              <div className="text-[28px] font-extrabold text-[#0f172a] leading-none mt-1">
-                {pendingRequestsCount > 0 ? pendingRequestsCount : '3'}
+              <span className="text-[12.5px] font-medium text-[#475569] dark:text-zinc-400 block">Antrean Persetujuan</span>
+              <div className="text-[28px] font-extrabold text-[#0f172a] dark:text-white leading-none mt-1">
+                {totalPendingRequestsCount}
               </div>
             </div>
           </div>
 
-          <div className="mt-5 pt-3 border-t border-[#e5eaf1] flex items-center justify-between text-[12.5px]">
+          <div className="mt-5 pt-3 border-t border-[#e5eaf1] dark:border-zinc-800 flex items-center justify-between text-[12.5px]">
             <div>
-              <span className="text-[11px] text-[#94a3b8] font-medium block">SLA Respons</span>
-              <span className="font-bold text-[#2563eb] flex items-center gap-1 mt-0.5">
-                &lt; 24 Jam
+              <span className="text-[11px] text-[#94a3b8] dark:text-zinc-500 font-medium block">Tindak Lanjut</span>
+              <span className="font-semibold text-amber-600 dark:text-amber-400 flex items-center gap-1 mt-0.5">
+                {totalPendingRequestsCount > 0 ? `${totalPendingRequestsCount} butuh approval` : 'Semua diproses'}
               </span>
             </div>
             <div className="text-right">
-              <span className="text-[11px] text-[#94a3b8] font-medium block">Kategori</span>
-              <span className="font-semibold text-[#475569] mt-0.5 block">Cuti & Izin</span>
+              <span className="text-[11px] text-[#94a3b8] dark:text-zinc-500 font-medium block">Kategori</span>
+              <span className="font-semibold text-[#475569] dark:text-zinc-400 mt-0.5 block">Cuti & Izin</span>
             </div>
           </div>
         </div>
 
-        {/* Card 4: Action Banner (#0f2b46 Navy - Rounded 24px) */}
+        {/* Card 4: Action Banner (#0f2b46 Navy - Rounded 18px) */}
         <div className="rounded-[18px] bg-[#0f2b46] text-white p-5 shadow-lg border border-[#16324f] flex flex-col justify-between relative overflow-hidden group">
           <div className="relative z-10">
             <div className="flex items-center justify-between">
@@ -1931,7 +1930,7 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
             <p className="text-[12.5px] text-[#c3d4ea] mt-1 leading-relaxed font-normal">
               {totalExpiringCount > 0
                 ? `${totalExpiringCount} karyawan jatuh tempo kontrak/probation (≤ 30 hari).`
-                : '5 karyawan jatuh tempo kontrak/probation (≤ 30 hari).'}
+                : 'Tidak ada kontrak atau probation yang jatuh tempo dalam 30 hari.'}
             </p>
           </div>
 
@@ -1944,23 +1943,20 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
               <ArrowRight className="size-3.5" />
             </button>
           </div>
-
-          {/* Subtle background glow */}
-          <div className="absolute -right-6 -bottom-6 w-28 h-28 bg-[#2563eb]/15 rounded-full blur-2xl pointer-events-none" />
         </div>
       </div>
 
       {/* ── COMPACT FILTER & SNAPSHOT BAR (BELOW CARDS) ── */}
-      <div className="bg-white dark:bg-[#131316] border border-[#e5eaf1] dark:border-[#222225] rounded-xl px-4 py-2.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] flex flex-wrap lg:flex-nowrap items-center justify-between gap-3">
+      <div className="bg-white dark:bg-[#131316] border border-[#e5eaf1] dark:border-[#222225] rounded-xl px-3.5 sm:px-4 py-2.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] flex flex-col lg:flex-row lg:items-center justify-between gap-3">
         {/* Left: Filter Controls */}
-        <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+        <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2 sm:gap-2.5 w-full lg:w-auto">
           <div className="flex items-center gap-1.5 text-slate-400 dark:text-slate-500 mr-0.5">
             <Filter className="size-3.5" />
-            <span className="text-[11px] font-semibold tracking-wide uppercase text-slate-400 dark:text-slate-500 hidden sm:inline">Filter:</span>
+            <span className="text-[11px] font-semibold tracking-wide uppercase text-slate-400 dark:text-slate-500">Filter:</span>
           </div>
 
           {/* Perusahaan Dropdown */}
-          <div className="relative min-w-[140px] sm:min-w-[170px]">
+          <div className="relative w-full sm:w-auto sm:min-w-[170px]">
             <select
               value={selectedCompany}
               onChange={e => setSelectedCompany(e.target.value)}
@@ -1977,7 +1973,7 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
           </div>
 
           {/* Departemen Dropdown */}
-          <div className="relative min-w-[140px] sm:min-w-[170px]">
+          <div className="relative w-full sm:w-auto sm:min-w-[170px]">
             <select
               value={selectedDepartment}
               onChange={e => setSelectedDepartment(e.target.value)}
@@ -1993,34 +1989,36 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
             <ChevronDown className="absolute right-2 top-2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
           </div>
 
-          {/* Snapshot Date Picker */}
-          <div className="relative">
-            <input
-              type="date"
-              value={snapshotDate}
-              onChange={e => setSnapshotDate(e.target.value)}
-              className="appearance-none rounded-lg border border-slate-200 dark:border-[#27272a] bg-slate-50/80 hover:bg-white focus:bg-white dark:bg-[#18181b] dark:hover:bg-[#1f1f23] dark:focus:bg-[#1f1f23] px-2.5 py-1.5 text-xs font-semibold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600/20 transition-all cursor-pointer"
-              title="Pilih tanggal snapshot data"
-            />
-          </div>
+          {/* Snapshot Date Picker + Reset */}
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <div className="relative flex-1 sm:flex-initial">
+              <input
+                type="date"
+                value={snapshotDate}
+                onChange={e => setSnapshotDate(e.target.value)}
+                className="w-full sm:w-auto appearance-none rounded-lg border border-slate-200 dark:border-[#27272a] bg-slate-50/80 hover:bg-white focus:bg-white dark:bg-[#18181b] dark:hover:bg-[#1f1f23] dark:focus:bg-[#1f1f23] px-2.5 py-1.5 text-xs font-semibold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600/20 transition-all cursor-pointer"
+                title="Pilih tanggal snapshot data"
+              />
+            </div>
 
-          {/* Reset Filter Button */}
-          {(selectedCompany !== 'all' || selectedDepartment !== 'all' || snapshotDate !== jakartaDate()) && (
-            <button
-              onClick={handleResetFilters}
-              className="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-600 hover:text-rose-700 dark:text-rose-400 py-1.5 px-2.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors cursor-pointer"
-              title="Reset semua filter ke default"
-            >
-              <RotateCcw className="size-3" />
-              <span>Reset</span>
-            </button>
-          )}
+            {/* Reset Filter Button */}
+            {(selectedCompany !== 'all' || selectedDepartment !== 'all' || snapshotDate !== jakartaDate()) && (
+              <button
+                onClick={handleResetFilters}
+                className="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-600 hover:text-rose-700 dark:text-rose-400 py-1.5 px-2.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors cursor-pointer shrink-0"
+                title="Reset semua filter ke default"
+              >
+                <RotateCcw className="size-3" />
+                <span>Reset</span>
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Right: Snapshot sub-indicator & DB Status */}
-        <div className="flex items-center gap-3 text-[11px] text-slate-500 dark:text-slate-400 shrink-0 ml-auto sm:ml-0">
+        <div className="flex items-center justify-between lg:justify-start gap-3 text-[11px] text-slate-500 dark:text-slate-400 shrink-0 w-full lg:w-auto pt-2 lg:pt-0 border-t border-slate-100 dark:border-zinc-800/60 lg:border-t-0">
           <div className="flex items-center gap-1.5">
-            <span className="size-2 rounded-full bg-emerald-500 shadow-xs" />
+            <span className="size-2 rounded-full bg-emerald-500 shadow-xs shrink-0" />
             <span>
               Snapshot {snapshotDate} · <strong className="font-bold text-slate-800 dark:text-slate-200">{totalHeadcount} karyawan aktif</strong>
             </span>
@@ -2032,14 +2030,14 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
       </div>
 
       {/* ── ROW 2: AKTIVITAS KEHADIRAN + JADWAL HARI INI ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-5">
         {/* Aktivitas Kehadiran (Bar Chart - 7 Cols) */}
-        <div className="lg:col-span-7 bg-white dark:bg-[#131316] rounded-[18px] p-6 border border-[#e5eaf1] dark:border-[#222225] shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-12px_rgba(15,23,42,0.12)] flex flex-col justify-between">
+        <div className="lg:col-span-7 bg-white dark:bg-[#131316] rounded-2xl sm:rounded-[18px] p-4 sm:p-6 border border-[#e5eaf1] dark:border-[#222225] shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-12px_rgba(15,23,42,0.12)] flex flex-col justify-between">
           <div>
-            <div className="flex items-center justify-between">
+            <div className="flex items-start sm:items-center justify-between gap-2">
               <div>
-                <h3 className="text-[16px] font-semibold text-[#0f172a] dark:text-slate-100">Aktivitas Kehadiran</h3>
-                <div className="flex items-center gap-1.5 text-[12.5px] mt-0.5">
+                <h3 className="text-[15px] sm:text-[16px] font-semibold text-[#0f172a] dark:text-slate-100">Aktivitas Kehadiran</h3>
+                <div className="flex items-center gap-1.5 text-[11.5px] sm:text-[12.5px] mt-0.5">
                   {attendanceActivity.hasComparison && attendanceActivity.diffPercent !== null ? (
                     <>
                       <span className={`font-semibold ${attendanceActivity.diffPercent >= 0 ? 'text-[#16a34a]' : 'text-[#e11d48]'}`}>
@@ -2056,7 +2054,7 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
 
               <button
                 onClick={() => setChartPeriod(p => p === 'weekly' ? 'monthly' : 'weekly')}
-                className="px-3 py-1.5 rounded-[10px] bg-[#f8fafc] dark:bg-[#1e1e24] border border-[#cbd5e1] dark:border-zinc-700 text-[12px] font-semibold text-[#475569] dark:text-zinc-300 hover:text-[#0f172a] dark:hover:text-white hover:bg-[#f1f5f9] dark:hover:bg-zinc-800 flex items-center gap-1.5 cursor-pointer transition-colors"
+                className="px-2.5 sm:px-3 py-1.5 rounded-[10px] bg-[#f8fafc] dark:bg-[#1e1e24] border border-[#cbd5e1] dark:border-zinc-700 text-[11.5px] sm:text-[12px] font-semibold text-[#475569] dark:text-zinc-300 hover:text-[#0f172a] dark:hover:text-white hover:bg-[#f1f5f9] dark:hover:bg-zinc-800 flex items-center gap-1.5 cursor-pointer transition-colors shrink-0"
               >
                 <span>{chartPeriod === 'weekly' ? 'Mingguan' : 'Bulanan'}</span>
                 <ChevronDown className="size-3.5" />
@@ -2064,7 +2062,7 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
             </div>
 
             {/* Vertical Bar Chart with Slim Rounded Bars */}
-            <div className="mt-8 h-44 flex items-end justify-between gap-3 px-3 relative">
+            <div className="mt-6 sm:mt-8 h-40 sm:h-44 flex items-end justify-between gap-1 sm:gap-3 px-1 sm:px-3 relative">
               <div className="absolute inset-0 flex flex-col justify-between pointer-events-none border-b border-[#e5eaf1] dark:border-zinc-800">
                 <div className="border-b border-[#f1f5f9] dark:border-zinc-800/60 w-full flex justify-end pr-1 text-[10px] text-[#94a3b8]">8h</div>
                 <div className="border-b border-[#f1f5f9] dark:border-zinc-800/60 w-full flex justify-end pr-1 text-[10px] text-[#94a3b8]">6h</div>
@@ -2073,49 +2071,55 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
                 <div className="w-full flex justify-end pr-1 text-[10px] text-[#94a3b8]">0h</div>
               </div>
 
-              {attendanceActivity.items.map((item, idx) => (
-                <div key={idx} className="flex-1 flex flex-col items-center gap-2 relative z-10 group">
-                  {/* Tooltip on hover or when highlighted */}
-                  <div className={`absolute -top-11 left-1/2 -translate-x-1/2 bg-[#0f172a] dark:bg-zinc-800 text-white px-3 py-1 rounded-[8px] text-[10px] font-bold whitespace-nowrap shadow-md flex items-center gap-1 transition-all pointer-events-none ${
-                    item.isHighlight ? 'opacity-100 z-20' : 'opacity-0 group-hover:opacity-100 z-20'
-                  }`}>
-                    <span>⏱️ {item.tooltip}</span>
-                  </div>
+              {attendanceActivity.items.map((item, idx) => {
+                const isFirst = idx === 0;
+                const isLast = idx === attendanceActivity.items.length - 1;
+                return (
+                  <div key={idx} className="flex-1 flex flex-col items-center gap-1.5 sm:gap-2 relative z-10 group">
+                    {/* Tooltip on hover or when highlighted with edge-safe alignment */}
+                    <div className={`absolute -top-11 ${
+                      isFirst ? 'left-0' : isLast ? 'right-0' : 'left-1/2 -translate-x-1/2'
+                    } bg-[#0f172a] dark:bg-zinc-800 text-white px-2.5 py-1 rounded-[8px] text-[10px] font-bold whitespace-nowrap shadow-md flex items-center gap-1 transition-all pointer-events-none ${
+                      item.isHighlight ? 'opacity-100 z-20' : 'opacity-0 group-hover:opacity-100 z-20'
+                    }`}>
+                      <span>⏱️ {item.tooltip}</span>
+                    </div>
 
-                  <div className="w-3 sm:w-3.5 rounded-full bg-[#f1f5f9] dark:bg-zinc-800 h-32 flex items-end overflow-hidden">
-                    <div
-                      style={{ height: `${item.height}%` }}
-                      className={`w-full rounded-full transition-all duration-500 ${
-                        item.isHighlight
-                          ? 'bg-[#2563eb] shadow-sm shadow-[#2563eb]/40'
-                          : item.hours > 0
-                          ? 'bg-[#cbd5e1] dark:bg-zinc-600 group-hover:bg-[#2563eb]'
-                          : 'bg-[#e2e8f0] dark:bg-zinc-700/60'
-                      }`}
-                    />
-                  </div>
+                    <div className="w-2.5 sm:w-3.5 rounded-full bg-[#f1f5f9] dark:bg-zinc-800 h-28 sm:h-32 flex items-end overflow-hidden">
+                      <div
+                        style={{ height: `${item.height}%` }}
+                        className={`w-full rounded-full transition-all duration-500 ${
+                          item.isHighlight
+                            ? 'bg-[#2563eb] shadow-sm shadow-[#2563eb]/40'
+                            : item.hours > 0
+                            ? 'bg-[#cbd5e1] dark:bg-zinc-600 group-hover:bg-[#2563eb]'
+                            : 'bg-[#e2e8f0] dark:bg-zinc-700/60'
+                        }`}
+                      />
+                    </div>
 
-                  <span className={`text-[12px] ${item.isHighlight ? 'text-[#2563eb] dark:text-blue-400 font-bold' : 'text-[#64748b] dark:text-zinc-400 font-medium'}`}>
-                    {item.day}
-                  </span>
-                </div>
-              ))}
+                    <span className={`text-[11px] sm:text-[12px] ${item.isHighlight ? 'text-[#2563eb] dark:text-blue-400 font-bold' : 'text-[#64748b] dark:text-zinc-400 font-medium'}`}>
+                      {item.day}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
-          <div className="mt-4 pt-3 border-t border-[#e5eaf1] dark:border-zinc-800 flex items-center justify-between text-[12.5px] text-[#64748b] dark:text-zinc-400">
+          <div className="mt-4 pt-3 border-t border-[#e5eaf1] dark:border-zinc-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1.5 text-[11.5px] sm:text-[12.5px] text-[#64748b] dark:text-zinc-400">
             <span>Total Terpantau: <strong className="text-[#0f172a] dark:text-slate-100">{attendanceActivity.totalTerpantauStr}</strong></span>
             <span className="text-[#2563eb] dark:text-blue-400 font-bold">{attendanceActivity.stabilitasStr}</span>
           </div>
         </div>
 
         {/* Jadwal Hari Ini (5 Cols) */}
-        <div className="lg:col-span-5 bg-white dark:bg-[#131316] rounded-[18px] p-6 border border-[#e5eaf1] dark:border-[#222225] shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-12px_rgba(15,23,42,0.12)] flex flex-col justify-between">
+        <div className="lg:col-span-5 bg-white dark:bg-[#131316] rounded-2xl sm:rounded-[18px] p-4 sm:p-6 border border-[#e5eaf1] dark:border-[#222225] shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-12px_rgba(15,23,42,0.12)] flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-[16px] font-semibold text-[#0f172a] dark:text-slate-100">Jadwal Hari Ini</h3>
-                <p className="text-[12.5px] text-[#475569] dark:text-slate-400 mt-0.5">Shift kerja & penugasan aktif</p>
+                <h3 className="text-[15px] sm:text-[16px] font-semibold text-[#0f172a] dark:text-slate-100">Jadwal Hari Ini</h3>
+                <p className="text-[11.5px] sm:text-[12.5px] text-[#475569] dark:text-slate-400 mt-0.5">Shift kerja & penugasan aktif</p>
               </div>
               <button
                 onClick={() => navigate('/calendar')}
@@ -2133,24 +2137,24 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
                   onClick={() => navigate('/calendar')}
                   className="flex items-center justify-between p-2.5 rounded-[10px] bg-[#f8fafc] dark:bg-[#18181b] hover:bg-[#eff6ff] dark:hover:bg-blue-950/20 transition-colors cursor-pointer group border border-transparent hover:border-[#bfdbfe] dark:hover:border-blue-800/40"
                 >
-                  <div className="flex items-center gap-3">
-                    <div className={`w-8 h-8 rounded-[8px] ${sch.bg} ${sch.text} flex items-center justify-center font-bold text-[11px]`}>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className={`w-8 h-8 rounded-[8px] ${sch.bg} ${sch.text} flex items-center justify-center font-bold text-[11px] shrink-0`}>
                       {sch.badge}
                     </div>
-                    <div>
-                      <h4 className="text-[12.5px] font-semibold text-[#0f172a] dark:text-slate-200 group-hover:text-[#2563eb] dark:group-hover:text-blue-400 transition-colors">
+                    <div className="min-w-0">
+                      <h4 className="text-[12px] sm:text-[12.5px] font-semibold text-[#0f172a] dark:text-slate-200 group-hover:text-[#2563eb] dark:group-hover:text-blue-400 transition-colors truncate">
                         {sch.name}
                       </h4>
-                      <p className="text-[11px] text-[#64748b] dark:text-slate-400">{sch.time} • {sch.count} Karyawan</p>
+                      <p className="text-[10.5px] sm:text-[11px] text-[#64748b] dark:text-slate-400 truncate">{sch.time} • {sch.count} Karyawan</p>
                     </div>
                   </div>
-                  <ChevronRight className="size-4 text-[#94a3b8] group-hover:text-[#2563eb] dark:group-hover:text-blue-400 transition-colors" />
+                  <ChevronRight className="size-4 text-[#94a3b8] group-hover:text-[#2563eb] dark:group-hover:text-blue-400 transition-colors shrink-0" />
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="mt-4 pt-3 border-t border-[#e5eaf1] dark:border-zinc-800 flex items-center justify-between text-[12px] text-[#64748b] dark:text-slate-400">
+          <div className="mt-4 pt-3 border-t border-[#e5eaf1] dark:border-zinc-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1 text-[11.5px] sm:text-[12px] text-[#64748b] dark:text-slate-400">
             <span>Total Karyawan Terjadwal: <strong className="text-[#0f172a] dark:text-slate-100">{totalHeadcount} Orang</strong></span>
             <span className="text-[#16a34a] font-semibold">Tercakup Sistem</span>
           </div>

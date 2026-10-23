@@ -290,7 +290,7 @@ export default function App() {
         canView={canView}
         onLogout={handleLogout}
       />
-      <SidebarInset className="overflow-hidden flex flex-col min-w-0 bg-[#f8fafc] dark:bg-[#0e1219] my-2.5 mr-2.5 rounded-[26px] border border-neutral-300/60 dark:border-zinc-800 shadow-[0_8px_30px_rgba(0,0,0,0.03)]">
+      <SidebarInset className="overflow-hidden flex flex-col min-w-0 bg-[#f8fafc] dark:bg-[#0e1219] my-0 mr-0 md:my-2.5 md:mr-2.5 rounded-none md:rounded-[26px] border-0 md:border border-neutral-300/60 dark:border-zinc-800 shadow-none md:shadow-[0_8px_30px_rgba(0,0,0,0.03)]">
         <NexoraHeader
           currentUser={currentUser}
           breadcrumbLabel={getBreadcrumbLabel()}
@@ -299,7 +299,7 @@ export default function App() {
           onToggleTheme={() => setTheme(isDark ? 'light' : 'dark')}
           onLogout={handleLogout}
         />
-        <main className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6 lg:p-7">
+        <main className="min-h-0 flex-1 overflow-y-auto p-3.5 sm:p-5 lg:p-7">
           <Routes>
             <Route
               path="/"

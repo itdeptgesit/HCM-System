@@ -51,16 +51,6 @@ interface NexoraSidebarProps {
   canView?: (module: string) => boolean;
 }
 
-/**
- * 4-Point Diamond Sparkle Star matching reference design
- */
-function SparkleStar({ className = 'size-5' }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
-      <path d="M12 2C12.3 7.5 16.5 11.7 22 12C16.5 12.3 12.3 16.5 12 22C11.7 16.5 7.5 12.3 2 12C7.5 11.7 11.7 7.5 12 2Z" />
-    </svg>
-  );
-}
 
 export function NexoraSidebar({
   currentUser,

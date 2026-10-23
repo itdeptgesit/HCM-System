@@ -298,7 +298,7 @@ export const EmployeeImportModal: React.FC<EmployeeImportModalProps> = ({
                   <>
                     <p className="text-sm font-bold text-foreground">{selectedFile.name}</p>
                     <p className="text-xs text-muted-foreground mt-1">
-                      Ukuran: {(selectedFile.size / 1024).toFixed(1)} KB — Klik untuk mengganti berkas
+                      Ukuran: {(selectedFile.size / 1024).toFixed(1)} KB (Klik untuk mengganti berkas)
                     </p>
                   </>
                 ) : (

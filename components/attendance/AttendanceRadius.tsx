@@ -3,7 +3,7 @@ import {
   MapPin, Plus, Search, Filter, RefreshCw, Trash2, Edit3,
   Loader2, Locate, ExternalLink, Map as MapIcon, MapPinOff, Ban,
   Building2, CheckCircle2, Navigation, AlertTriangle, RotateCcw, Info,
-  Users, UserCheck, Lock, Unlock, Check, X, ShieldAlert
+  Users, UserCheck, Lock, Unlock, Check, X, ShieldAlert, Smartphone
 } from '@/components/ui/icons';
 import { toast } from 'sonner';
 import { useTheme } from 'next-themes';
@@ -24,6 +24,7 @@ import 'leaflet/dist/leaflet.css';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { StatCard } from '../StatCard';
 import { UserAvatar } from '../UserAvatar';
+import { LiveAttendanceMobileSetup } from './LiveAttendanceMobileSetup';
 import {
   OfficeLocation, UserAccount, parseLocationMeta, encodeLocationAddress
 } from './attendanceTypes';
@@ -76,6 +77,7 @@ const OfficeLocationsManager: React.FC<{
 }> = ({ locations, setLocations, onRefresh, loading }) => {
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === 'dark';
+  const [mainTab, setMainTab] = useState<'location' | 'mobile'>('location');
   const [activeTab, setActiveTab] = useState<'list' | 'map'>('list');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
@@ -434,47 +436,86 @@ const OfficeLocationsManager: React.FC<{
     <div className="w-full space-y-6 animate-in fade-in duration-500">
       {/* Standard PageHeader */}
       <PageHeader
-        title="Office Radius"
-        description="Kelola titik koordinat kantor, geofence radius, dan validasi lokasi presensi mobile karyawan."
+        title="Live Attendance"
+        description="Kelola titik lokasi kantor, radius geofence, serta aturan presensi mobile (selfie, face recognition, liveness detection)."
       >
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleRefresh}
-            disabled={refreshing || loading}
-            className="gap-1.5 border-border/60 bg-background/80 dark:bg-zinc-900/80 text-foreground hover:bg-muted shadow-2xs text-xs font-semibold"
-          >
-            <RefreshCw size={14} className={cn((refreshing || loading) && 'animate-spin text-primary dark:text-blue-400')} />
-            <span>Muat Ulang</span>
-          </Button>
-          <Button
-            size="sm"
-            onClick={openAdd}
-            className="gap-1.5 bg-[#103065] dark:bg-blue-600 text-white hover:bg-[#173e77] dark:hover:bg-blue-700 shadow-2xs text-xs font-semibold"
-          >
-            <Plus size={14} />
-            <span>Tambah Lokasi</span>
-          </Button>
-        </div>
+        {mainTab === 'location' && (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRefresh}
+              disabled={refreshing || loading}
+              className="gap-1.5 border-border/60 bg-background/80 dark:bg-zinc-900/80 text-foreground hover:bg-muted shadow-2xs text-xs font-semibold"
+            >
+              <RefreshCw size={14} className={cn((refreshing || loading) && 'animate-spin text-primary dark:text-blue-400')} />
+              <span>Muat Ulang</span>
+            </Button>
+            <Button
+              size="sm"
+              onClick={openAdd}
+              className="gap-1.5 bg-[#103065] dark:bg-blue-600 text-white hover:bg-[#173e77] dark:hover:bg-blue-700 shadow-2xs text-xs font-semibold"
+            >
+              <Plus size={14} />
+              <span>Tambah Lokasi</span>
+            </Button>
+          </div>
+        )}
       </PageHeader>
 
-      {/* Tab Switcher */}
-      <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as any)} className="w-fit mb-6">
-        <TabsList>
-          <TabsTrigger value="list">
-            <Building2 size={14} className="mr-1.5" />
-            <span>Daftar Lokasi</span>
-            <Badge variant="secondary" className="ml-2 px-1.5 py-0 text-[10px] font-bold">
-              {locations.length}
-            </Badge>
-          </TabsTrigger>
-          <TabsTrigger value="map">
-            <MapIcon size={14} className="mr-1.5" />
-            <span>Peta Sebaran GPS</span>
-          </TabsTrigger>
-        </TabsList>
-      </Tabs>
+      {/* Top-Level Tabs (Talenta Style: Location set up | Mobile set up) */}
+      <div className="flex items-center gap-2 border-b border-border/60 pb-3">
+        <button
+          onClick={() => setMainTab('location')}
+          className={cn(
+            "flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer",
+            mainTab === 'location'
+              ? "bg-[#103065] text-white dark:bg-blue-600 shadow-sm"
+              : "text-muted-foreground hover:bg-muted hover:text-foreground"
+          )}
+        >
+          <Building2 size={14} />
+          <span>Location set up</span>
+          <Badge variant="secondary" className="ml-1 px-1.5 py-0 text-[10px] font-bold">
+            {locations.length}
+          </Badge>
+        </button>
+
+        <button
+          onClick={() => setMainTab('mobile')}
+          className={cn(
+            "flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer",
+            mainTab === 'mobile'
+              ? "bg-[#103065] text-white dark:bg-blue-600 shadow-sm"
+              : "text-muted-foreground hover:bg-muted hover:text-foreground"
+          )}
+        >
+          <Smartphone size={14} />
+          <span>Mobile set up</span>
+          <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
+        </button>
+      </div>
+
+      {mainTab === 'mobile' ? (
+        <LiveAttendanceMobileSetup />
+      ) : (
+        <>
+          {/* Tab Switcher */}
+          <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as any)} className="w-fit mb-6">
+            <TabsList>
+              <TabsTrigger value="list">
+                <Building2 size={14} className="mr-1.5" />
+                <span>Daftar Lokasi</span>
+                <Badge variant="secondary" className="ml-2 px-1.5 py-0 text-[10px] font-bold">
+                  {locations.length}
+                </Badge>
+              </TabsTrigger>
+              <TabsTrigger value="map">
+                <MapIcon size={14} className="mr-1.5" />
+                <span>Peta Sebaran GPS</span>
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
 
       {/* StatCards Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
@@ -812,6 +853,8 @@ const OfficeLocationsManager: React.FC<{
             </div>
           </CardContent>
         </Card>
+      )}
+      </>
       )}
 
       {/* Add / Edit Dialog */}
