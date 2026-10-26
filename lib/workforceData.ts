@@ -56,8 +56,12 @@ export function normalizeAttendance(row: any) {
     workMins = 540; // 9 hours
   }
 
+  const isPendingApproval = Boolean(row.approval_status && String(row.approval_status).toLowerCase().startsWith('pending'));
+  const effectiveStatus = isPendingApproval ? 'pending' : (aliases[raw] || raw);
+
   return {
-    ...row, user_id: String(row.user_id), status: aliases[raw] || raw,
+    ...row, user_id: String(row.user_id), status: effectiveStatus,
+    approval_status: row.approval_status || 'approved',
     clock_in: cin,
     clock_out: cout,
     total_work_minutes: workMins,
