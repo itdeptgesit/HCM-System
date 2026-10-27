@@ -1,13 +1,13 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Users, UserCheck, FileText, CreditCard, RefreshCcw, Search, Plus,
   FileSpreadsheet, Eye, EyeOff, Pencil, Trash2, KeyRound, AlertTriangle,
   Building2, Briefcase, Calendar, ShieldCheck, Mail, Phone, MapPin,
   Clock, ArrowUpRight, CheckCircle2, XCircle, ArrowRightLeft,
   ChevronLeft, ChevronRight, Filter, ShieldAlert, Award, Upload, GraduationCap,
-  X, Loader2, Grid, List, MoreHorizontal
+  X, Loader2, Grid, List, MoreHorizontal, UserPlus
 } from '@/components/ui/icons';
 import {
   DropdownMenu,
@@ -46,6 +46,12 @@ import { RestrictedDocViewer } from './ui/RestrictedDocViewer';
 import { EmployeeImportModal } from './EmployeeImportModal';
 import { EmployeeExportModal } from './EmployeeExportModal';
 import { EmployeeAppointmentSKModal } from './hr/EmployeeAppointmentSKModal';
+import { EmployeeChangeRequestsManager } from './hr/EmployeeChangeRequestsManager';
+import {
+  checkRequiresApproval,
+  createEmployeeChangeRequest,
+  fetchEmployeeChangeRequests
+} from '../lib/employeeChangeRequestService';
 
 interface EmployeeDataManagerProps {
   currentUser: UserAccount | null;
@@ -61,7 +67,8 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
   // State
   const [employees, setEmployees] = useState<UserAccount[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'directory' | 'contracts' | 'payroll' | 'transfers'>('directory');
+  const [activeTab, setActiveTab] = useState<'directory' | 'contracts' | 'payroll' | 'transfers' | 'change_requests'>('directory');
+  const [pendingChangeRequestsCount, setPendingChangeRequestsCount] = useState<number>(0);
   const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
 
   // Search & Filter state
@@ -300,9 +307,19 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
     }
   };
 
+  const loadPendingChangeRequestsCount = useCallback(async () => {
+    try {
+      const list = await fetchEmployeeChangeRequests({ status: 'Pending' });
+      setPendingChangeRequestsCount(list.length);
+    } catch (err) {
+      console.error('Failed to load pending change requests count:', err);
+    }
+  }, []);
+
   useEffect(() => {
     fetchEmployees();
-  }, []);
+    loadPendingChangeRequestsCount();
+  }, [loadPendingChangeRequestsCount]);
 
   // Compute contract status / days remaining
   const getContractMeta = (emp: UserAccount) => {
@@ -372,7 +389,7 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
 
     const pkwtList = activeEmployees.filter(e => {
       const t = `${e.contractType || ''} ${e.employmentType || ''}`.toLowerCase();
-      return (t.includes('pkwt') || t.includes('contract')) && !t.includes('pkwtt');
+      return (t.includes('pkwt') || t.includes('kontrak') || t.includes('contract')) && !t.includes('pkwtt');
     });
     const pkwttList = activeEmployees.filter(e => {
       const t = `${e.contractType || ''} ${e.employmentType || ''}`.toLowerCase();
@@ -380,28 +397,56 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
     });
     const probationList = activeEmployees.filter(e => {
       const t = `${e.contractType || ''} ${e.employmentType || ''}`.toLowerCase();
-      return t.includes('probation') || t.includes('percobaan');
+      return (t.includes('probation') || t.includes('percobaan')) && !t.includes('pkwtt');
+    });
+    const magangList = activeEmployees.filter(e => {
+      const t = `${e.contractType || ''} ${e.employmentType || ''}`.toLowerCase();
+      return (t.includes('magang') || t.includes('intern')) && !t.includes('pkwtt');
     });
 
-    let expiringCount = 0;
-    let expiredCount = 0;
-
+    // Breakdown for PKWT contracts
+    let pkwtExpiring = 0;
+    let pkwtExpired = 0;
     pkwtList.forEach(e => {
       const meta = getContractMeta(e);
-      if (meta.isExpiring) expiringCount++;
-      if (meta.isExpired) expiredCount++;
+      if (meta.isExpiring) pkwtExpiring++;
+      if (meta.isExpired) pkwtExpired++;
     });
+    const pkwtSafe = Math.max(0, pkwtList.length - pkwtExpiring - pkwtExpired);
+
+    // Breakdown for Probation evaluations
+    let probationExpiring = 0;
+    let probationExpired = 0;
+    probationList.forEach(e => {
+      const meta = getContractMeta(e);
+      if (meta.isExpiring) probationExpiring++;
+      if (meta.isExpired) probationExpired++;
+    });
+    const probationSafe = Math.max(0, probationList.length - probationExpiring - probationExpired);
+
+    // Total active expiring/expired across contracts & probation
+    const totalExpiring = pkwtExpiring + probationExpiring;
+    const totalExpired = pkwtExpired + probationExpired;
+    const totalSafe = pkwtSafe + probationSafe;
 
     return {
-      total: total,
+      total,
       active: activeEmployees.length,
       hq: hqCount,
       nonHq: nonHqCount,
       pkwt: pkwtList.length,
       pkwtt: pkwttList.length,
       probation: probationList.length,
-      expiring: expiringCount,
-      expired: expiredCount
+      magang: magangList.length,
+      pkwtExpiring,
+      pkwtExpired,
+      pkwtSafe,
+      probationExpiring,
+      probationExpired,
+      probationSafe,
+      expiring: totalExpiring,
+      expired: totalExpired,
+      totalSafe
     };
   }, [employees]);
 
@@ -883,6 +928,98 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
     };
 
     try {
+      if (editingEmployee && checkRequiresApproval(currentUser)) {
+        const originalData: Record<string, any> = {
+          username: editingEmployee.username,
+          full_name: editingEmployee.fullName,
+          nickname: editingEmployee.nickname || null,
+          email: (editingEmployee.email || '').trim().toLowerCase(),
+          role: editingEmployee.role,
+          groups: editingEmployee.groups,
+          status: editingEmployee.status,
+          employment_status: editingEmployee.employmentStatus,
+          status_effective_date: editingEmployee.statusEffectiveDate,
+          separation_date: editingEmployee.separationDate,
+          separation_reason: editingEmployee.separationReason,
+          company: editingEmployee.company,
+          branch: editingEmployee.branch,
+          department: editingEmployee.department,
+          phone: editingEmployee.phone,
+          address: editingEmployee.address,
+          job_title: editingEmployee.jobTitle,
+          employee_code: editingEmployee.employeeCode,
+          join_date: editingEmployee.joinDate,
+          job_level: editingEmployee.jobLevel,
+          employment_type: editingEmployee.employmentType,
+          contract_type: editingEmployee.contractType,
+          contract_start_date: editingEmployee.contractStartDate,
+          contract_end_date: editingEmployee.contractEndDate,
+          pkwt_number: editingEmployee.pkwtNumber,
+          payroll_status: editingEmployee.payrollStatus,
+          bank_name: editingEmployee.bankName,
+          bank_account_name: editingEmployee.bankAccountName,
+          bank_account_number: editingEmployee.bankAccountNumber,
+          tax_status: editingEmployee.taxStatus,
+          date_of_birth: editingEmployee.dateOfBirth,
+          birth_place: editingEmployee.birthPlace,
+          gender: editingEmployee.gender,
+          marital_status: editingEmployee.maritalStatus,
+          religion: editingEmployee.religion,
+          blood_type: editingEmployee.bloodType,
+          nik: editingEmployee.nik,
+          npwp: editingEmployee.npwp,
+          passport_number: (editingEmployee as any).passportNumber || null,
+          residential_address: editingEmployee.residentialAddress,
+          bpjs_tk_number: editingEmployee.bpjsTkNumber,
+          bpjs_health_number: editingEmployee.bpjsHealthNumber,
+          grade_class: editingEmployee.gradeClass,
+          supervisor_id: (editingEmployee as any).supervisorId || null,
+          manager_id: (editingEmployee as any).managerId || null,
+          vp_id: (editingEmployee as any).vpId || null,
+          attendance_supervisor_id: (editingEmployee as any).attendanceSupervisorId || null,
+          attendance_hr_id: (editingEmployee as any).attendanceHrId || null,
+          attendance_manager_id: (editingEmployee as any).attendanceManagerId || null,
+          attendance_vp_id: (editingEmployee as any).attendanceVpId || null,
+          avatar_url: editingEmployee.avatarUrl,
+          e_sign_url: (editingEmployee as any).eSignUrl || null,
+          ktp_file_url: editingEmployee.ktpFileUrl,
+          ijazah_file_url: editingEmployee.ijazahFileUrl,
+          sk_file_url: editingEmployee.skFileUrl,
+          bpjs_file_url: editingEmployee.bpjsFileUrl,
+          last_education: editingEmployee.lastEducation,
+          institution_name: editingEmployee.institutionName,
+          major: editingEmployee.major,
+          graduation_year: editingEmployee.graduationYear,
+          education_start_year: editingEmployee.educationStartYear,
+          gpa: editingEmployee.gpa,
+          diploma_number: editingEmployee.diplomaNumber,
+          schedule_id: editingEmployee.scheduleId,
+          work_schedule_type: editingEmployee.workScheduleType,
+          custom_work_start: editingEmployee.customWorkStart,
+          custom_work_end: editingEmployee.customWorkEnd,
+          custom_grace_period_minutes: editingEmployee.customGracePeriodMinutes
+        };
+
+        const { success, data: request, error: reqErr } = await createEmployeeChangeRequest({
+          employee: editingEmployee,
+          requestedBy: currentUser!,
+          source: 'hr_data_manager',
+          originalData,
+          proposedChanges: payload
+        });
+
+        if (!success || reqErr) {
+          showToast('Gagal mengajukan perubahan: ' + (reqErr || 'Tidak ada perubahan terdeteksi'), 'error');
+          return;
+        }
+
+        showToast(`Perubahan data ${editingEmployee.fullName} berhasil diajukan dan sedang menunggu persetujuan HR Manager`, 'success');
+        setIsFormModalOpen(false);
+        setEditingEmployee(null);
+        await loadPendingChangeRequestsCount();
+        return;
+      }
+
       if (passwordTrim && passwordTrim.length < 6) {
         showToast('Password minimal 6 karakter', 'error');
         return;
@@ -917,6 +1054,24 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
       };
 
       await executeSave(payload);
+
+      // Catat log aktivitas & audit trail untuk perubahan langsung
+      trackActivity({
+        userId: currentUser?.id,
+        userName: currentUser?.fullName || 'HR Manager',
+        userRole: currentUser?.role || 'Admin',
+        userEmail: currentUser?.email || '',
+        action: editingEmployee ? 'Update Data Karyawan Langsung' : 'Pendaftaran Karyawan Baru',
+        module: 'Data Karyawan',
+        details: editingEmployee
+          ? `Memperbarui data karyawan ${userData.fullName} secara langsung (Bypass Approval oleh ${currentUser?.role || 'HR Manager'})`
+          : `Mendaftarkan karyawan baru ${userData.fullName} (${userData.email})`,
+        metadata: {
+          employeeId: editingEmployee?.id,
+          employeeName: userData.fullName
+        }
+      }).catch(console.error);
+
       showToast(editingEmployee ? `Data ${userData.fullName} berhasil diperbarui` : `Employee ${userData.fullName} berhasil didaftarkan`, 'success');
 
       setIsFormModalOpen(false);
@@ -1038,233 +1193,266 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
         </div>
       </PageHeader>
 
-      {/* NEXORA STYLE KPI STAT CARDS */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Card 1: Total Karyawan Aktif & HQ / Non-HQ Info */}
-        <Card
-          className="relative overflow-hidden bg-card/80 backdrop-blur-sm bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] dark:bg-[radial-gradient(#1f2937_1px,transparent_1px)] [background-size:16px_16px] border border-border/80 rounded-2xl shadow-sm hover:shadow-md transition-all cursor-pointer group"
+      {/* TOP KPI CARDS (HOME DASHBOARD STYLE - ROUNDED 18PX) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
+        {/* Card 1: Total Karyawan Aktif */}
+        <div
           onClick={() => {
             setActiveTab('directory');
             setStatusFilter('Active');
+            setEmploymentFilter('');
+            setBranchFilter('all');
+            setContractAlertFilter('all');
+            setCurrentPage(1);
           }}
+          className={`bg-white dark:bg-[#131622] rounded-[18px] p-5 border border-[#e5eaf1] dark:border-zinc-800/80 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-12px_rgba(15,23,42,0.12)] hover:-translate-y-0.5 hover:shadow-[0_2px_4px_rgba(15,23,42,0.05),0_16px_32px_-12px_rgba(15,23,42,0.18)] transition-all flex flex-col justify-between cursor-pointer group ${
+            activeTab === 'directory' && !employmentFilter && branchFilter === 'all' && contractAlertFilter === 'all'
+              ? 'ring-2 ring-blue-500/40 border-blue-500/30'
+              : ''
+          }`}
+          title="Klik untuk melihat semua karyawan aktif"
         >
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Total Karyawan Aktif
-            </CardTitle>
-
-            {/* Gradient Squircle Icon Box */}
-            <div className="flex size-10 items-center justify-center rounded-xl border border-border/80 bg-background/60 p-0.5 shadow-xs group-hover:scale-105 transition-transform">
-              <div className="flex size-full items-center justify-center rounded-lg text-white bg-gradient-to-br from-cyan-500 to-blue-600 dark:from-cyan-400 dark:to-blue-500 shadow-sm">
-                <Users className="size-5" />
+          <div className="flex items-center gap-3.5">
+            <div className="w-11 h-11 rounded-[14px] bg-[#eff6ff] dark:bg-blue-950/60 text-[#2563eb] dark:text-blue-400 flex items-center justify-center font-bold shrink-0">
+              <Users className="size-5" />
+            </div>
+            <div>
+              <span className="text-[12.5px] font-medium text-[#475569] dark:text-zinc-400 block">Karyawan Aktif</span>
+              <div className="text-[28px] font-extrabold text-[#0f172a] dark:text-white leading-none mt-1">
+                {stats.active}
               </div>
             </div>
-          </CardHeader>
+          </div>
 
-          <CardContent className="pt-0">
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-black tracking-tight text-foreground">{stats.active}</span>
-              <span className="text-xs text-muted-foreground font-medium">dari {stats.total} terdaftar</span>
-            </div>
-
-            <div className="mt-3 flex items-center gap-1.5 text-xs flex-wrap">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setBranchFilter(prev => prev === 'HQ' ? 'all' : 'HQ');
-                }}
-                className="transition-transform hover:scale-105 cursor-pointer"
-                title="Klik untuk filter Karyawan HQ"
-              >
-                <Badge
-                  variant="outline"
-                  className={`rounded-md px-2 py-0.5 text-xs font-bold transition-all ${
-                    branchFilter === 'HQ'
-                      ? 'border-blue-500 bg-blue-600 text-white shadow-xs'
-                      : 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-900/60 dark:bg-blue-950/50 dark:text-blue-300'
-                  }`}
-                >
-                  HQ: {stats.hq}
-                </Badge>
-              </button>
-
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setBranchFilter(prev => prev === 'Non HQ' ? 'all' : 'Non HQ');
-                }}
-                className="transition-transform hover:scale-105 cursor-pointer"
-                title="Klik untuk filter Karyawan Non-HQ"
-              >
-                <Badge
-                  variant="outline"
-                  className={`rounded-md px-2 py-0.5 text-xs font-bold transition-all ${
-                    branchFilter === 'Non HQ'
-                      ? 'border-purple-500 bg-purple-600 text-white shadow-xs'
-                      : 'border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100 dark:border-purple-900/60 dark:bg-purple-950/50 dark:text-purple-300'
-                  }`}
-                >
-                  Non-HQ: {stats.nonHq}
-                </Badge>
-              </button>
-
-              {branchFilter !== 'all' && (
+          <div className="mt-5 pt-3 border-t border-[#e5eaf1] dark:border-zinc-800 flex items-center justify-between text-[12.5px]">
+            <div>
+              <span className="text-[11px] text-[#94a3b8] dark:text-zinc-500 font-medium block">Penempatan Kerja</span>
+              <span className="font-semibold text-slate-700 dark:text-zinc-300 flex items-center gap-1.5 mt-0.5">
                 <button
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
-                    setBranchFilter('all');
+                    setActiveTab('directory');
+                    setBranchFilter(prev => prev === 'HQ' ? 'all' : 'HQ');
+                    setCurrentPage(1);
                   }}
-                  className="text-[10px] text-rose-500 hover:underline font-semibold ml-1 cursor-pointer"
+                  className={`text-[11.5px] transition-colors cursor-pointer ${
+                    branchFilter === 'HQ' ? 'text-blue-600 dark:text-blue-400 font-bold underline' : 'hover:text-blue-600'
+                  }`}
+                  title="Filter Karyawan HQ"
                 >
-                  Reset Penempatan
+                  HQ: {stats.hq}
                 </button>
-              )}
-
-              <span className="text-[11px] text-muted-foreground ml-auto font-medium">
-                {stats.total > 0 ? Math.round((stats.active / stats.total) * 100) : 0}% aktif
+                <span className="text-muted-foreground/40">·</span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveTab('directory');
+                    setBranchFilter(prev => prev === 'Non HQ' ? 'all' : 'Non HQ');
+                    setCurrentPage(1);
+                  }}
+                  className={`text-[11.5px] transition-colors cursor-pointer ${
+                    branchFilter === 'Non HQ' ? 'text-purple-600 dark:text-purple-400 font-bold underline' : 'hover:text-purple-600'
+                  }`}
+                  title="Filter Karyawan Non-HQ"
+                >
+                  Non-HQ: {stats.nonHq}
+                </button>
               </span>
             </div>
-          </CardContent>
-        </Card>
+            <div className="text-right">
+              <span className="text-[11px] text-[#94a3b8] dark:text-zinc-500 font-medium block">Status Data</span>
+              <span className="font-semibold text-[#475569] dark:text-zinc-400 mt-0.5 block">
+                {stats.total > 0 ? Math.round((stats.active / stats.total) * 100) : 0}% ({stats.total} total)
+              </span>
+            </div>
+          </div>
+        </div>
 
-        {/* Card 2: Karyawan PKWT (Kontrak) */}
-        <Card
-          className="relative overflow-hidden bg-card/80 backdrop-blur-sm bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] dark:bg-[radial-gradient(#1f2937_1px,transparent_1px)] [background-size:16px_16px] border border-border/80 rounded-2xl shadow-sm hover:shadow-md transition-all cursor-pointer group"
+        {/* Card 2: Karyawan PKWTT (Tetap) */}
+        <div
           onClick={() => {
             setActiveTab('directory');
-            setEmploymentFilter('PKWT');
+            setEmploymentFilter(prev => prev === 'PKWTT' ? '' : 'PKWTT');
+            setCurrentPage(1);
           }}
-        >
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Karyawan PKWT
-            </CardTitle>
-
-            <div className="flex size-10 items-center justify-center rounded-xl border border-border/80 bg-background/60 p-0.5 shadow-xs group-hover:scale-105 transition-transform">
-              <div className="flex size-full items-center justify-center rounded-lg text-white bg-gradient-to-br from-amber-500 to-orange-600 dark:from-amber-400 dark:to-orange-500 shadow-sm">
-                <FileText className="size-5" />
-              </div>
-            </div>
-          </CardHeader>
-
-          <CardContent className="pt-0">
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-black tracking-tight text-foreground">{stats.pkwt}</span>
-              <span className="text-xs text-muted-foreground font-medium">karyawan kontrak</span>
-            </div>
-
-            <div className="mt-3 flex items-center gap-1.5 text-xs">
-              <Badge
-                variant="outline"
-                className="rounded-md px-2 py-0.5 text-xs font-bold border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/50 dark:text-amber-400"
-              >
-                {stats.active > 0 ? Math.round((stats.pkwt / stats.active) * 100) : 0}% tenaga kerja
-              </Badge>
-              <span className="text-[11px] text-muted-foreground truncate">
-                {stats.expiring > 0 ? `${stats.expiring} perlu perpanjang · ${Math.max(0, stats.pkwt - stats.expiring)} aman` : 'Semua kontrak aman'}
-              </span>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Card 3: Karyawan PKWTT (Tetap) */}
-        <Card
-          className="relative overflow-hidden bg-card/80 backdrop-blur-sm bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] dark:bg-[radial-gradient(#1f2937_1px,transparent_1px)] [background-size:16px_16px] border border-border/80 rounded-2xl shadow-sm hover:shadow-md transition-all cursor-pointer group"
-          onClick={() => {
-            setActiveTab('directory');
-            setEmploymentFilter('PKWTT');
-          }}
-        >
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Karyawan PKWTT
-            </CardTitle>
-
-            <div className="flex size-10 items-center justify-center rounded-xl border border-border/80 bg-background/60 p-0.5 shadow-xs group-hover:scale-105 transition-transform">
-              <div className="flex size-full items-center justify-center rounded-lg text-white bg-gradient-to-br from-emerald-500 to-teal-600 dark:from-emerald-400 dark:to-teal-500 shadow-sm">
-                <UserCheck className="size-5" />
-              </div>
-            </div>
-          </CardHeader>
-
-          <CardContent className="pt-0">
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-black tracking-tight text-foreground">{stats.pkwtt}</span>
-              <span className="text-xs text-muted-foreground font-medium">karyawan tetap</span>
-            </div>
-
-            <div className="mt-3 flex items-center gap-1.5 text-xs">
-              <Badge
-                variant="outline"
-                className="rounded-md px-2 py-0.5 text-xs font-bold border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/50 dark:text-emerald-400"
-              >
-                {stats.active > 0 ? Math.round((stats.pkwtt / stats.active) * 100) : 0}% tenaga kerja
-              </Badge>
-              <span className="text-[11px] text-muted-foreground truncate">
-                PKWTT Tetap (Permanent)
-              </span>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Card 4: Kontrak Jatuh Tempo (≤ 60 hari) */}
-        <Card
-          className={`relative overflow-hidden bg-card/80 backdrop-blur-sm bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] dark:bg-[radial-gradient(#1f2937_1px,transparent_1px)] [background-size:16px_16px] border border-border/80 rounded-2xl shadow-sm hover:shadow-md transition-all cursor-pointer group ${
-            stats.expiring > 0 ? 'border-rose-300 dark:border-rose-800' : ''
+          className={`bg-white dark:bg-[#131622] rounded-[18px] p-5 border border-[#e5eaf1] dark:border-zinc-800/80 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-12px_rgba(15,23,42,0.12)] hover:-translate-y-0.5 hover:shadow-[0_2px_4px_rgba(15,23,42,0.05),0_16px_32px_-12px_rgba(15,23,42,0.18)] transition-all flex flex-col justify-between cursor-pointer group ${
+            activeTab === 'directory' && employmentFilter === 'PKWTT'
+              ? 'ring-2 ring-emerald-500/60 border-emerald-500/40 shadow-md'
+              : ''
           }`}
+          title="Klik untuk filter Karyawan Tetap (PKWTT)"
+        >
+          <div className="flex items-center gap-3.5">
+            <div className="w-11 h-11 rounded-[14px] bg-[#f0fdf4] dark:bg-emerald-950/60 text-[#16a34a] dark:text-emerald-400 flex items-center justify-center font-bold shrink-0">
+              <UserCheck className="size-5" />
+            </div>
+            <div>
+              <span className="text-[12.5px] font-medium text-[#475569] dark:text-zinc-400 block">Karyawan PKWTT</span>
+              <div className="text-[28px] font-extrabold text-[#0f172a] dark:text-white leading-none mt-1">
+                {stats.pkwtt}
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-5 pt-3 border-t border-[#e5eaf1] dark:border-zinc-800 flex items-center justify-between text-[12.5px]">
+            <div>
+              <span className="text-[11px] text-[#94a3b8] dark:text-zinc-500 font-medium block">Porsi Tenaga Kerja</span>
+              <span className="font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1 mt-0.5">
+                {stats.active > 0 ? Math.round((stats.pkwtt / stats.active) * 100) : 0}% Tetap
+              </span>
+            </div>
+            <div className="text-right">
+              <span className="text-[11px] text-[#94a3b8] dark:text-zinc-500 font-medium block">Kategori</span>
+              <span className="font-semibold text-[#475569] dark:text-zinc-400 mt-0.5 block">Permanent</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Card 3: Karyawan PKWT (Kontrak) */}
+        <div
+          onClick={() => {
+            setActiveTab('directory');
+            setEmploymentFilter(prev => prev === 'PKWT' ? '' : 'PKWT');
+            setCurrentPage(1);
+          }}
+          className={`bg-white dark:bg-[#131622] rounded-[18px] p-5 border border-[#e5eaf1] dark:border-zinc-800/80 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-12px_rgba(15,23,42,0.12)] hover:-translate-y-0.5 hover:shadow-[0_2px_4px_rgba(15,23,42,0.05),0_16px_32px_-12px_rgba(15,23,42,0.18)] transition-all flex flex-col justify-between cursor-pointer group ${
+            activeTab === 'directory' && employmentFilter === 'PKWT'
+              ? 'ring-2 ring-amber-500/60 border-amber-500/40 shadow-md'
+              : ''
+          }`}
+          title="Klik untuk filter Karyawan PKWT"
+        >
+          <div className="flex items-center gap-3.5">
+            <div className="w-11 h-11 rounded-[14px] bg-[#fffbeb] dark:bg-amber-950/60 text-[#d97706] dark:text-amber-400 flex items-center justify-center font-bold shrink-0">
+              <FileText className="size-5" />
+            </div>
+            <div>
+              <span className="text-[12.5px] font-medium text-[#475569] dark:text-zinc-400 block">Karyawan PKWT</span>
+              <div className="text-[28px] font-extrabold text-[#0f172a] dark:text-white leading-none mt-1">
+                {stats.pkwt}
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-5 pt-3 border-t border-[#e5eaf1] dark:border-zinc-800 flex items-center justify-between text-[12.5px]">
+            <div>
+              <span className="text-[11px] text-[#94a3b8] dark:text-zinc-500 font-medium block">Kondisi Kontrak</span>
+              <span className="font-semibold text-amber-600 dark:text-amber-400 flex items-center gap-1 mt-0.5">
+                {stats.pkwtExpiring > 0
+                  ? `${stats.pkwtExpiring} jatuh tempo · ${stats.pkwtSafe} aman`
+                  : 'Semua aman'}
+              </span>
+            </div>
+            <div className="text-right">
+              <span className="text-[11px] text-[#94a3b8] dark:text-zinc-500 font-medium block">Porsi</span>
+              <span className="font-semibold text-[#475569] dark:text-zinc-400 mt-0.5 block">
+                {stats.active > 0 ? Number(((stats.pkwt / stats.active) * 100).toFixed(1)) : 0}% PKWT
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Card 4: Masa Percobaan (Probation) */}
+        <div
+          onClick={() => {
+            setActiveTab('directory');
+            setEmploymentFilter(prev => prev === 'Probation' ? '' : 'Probation');
+            setCurrentPage(1);
+          }}
+          className={`bg-white dark:bg-[#131622] rounded-[18px] p-5 border border-[#e5eaf1] dark:border-zinc-800/80 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-12px_rgba(15,23,42,0.12)] hover:-translate-y-0.5 hover:shadow-[0_2px_4px_rgba(15,23,42,0.05),0_16px_32px_-12px_rgba(15,23,42,0.18)] transition-all flex flex-col justify-between cursor-pointer group ${
+            activeTab === 'directory' && employmentFilter === 'Probation'
+              ? 'ring-2 ring-purple-500/60 border-purple-500/40 shadow-md'
+              : ''
+          }`}
+          title="Klik untuk filter Karyawan Masa Percobaan (Probation)"
+        >
+          <div className="flex items-center gap-3.5">
+            <div className="w-11 h-11 rounded-[14px] bg-[#faf5ff] dark:bg-purple-950/60 text-[#9333ea] dark:text-purple-400 flex items-center justify-center font-bold shrink-0">
+              <UserPlus className="size-5" />
+            </div>
+            <div>
+              <span className="text-[12.5px] font-medium text-[#475569] dark:text-zinc-400 block">Masa Percobaan</span>
+              <div className="text-[28px] font-extrabold text-[#0f172a] dark:text-white leading-none mt-1">
+                {stats.probation}
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-5 pt-3 border-t border-[#e5eaf1] dark:border-zinc-800 flex items-center justify-between text-[12.5px]">
+            <div>
+              <span className="text-[11px] text-[#94a3b8] dark:text-zinc-500 font-medium block">Evaluasi 3 Bulan</span>
+              <span className="font-semibold text-purple-600 dark:text-purple-400 flex items-center gap-1 mt-0.5">
+                {stats.probationExpiring > 0
+                  ? `${stats.probationExpiring} review < 30 hr`
+                  : 'Semua aman'}
+              </span>
+            </div>
+            <div className="text-right">
+              <span className="text-[11px] text-[#94a3b8] dark:text-zinc-500 font-medium block">Porsi</span>
+              <span className="font-semibold text-[#475569] dark:text-zinc-400 mt-0.5 block">
+                {stats.active > 0 ? Number(((stats.probation / stats.active) * 100).toFixed(1)) : 0}% Masa Uji
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Card 5: Jatuh Tempo & Review */}
+        <div
           onClick={() => {
             setActiveTab('contracts');
             setEmploymentFilter('');
             setBranchFilter('all');
             setContractAlertFilter(stats.expiring > 0 ? 'expiring' : 'all');
+            setCurrentPage(1);
           }}
+          className={`bg-white dark:bg-[#131622] rounded-[18px] p-5 border border-[#e5eaf1] dark:border-zinc-800/80 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-12px_rgba(15,23,42,0.12)] hover:-translate-y-0.5 hover:shadow-[0_2px_4px_rgba(15,23,42,0.05),0_16px_32px_-12px_rgba(15,23,42,0.18)] transition-all flex flex-col justify-between cursor-pointer group ${
+            activeTab === 'contracts' && contractAlertFilter === 'expiring'
+              ? 'ring-2 ring-rose-500/60 border-rose-500/40 shadow-md'
+              : ''
+          }`}
+          title="Klik untuk membuka tab Kontrak & melihat detail yang jatuh tempo"
         >
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Kontrak Jatuh Tempo
-            </CardTitle>
-
-            <div className="flex size-10 items-center justify-center rounded-xl border border-border/80 bg-background/60 p-0.5 shadow-xs group-hover:scale-105 transition-transform">
-              <div className={`flex size-full items-center justify-center rounded-lg text-white shadow-sm ${
-                stats.expiring > 0
-                  ? 'bg-gradient-to-br from-rose-500 to-red-600 animate-pulse'
-                  : 'bg-gradient-to-br from-slate-500 to-zinc-600'
-              }`}>
-                <Clock className="size-5" />
-              </div>
+          <div className="flex items-center gap-3.5">
+            <div className={`w-11 h-11 rounded-[14px] flex items-center justify-center font-bold shrink-0 ${
+              stats.expiring > 0
+                ? 'bg-[#fff1f2] dark:bg-rose-950/60 text-[#e11d48] dark:text-rose-400'
+                : 'bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400'
+            }`}>
+              <Clock className={`size-5 ${stats.expiring > 0 ? 'animate-pulse' : ''}`} />
             </div>
-          </CardHeader>
-
-          <CardContent className="pt-0">
-            <div className="flex items-baseline gap-2">
-              <span className={`text-3xl font-black tracking-tight ${
-                stats.expiring > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-foreground'
+            <div>
+              <span className="text-[12.5px] font-medium text-[#475569] dark:text-zinc-400 block">Jatuh Tempo & Review</span>
+              <div className={`text-[28px] font-extrabold leading-none mt-1 ${
+                stats.expiring > 0 ? 'text-[#e11d48] dark:text-rose-400' : 'text-[#0f172a] dark:text-white'
               }`}>
                 {stats.expiring}
-              </span>
-              <span className="text-xs text-muted-foreground font-medium">kontrak</span>
+              </div>
             </div>
+          </div>
 
-            <div className="mt-3 flex items-center gap-1.5 text-xs">
-              <Badge
-                variant="outline"
-                className={`rounded-md px-2 py-0.5 text-xs font-bold ${
-                  stats.expiring > 0
-                    ? 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/50 dark:text-rose-400'
-                    : 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/50 dark:text-emerald-400'
-                }`}
-              >
-                {stats.expiring > 0 ? '< 30 Hari' : 'Status Aman'}
-              </Badge>
-              <span className="text-[11px] text-muted-foreground truncate">
-                {stats.expiring > 0 ? '1 dari 4 PKWT perlu perpanjang' : 'Tidak ada jatuh tempo'}
+          <div className="mt-5 pt-3 border-t border-[#e5eaf1] dark:border-zinc-800 flex items-center justify-between text-[12.5px]">
+            <div>
+              <span className="text-[11px] text-[#94a3b8] dark:text-zinc-500 font-medium block">Tindak Lanjut</span>
+              <span className={`font-semibold flex items-center gap-1 mt-0.5 ${
+                stats.expiring > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-600 dark:text-zinc-400'
+              }`}>
+                {stats.expiring > 0
+                  ? `${stats.pkwtExpiring} PKWT · ${stats.probationExpiring} Probation`
+                  : 'Semua aman'}
               </span>
             </div>
-          </CardContent>
-        </Card>
+            <div className="text-right">
+              <span className="text-[11px] text-[#94a3b8] dark:text-zinc-500 font-medium block">Batas Waktu</span>
+              <span className={`font-semibold mt-0.5 block ${
+                stats.expired > 0 ? 'text-rose-600 dark:text-rose-400' : stats.expiring > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-[#475569] dark:text-zinc-400'
+              }`}>
+                {stats.expired > 0 ? `${stats.expired} Lewat Tempo` : stats.expiring > 0 ? '< 30 Hari' : 'Aman'}
+              </span>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* VIEW TABS & TOOLBAR */}
@@ -1291,14 +1479,24 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
                 <TabsTrigger value="transfers" className="text-xs font-semibold gap-1.5 px-3 py-1.5">
                   <ArrowRightLeft size={14} /> Riwayat Transfer
                 </TabsTrigger>
+                <TabsTrigger value="change_requests" className="text-xs font-semibold gap-1.5 px-3 py-1.5">
+                  <ShieldCheck size={14} /> Persetujuan Data
+                  {pendingChangeRequestsCount > 0 && (
+                    <span className="ml-1 px-1.5 py-0.2 text-[10px] font-bold bg-amber-500 text-white rounded-full">
+                      {pendingChangeRequestsCount}
+                    </span>
+                  )}
+                </TabsTrigger>
               </TabsList>
             </Tabs>
 
             {/* Quick Count Info & View Toggle */}
             <div className="flex items-center gap-3">
-              <span className="text-xs text-muted-foreground font-medium hidden sm:inline">
-                Menampilkan <b>{filteredEmployees.length}</b> dari <b>{employees.length}</b> employee
-              </span>
+              {activeTab !== 'change_requests' && (
+                <span className="text-xs text-muted-foreground font-medium hidden sm:inline">
+                  Menampilkan <b>{filteredEmployees.length}</b> dari <b>{employees.length}</b> employee
+                </span>
+              )}
 
               {activeTab === 'directory' && (
                 <div className="flex items-center p-0.5 rounded-lg border border-border bg-muted/60">
@@ -1335,99 +1533,110 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
         </CardHeader>
 
         {/* FILTERS & SEARCH ROW */}
-        <CardContent className="pt-4 pb-4">
-          <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3">
-            {/* Search Input */}
-            <div className="relative flex-1">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" size={15} />
-              <Input
-                placeholder="Cari nama, NIK, jabatan, email, departemen..."
-                className="pl-10 text-xs bg-background/50 h-9"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
+        {activeTab !== 'change_requests' && (
+          <CardContent className="pt-4 pb-4">
+            <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3">
+              {/* Search Input */}
+              <div className="relative flex-1">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" size={15} />
+                <Input
+                  placeholder="Cari nama, NIK, jabatan, email, departemen..."
+                  className="pl-10 text-xs bg-background/50 h-9"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
 
-            {/* Filter Company */}
-            <select
-              value={companyFilter}
-              onChange={(e) => setCompanyFilter(e.target.value)}
-              className="h-9 rounded-lg border border-border bg-background px-3 text-xs font-medium text-foreground outline-none transition focus:border-primary focus:ring-1 focus:ring-primary/20"
-            >
-              <option value="">Semua Perusahaan</option>
-              {companies.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
-
-            {/* Filter Department */}
-            <select
-              value={departmentFilter}
-              onChange={(e) => setDepartmentFilter(e.target.value)}
-              className="h-9 rounded-lg border border-border bg-background px-3 text-xs font-medium text-foreground outline-none transition focus:border-primary focus:ring-1 focus:ring-primary/20"
-            >
-              <option value="">Semua Departemen</option>
-              {departments.map((d) => (
-                <option key={d} value={d}>{d}</option>
-              ))}
-            </select>
-
-            {/* Filter Employment Type */}
-            <select
-              value={employmentFilter}
-              onChange={(e) => setEmploymentFilter(e.target.value)}
-              className="h-9 rounded-lg border border-border bg-background px-3 text-xs font-medium text-foreground outline-none transition focus:border-primary focus:ring-1 focus:ring-primary/20"
-            >
-              <option value="">Semua Status Kerja</option>
-              {employmentTypes.map((et) => (
-                <option key={et} value={et}>{et}</option>
-              ))}
-            </select>
-
-            {/* Filter Status Akun (Aktif / Resign / Non-Aktif) */}
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as any)}
-              className="h-9 rounded-lg border border-border bg-background px-3 text-xs font-medium text-foreground outline-none transition focus:border-primary focus:ring-1 focus:ring-primary/20"
-            >
-              <option value="Active">Karyawan Aktif</option>
-              <option value="all">Semua Status</option>
-              <option value="Resigned">Karyawan Resign</option>
-              <option value="Disabled">Karyawan Non-Aktif</option>
-            </select>
-
-            {/* Filter Contract Alert (Visible in contracts tab) */}
-            {activeTab === 'contracts' && (
+              {/* Filter Company */}
               <select
-                value={contractAlertFilter}
-                onChange={(e) => setContractAlertFilter(e.target.value as any)}
-                className="h-9 rounded-lg border border-border bg-background px-3 text-xs font-semibold text-foreground outline-none transition focus:border-primary focus:ring-1 focus:ring-primary/20"
+                value={companyFilter}
+                onChange={(e) => setCompanyFilter(e.target.value)}
+                className="h-9 rounded-lg border border-border bg-background px-3 text-xs font-medium text-foreground outline-none transition focus:border-primary focus:ring-1 focus:ring-primary/20"
               >
-                <option value="all">Semua Masa Kontrak</option>
-                <option value="expiring">Perlu Perpanjangan &lt; 30 hari ({stats.expiring})</option>
-                <option value="safe">Masa Kontrak Aman ({Math.max(0, stats.pkwt - stats.expiring - stats.expired)})</option>
-                <option value="expired">Telah Berakhir ({stats.expired})</option>
+                <option value="">Semua Perusahaan</option>
+                {companies.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
               </select>
-            )}
 
-            {/* Reset Filters button */}
-            {(searchTerm || companyFilter || departmentFilter || employmentFilter || statusFilter !== 'Active' || contractAlertFilter !== 'all') && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={resetFilters}
-                className="text-xs text-rose-500 hover:text-rose-600 hover:bg-rose-500/10 h-9"
+              {/* Filter Department */}
+              <select
+                value={departmentFilter}
+                onChange={(e) => setDepartmentFilter(e.target.value)}
+                className="h-9 rounded-lg border border-border bg-background px-3 text-xs font-medium text-foreground outline-none transition focus:border-primary focus:ring-1 focus:ring-primary/20"
               >
-                Reset
-              </Button>
-            )}
-          </div>
-        </CardContent>
+                <option value="">Semua Departemen</option>
+                {departments.map((d) => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </select>
+
+              {/* Filter Employment Type */}
+              <select
+                value={employmentFilter}
+                onChange={(e) => setEmploymentFilter(e.target.value)}
+                className="h-9 rounded-lg border border-border bg-background px-3 text-xs font-medium text-foreground outline-none transition focus:border-primary focus:ring-1 focus:ring-primary/20"
+              >
+                <option value="">Semua Status Kerja</option>
+                {employmentTypes.map((et) => (
+                  <option key={et} value={et}>{et}</option>
+                ))}
+              </select>
+
+              {/* Filter Status Akun (Aktif / Resign / Non-Aktif) */}
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as any)}
+                className="h-9 rounded-lg border border-border bg-background px-3 text-xs font-medium text-foreground outline-none transition focus:border-primary focus:ring-1 focus:ring-primary/20"
+              >
+                <option value="Active">Karyawan Aktif</option>
+                <option value="all">Semua Status</option>
+                <option value="Resigned">Karyawan Resign</option>
+                <option value="Disabled">Karyawan Non-Aktif</option>
+              </select>
+
+              {/* Filter Contract Alert (Visible in contracts tab) */}
+              {activeTab === 'contracts' && (
+                <select
+                  value={contractAlertFilter}
+                  onChange={(e) => setContractAlertFilter(e.target.value as any)}
+                  className="h-9 rounded-lg border border-border bg-background px-3 text-xs font-semibold text-foreground outline-none transition focus:border-primary focus:ring-1 focus:ring-primary/20"
+                >
+                  <option value="all">Semua Masa Kontrak</option>
+                  <option value="expiring">Perlu Tindakan &lt; 30 hari ({stats.expiring})</option>
+                  <option value="safe">Masa Berlaku Aman ({stats.totalSafe})</option>
+                  <option value="expired">Telah Berakhir ({stats.expired})</option>
+                </select>
+              )}
+
+              {/* Reset Filters button */}
+              {(searchTerm || companyFilter || departmentFilter || employmentFilter || statusFilter !== 'Active' || contractAlertFilter !== 'all') && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={resetFilters}
+                  className="text-xs text-rose-500 hover:text-rose-600 hover:bg-rose-500/10 h-9"
+                >
+                  Reset
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        )}
       </Card>
 
       {/* DATA TABLE CONTAINER */}
-      <Card className="border-border/60 shadow-sm overflow-hidden">
-        {activeTab === 'directory' && viewMode === 'grid' ? (
+      {activeTab === 'change_requests' ? (
+        <EmployeeChangeRequestsManager
+          currentUser={currentUser}
+          onRefreshNeeded={() => {
+            fetchEmployees();
+            loadPendingChangeRequestsCount();
+          }}
+        />
+      ) : (
+        <Card className="border-border/60 shadow-sm overflow-hidden">
+          {activeTab === 'directory' && viewMode === 'grid' ? (
           <div className="p-4 sm:p-6">
             {isLoading ? (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -2100,6 +2309,7 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
           </div>
         </div>
       </Card>
+      )}
 
       {/* QUICK VIEW EMPLOYEE DETAIL MODAL (AUTHENTIC SHADCN UI SYSTEM - LARGE & SPACIOUS) */}
       <Dialog open={!!viewingEmployee} onOpenChange={(open) => !open && setViewingEmployee(null)}>
@@ -3276,7 +3486,7 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
         onClose={() => setIsExportModalOpen(false)}
         allEmployees={employees.filter(e => !isTechnicalAccount(e))}
         filteredEmployees={filteredEmployees}
-        activeTab={activeTab}
+        activeTab={activeTab === 'change_requests' ? 'directory' : activeTab}
         getContractMeta={getContractMeta}
       />
 

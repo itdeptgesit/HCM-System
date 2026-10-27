@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   GitMerge, 
   Search, 
@@ -17,7 +17,9 @@ import {
   Check,
   AlertCircle,
   Upload,
-  FileSpreadsheet
+  FileSpreadsheet,
+  ArrowRightLeft,
+  Users
 } from '@/components/ui/icons';
 import * as XLSX from 'xlsx';
 import { supabase } from '../../lib/supabaseClient';
@@ -111,6 +113,25 @@ export const ApprovalHierarchy: React.FC<{ currentUser?: any }> = ({ currentUser
   const [saving, setSaving] = useState(false);
   const [importing, setImporting] = useState(false);
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  // Delegation Modal State (for approvers on leave e.g. cuti hamil)
+  const [delegationModalOpen, setDelegationModalOpen] = useState(false);
+  const [sourceApproverId, setSourceApproverId] = useState<string>('2'); // Khairun Nisa Oktafiani
+  const [targetApproverId, setTargetApproverId] = useState<string>('20'); // Kadek Hananda Cherry
+  const [delegateLevel1, setDelegateLevel1] = useState(true);
+  const [delegateLevel2, setDelegateLevel2] = useState(true);
+  const [delegateLevel3, setDelegateLevel3] = useState(true);
+  const [isDelegating, setIsDelegating] = useState(false);
+
+  const affectedCount = useMemo(() => {
+    if (!sourceApproverId) return 0;
+    const src = Number(sourceApproverId);
+    return users.filter(u => 
+      (delegateLevel1 && (u.attendance_supervisor_id === src || u.supervisor_id === src)) ||
+      (delegateLevel2 && u.attendance_hr_id === src) ||
+      (delegateLevel3 && (u.attendance_manager_id === src || u.manager_id === src))
+    ).length;
+  }, [users, sourceApproverId, delegateLevel1, delegateLevel2, delegateLevel3]);
 
   const handleImportExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -286,6 +307,71 @@ export const ApprovalHierarchy: React.FC<{ currentUser?: any }> = ({ currentUser
     }
   };
 
+  // Bulk delegation of approval rights (e.g. maternity leave delegation)
+  const handleExecuteDelegation = async () => {
+    if (!sourceApproverId || !targetApproverId || sourceApproverId === targetApproverId) {
+      showToast('Pilih approver sumber dan approver penerima yang berbeda', 'error');
+      return;
+    }
+    const src = Number(sourceApproverId);
+    const tgt = Number(targetApproverId);
+    const sourceUser = users.find(u => u.id === src);
+    const targetUser = users.find(u => u.id === tgt);
+
+    setIsDelegating(true);
+    try {
+      let updatedTotal = 0;
+      const toUpdate = users.filter(u => 
+        (delegateLevel1 && (u.attendance_supervisor_id === src || u.supervisor_id === src)) ||
+        (delegateLevel2 && u.attendance_hr_id === src) ||
+        (delegateLevel3 && (u.attendance_manager_id === src || u.manager_id === src))
+      );
+
+      for (const emp of toUpdate) {
+        const payload: any = { updated_at: new Date().toISOString() };
+        if (delegateLevel1 && (emp.attendance_supervisor_id === src || emp.supervisor_id === src)) {
+          if (emp.attendance_supervisor_id === src) payload.attendance_supervisor_id = tgt;
+          if (emp.supervisor_id === src) payload.supervisor_id = tgt;
+        }
+        if (delegateLevel2 && emp.attendance_hr_id === src) {
+          payload.attendance_hr_id = tgt;
+        }
+        if (delegateLevel3 && (emp.attendance_manager_id === src || emp.manager_id === src)) {
+          if (emp.attendance_manager_id === src) payload.attendance_manager_id = tgt;
+          if (emp.manager_id === src) payload.manager_id = tgt;
+        }
+
+        const { error } = await supabase.from('user_accounts').update(payload).eq('id', emp.id);
+        if (!error) updatedTotal++;
+      }
+
+      showToast(`Berhasil mendelegasikan alur persetujuan ${sourceUser?.full_name} ke ${targetUser?.full_name} (${updatedTotal} karyawan diperbarui)!`, 'success');
+      
+      trackActivity({
+        userId: currentUser?.id,
+        userName: currentUser?.fullName || 'Administrator',
+        userRole: currentUser?.role || 'Super Admin',
+        userEmail: currentUser?.email,
+        module: 'Hierarchy Approval',
+        action: 'DELEGASI_APPROVAL_HIERARCHY',
+        details: `Mendelegasikan alur persetujuan dari ${sourceUser?.full_name} (${sourceUser?.email}) ke ${targetUser?.full_name} (${targetUser?.email}) untuk ${updatedTotal} karyawan`,
+        metadata: {
+          sourceApproverId: src,
+          targetApproverId: tgt,
+          updatedCount: updatedTotal
+        }
+      }).catch(console.error);
+
+      setDelegationModalOpen(false);
+      await fetchUsers();
+    } catch (err: any) {
+      console.error('Delegation error:', err);
+      showToast('Gagal mendelegasikan approver: ' + (err.message || 'Error'), 'error');
+    } finally {
+      setIsDelegating(false);
+    }
+  };
+
   // Helper to find approver name
   const getApproverName = (id?: number | null) => {
     if (!id) return '-';
@@ -340,6 +426,15 @@ export const ApprovalHierarchy: React.FC<{ currentUser?: any }> = ({ currentUser
           >
             <Upload className={`h-3.5 w-3.5 ${importing ? 'animate-bounce' : ''}`} />
             <span>{importing ? 'Memproses Excel...' : 'Impor Approval Line (.xlsx)'}</span>
+          </button>
+
+          <button
+            onClick={() => setDelegationModalOpen(true)}
+            className="inline-flex items-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3.5 py-2 text-xs font-semibold text-amber-700 dark:text-amber-300 shadow-2xs hover:bg-amber-500/20 transition-colors cursor-pointer"
+            title="Alihkan / delegasikan approver yang sedang cuti secara massal"
+          >
+            <ArrowRightLeft className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+            <span>Delegasikan Approver Cuti</span>
           </button>
 
           <button
@@ -422,19 +517,20 @@ export const ApprovalHierarchy: React.FC<{ currentUser?: any }> = ({ currentUser
                   <th className="pb-3 font-semibold">Level 1: Supervisor</th>
                   <th className="pb-3 font-semibold">Level 2: HR</th>
                   <th className="pb-3 font-semibold">Level 3: Manager</th>
+                  <th className="pb-3 font-semibold">Level 4: VP</th>
                   <th className="pb-3 font-semibold text-right">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/60">
                 {loading ? (
                   <tr>
-                    <td colSpan={6} className="py-8 text-center text-muted-foreground">
+                    <td colSpan={7} className="py-8 text-center text-muted-foreground">
                       Memuat data hierarki persetujuan...
                     </td>
                   </tr>
                 ) : filteredUsers.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="py-8 text-center text-muted-foreground">
+                    <td colSpan={7} className="py-8 text-center text-muted-foreground">
                       Tidak ada karyawan yang sesuai filter.
                     </td>
                   </tr>
@@ -490,6 +586,17 @@ export const ApprovalHierarchy: React.FC<{ currentUser?: any }> = ({ currentUser
                             : 'bg-muted/60 text-muted-foreground border border-border/50'
                         }`}>
                           <span>{getApproverName(u.attendance_manager_id || u.manager_id)}</span>
+                        </span>
+                      </td>
+
+                      {/* Level 4: VP */}
+                      <td className="py-3.5">
+                        <span className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-medium ${
+                          (u.attendance_vp_id || u.vp_id) 
+                            ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200/60 dark:border-amber-900/60'
+                            : 'bg-muted/60 text-muted-foreground border border-border/50'
+                        }`}>
+                          <span>{getApproverName(u.attendance_vp_id || u.vp_id)}</span>
                         </span>
                       </td>
 
@@ -692,6 +799,146 @@ export const ApprovalHierarchy: React.FC<{ currentUser?: any }> = ({ currentUser
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delegasi Approver Cuti Modal */}
+      {delegationModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <div className="w-full max-w-lg rounded-2xl bg-card p-6 shadow-xl border border-border animate-in fade-in zoom-in-95 duration-150 text-card-foreground">
+            <div className="flex items-center justify-between pb-4 border-b border-border">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                  <ArrowRightLeft className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-foreground">Delegasikan Approver Cuti</h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Pengalihan tugas persetujuan sementara / cuti panjang
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setDelegationModalOpen(false)}
+                className="rounded-lg p-1 text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-4">
+              <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-200">
+                <p className="font-semibold flex items-center gap-1.5">
+                  <AlertCircle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                  Pengalihan Alur Approval Otomatis
+                </p>
+                <p className="mt-1 text-[11px] text-muted-foreground leading-relaxed">
+                  Fitur ini akan memperbarui jalur hierarki seluruh karyawan yang saat ini approver-nya dipegang oleh pejabat yang sedang cuti ke pejabat penggantinya.
+                </p>
+              </div>
+
+              {/* Approver Sumber */}
+              <div>
+                <label className="block text-xs font-semibold text-foreground mb-1">
+                  Approver yang Sedang Cuti (Sumber)
+                </label>
+                <select
+                  value={sourceApproverId}
+                  onChange={(e) => setSourceApproverId(e.target.value)}
+                  className="w-full h-9 rounded-xl border border-border bg-muted/40 px-3 text-xs text-foreground focus:border-primary focus:bg-background focus:outline-none cursor-pointer"
+                >
+                  <option value="">Pilih Approver Asal</option>
+                  {users.map(u => (
+                    <option key={u.id} value={u.id.toString()}>
+                      {u.full_name} ({u.job_title || u.role || 'Staff'}) — {u.email}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Approver Pengganti */}
+              <div>
+                <label className="block text-xs font-semibold text-foreground mb-1">
+                  Delegasikan Kepada (Penerima Tugas)
+                </label>
+                <select
+                  value={targetApproverId}
+                  onChange={(e) => setTargetApproverId(e.target.value)}
+                  className="w-full h-9 rounded-xl border border-border bg-muted/40 px-3 text-xs text-foreground focus:border-primary focus:bg-background focus:outline-none cursor-pointer"
+                >
+                  <option value="">Pilih Approver Pengganti</option>
+                  {users.filter(u => String(u.id) !== sourceApproverId).map(u => (
+                    <option key={u.id} value={u.id.toString()}>
+                      {u.full_name} ({u.job_title || u.role || 'Staff'}) — {u.email}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Cakupan Level */}
+              <div>
+                <label className="block text-xs font-semibold text-foreground mb-2">
+                  Tingkatan Persetujuan yang Dialihkan:
+                </label>
+                <div className="space-y-2 rounded-xl border border-border/60 bg-muted/20 p-3 text-xs">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      checked={delegateLevel2} 
+                      onChange={e => setDelegateLevel2(e.target.checked)} 
+                      className="rounded border-border"
+                    />
+                    <span className="font-medium text-foreground">Level 2: HR Specialist / PIC HRD</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      checked={delegateLevel1} 
+                      onChange={e => setDelegateLevel1(e.target.checked)} 
+                      className="rounded border-border"
+                    />
+                    <span className="font-medium text-foreground">Level 1: Atasan Langsung (Supervisor)</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      checked={delegateLevel3} 
+                      onChange={e => setDelegateLevel3(e.target.checked)} 
+                      className="rounded border-border"
+                    />
+                    <span className="font-medium text-foreground">Level 3: Head of Department (Manager)</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Info Karyawan Terdampak */}
+              <div className="flex items-center justify-between p-3 rounded-xl bg-muted/40 border border-border text-xs">
+                <span className="text-muted-foreground">Karyawan yang akan dialihkan:</span>
+                <span className="font-bold text-foreground bg-primary/10 text-primary px-2 py-0.5 rounded-md">
+                  {affectedCount} Karyawan
+                </span>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-border">
+                <button
+                  type="button"
+                  onClick={() => setDelegationModalOpen(false)}
+                  className="rounded-xl border border-border px-4 py-2 text-xs font-semibold text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExecuteDelegation}
+                  disabled={isDelegating || affectedCount === 0}
+                  className="rounded-xl bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 text-xs font-semibold shadow-xs disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
+                >
+                  <ArrowRightLeft className={`h-3.5 w-3.5 ${isDelegating ? 'animate-spin' : ''}`} />
+                  <span>{isDelegating ? 'Memproses Pengalihan...' : `Terapkan Delegasi ke ${users.find(u => String(u.id) === targetApproverId)?.full_name || 'Pengganti'}`}</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

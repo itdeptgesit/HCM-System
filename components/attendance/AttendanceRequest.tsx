@@ -45,6 +45,8 @@ import {
 import { LeaveQuotaOverviewTab } from './LeaveQuotaOverviewTab';
 import { LeaveQuotaAdjustmentModal } from './LeaveQuotaAdjustmentModal';
 import { NewLeaveRequestModal } from './NewLeaveRequestModal';
+import { EmployeeChangeRequestsManager } from '../hr/EmployeeChangeRequestsManager';
+import { fetchEmployeeChangeRequests, isHRManagerOrAdmin } from '../../lib/employeeChangeRequestService';
 
 export interface AttendanceRequestProps {
   currentUser?: any;
@@ -61,18 +63,36 @@ export const AttendanceRequest: React.FC<AttendanceRequestProps> = ({ currentUse
   const [attendanceCorrections, setAttendanceCorrections] = useState<any[]>([]);
   const [loadError, setLoadError] = useState('');
   const processing = useRef(false);
-  const [requestTab, setRequestTab] = useState<'leave' | 'overtime' | 'reimbursement' | 'attendance_correction'>(() => {
+  const [requestTab, setRequestTab] = useState<'leave' | 'overtime' | 'reimbursement' | 'attendance_correction' | 'employee_data'>(() => {
     const type = new URLSearchParams(window.location.search).get('type');
     if (typeof window !== 'undefined' && (window.location.pathname.includes('/attendance/requests') || type === 'attendance_correction')) {
       return 'attendance_correction';
     }
+    if (type === 'employee_data') return 'employee_data';
     return type === 'overtime' || type === 'reimbursement' || type === 'attendance_correction' ? type : 'leave';
   });
+
+  const [pendingEmployeeChangesCount, setPendingEmployeeChangesCount] = useState<number>(0);
+
+  const loadPendingEmployeeChanges = useCallback(async () => {
+    try {
+      const list = await fetchEmployeeChangeRequests({ status: 'Pending' });
+      setPendingEmployeeChangesCount(list.length);
+    } catch (err) {
+      console.error('Failed to load pending employee changes:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadPendingEmployeeChanges();
+  }, [loadPendingEmployeeChanges]);
 
   useEffect(() => {
     const type = new URLSearchParams(window.location.search).get('type');
     if (window.location.pathname.includes('/attendance/requests') || type === 'attendance_correction') {
       setRequestTab('attendance_correction');
+    } else if (type === 'employee_data') {
+      setRequestTab('employee_data');
     }
   }, []);
   const [requestFilter, setRequestFilter] = useState<'all' | 'pending' | 'pending_line_1' | 'pending_line_2' | 'pending_senior' | 'pending_office' | 'approved' | 'rejected'>('all');
@@ -1678,11 +1698,13 @@ export const AttendanceRequest: React.FC<AttendanceRequestProps> = ({ currentUse
   // ── Request (combined: Leave, OT, Reimb, Attendance Correction) ───────────────────────────
   const renderRequest = () => {
     const scopedCorrections = attendanceCorrections.filter(row => matchesRequestScope(row.user_id));
+    const isHR = isHRAccount(currentUser) || isHRManagerOrAdmin(currentUser);
     const tabs = [
       { id: 'attendance_correction' as const, label: 'Request Absen', icon: <Clock size={14} />, count: attendanceCorrections.filter(r => isPendingApprovalStatus(r.status) && matchesRequestScope(r.user_id)).length },
       { id: 'leave' as const, label: 'Cuti / Izin', icon: <Calendar size={14} />, count: scopedLeave.filter(l => isPendingApprovalStatus(l.status)).length },
       { id: 'overtime' as const, label: 'Lembur', icon: <Timer size={14} />, count: scopedOvertime.filter(o => isPendingApprovalStatus(o.status)).length },
       { id: 'reimbursement' as const, label: 'Reimbursement', icon: <Wallet size={14} />, count: scopedReimb.filter(r => isPendingApprovalStatus(r.status)).length },
+      ...(isHR ? [{ id: 'employee_data' as const, label: 'Data Karyawan', icon: <ShieldCheck size={14} />, count: pendingEmployeeChangesCount }] : [])
     ];
 
     const scopeLabel =
@@ -1788,100 +1810,112 @@ export const AttendanceRequest: React.FC<AttendanceRequestProps> = ({ currentUse
           </TabsList>
         </Tabs>
 
-        {/* StatCards Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <StatCard
-            label={summary[0].label}
-            value={summary[0].value}
-            subValue={summary[0].sub}
-            icon={requestTab === 'attendance_correction' ? Clock : requestTab === 'leave' ? Calendar : requestTab === 'overtime' ? Timer : Wallet}
-            color="slate"
-          />
-          <StatCard
-            label={summary[1].label}
-            value={summary[1].value}
-            subValue={summary[1].sub}
-            icon={AlertTriangle}
-            color="amber"
-            status={Number(summary[1].value) > 0 ? "at-risk" : undefined}
-          />
-          <StatCard
-            label={summary[2].label}
-            value={summary[2].value}
-            subValue={summary[2].sub}
-            icon={CheckCircle2}
-            color="emerald"
-            status="on-track"
-          />
-          <StatCard
-            label={summary[3].label}
-            value={summary[3].value}
-            subValue={summary[3].sub}
-            icon={XCircle}
-            color="rose"
-          />
-        </div>
-
-        {/* Scope / Filter Toolbar Card */}
-        <Card className="border-border/60 shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0 pb-4">
-            <div>
-              <CardTitle className="text-sm font-bold flex items-center gap-2">
-                <Filter size={16} className="text-primary" />
-                Filter Perusahaan &amp; Departemen
-              </CardTitle>
-              <p className="text-[11px] font-medium text-muted-foreground mt-1">
-                {scopeLabel} &bull; {totalScope} total pengajuan
-              </p>
-            </div>
-            {(requestCompany !== 'all' || requestDept !== 'all') && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => { setRequestCompany('all'); setRequestDept('all'); }}
-                className="h-8 px-2 text-xs font-semibold text-rose-500 hover:bg-rose-500/10 hover:text-rose-400"
-              >
-                <RotateCcw size={13} className="mr-1" /> Reset Filter
-              </Button>
-            )}
-          </CardHeader>
-          <CardContent className="pt-0">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              <div>
-                <Label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Perusahaan</Label>
-                <select
-                  value={requestCompany}
-                  onChange={e => setRequestCompany(e.target.value)}
-                  className="h-9 w-full rounded-md border border-border/60 dark:border-zinc-800 bg-background dark:bg-zinc-900 px-2.5 text-xs font-medium text-foreground dark:text-zinc-100 outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-                >
-                  <option value="all">Semua Perusahaan</option>
-                  {requestCompanyOptions.map(c => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <Label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Departemen</Label>
-                <select
-                  value={requestDept}
-                  onChange={e => setRequestDept(e.target.value)}
-                  className="h-9 w-full rounded-md border border-border/60 dark:border-zinc-800 bg-background dark:bg-zinc-900 px-2.5 text-xs font-medium text-foreground dark:text-zinc-100 outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-                >
-                  <option value="all">Semua Departemen</option>
-                  {requestDeptOptions.map(dep => (
-                    <option key={dep} value={dep}>{dep}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
         {/* Tab Content */}
-        {requestTab === 'attendance_correction' && renderAttendanceCorrections()}
-        {requestTab === 'leave' && renderLeave()}
-        {requestTab === 'overtime' && renderOvertime()}
-        {requestTab === 'reimbursement' && renderReimbursement()}
+        {requestTab === 'employee_data' ? (
+          <EmployeeChangeRequestsManager
+            currentUser={currentUser}
+            onRefreshNeeded={() => {
+              loadAllData();
+              loadPendingEmployeeChanges();
+            }}
+          />
+        ) : (
+          <>
+            {/* StatCards Grid */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              <StatCard
+                label={summary[0].label}
+                value={summary[0].value}
+                subValue={summary[0].sub}
+                icon={requestTab === 'attendance_correction' ? Clock : requestTab === 'leave' ? Calendar : requestTab === 'overtime' ? Timer : Wallet}
+                color="slate"
+              />
+              <StatCard
+                label={summary[1].label}
+                value={summary[1].value}
+                subValue={summary[1].sub}
+                icon={AlertTriangle}
+                color="amber"
+                status={Number(summary[1].value) > 0 ? "at-risk" : undefined}
+              />
+              <StatCard
+                label={summary[2].label}
+                value={summary[2].value}
+                subValue={summary[2].sub}
+                icon={CheckCircle2}
+                color="emerald"
+                status="on-track"
+              />
+              <StatCard
+                label={summary[3].label}
+                value={summary[3].value}
+                subValue={summary[3].sub}
+                icon={XCircle}
+                color="rose"
+              />
+            </div>
+
+            {/* Scope / Filter Toolbar Card */}
+            <Card className="border-border/60 shadow-sm">
+              <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0 pb-4">
+                <div>
+                  <CardTitle className="text-sm font-bold flex items-center gap-2">
+                    <Filter size={16} className="text-primary" />
+                    Filter Perusahaan &amp; Departemen
+                  </CardTitle>
+                  <p className="text-[11px] font-medium text-muted-foreground mt-1">
+                    {scopeLabel} &bull; {totalScope} total pengajuan
+                  </p>
+                </div>
+                {(requestCompany !== 'all' || requestDept !== 'all') && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => { setRequestCompany('all'); setRequestDept('all'); }}
+                    className="h-8 px-2 text-xs font-semibold text-rose-500 hover:bg-rose-500/10 hover:text-rose-400"
+                  >
+                    <RotateCcw size={13} className="mr-1" /> Reset Filter
+                  </Button>
+                )}
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div>
+                    <Label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Perusahaan</Label>
+                    <select
+                      value={requestCompany}
+                      onChange={e => setRequestCompany(e.target.value)}
+                      className="h-9 w-full rounded-md border border-border/60 dark:border-zinc-800 bg-background dark:bg-zinc-900 px-2.5 text-xs font-medium text-foreground dark:text-zinc-100 outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                    >
+                      <option value="all">Semua Perusahaan</option>
+                      {requestCompanyOptions.map(c => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <Label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Departemen</Label>
+                    <select
+                      value={requestDept}
+                      onChange={e => setRequestDept(e.target.value)}
+                      className="h-9 w-full rounded-md border border-border/60 dark:border-zinc-800 bg-background dark:bg-zinc-900 px-2.5 text-xs font-medium text-foreground dark:text-zinc-100 outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                    >
+                      <option value="all">Semua Departemen</option>
+                      {requestDeptOptions.map(dep => (
+                        <option key={dep} value={dep}>{dep}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {requestTab === 'attendance_correction' && renderAttendanceCorrections()}
+            {requestTab === 'leave' && renderLeave()}
+            {requestTab === 'overtime' && renderOvertime()}
+            {requestTab === 'reimbursement' && renderReimbursement()}
+          </>
+        )}
       </div>
     );
   };

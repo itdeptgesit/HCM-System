@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   User,
   Mail,
@@ -39,6 +39,7 @@ import { supabase } from '../../lib/supabaseClient';
 import { uploadFileToGoogleDrive } from '../../lib/googleDriveUpload';
 import { formatAvatarImageUrl } from '../UserAvatar';
 import { normalizeGender, normalizeReligion } from '../../lib/utils';
+import { trackActivity } from '../../lib/auditLogger';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -48,6 +49,13 @@ import { ImageCropModal } from '@/components/ui/ImageCropModal';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { prepareProfileImage } from '../../lib/profileImage';
+import {
+  checkRequiresApproval,
+  createEmployeeChangeRequest,
+  fetchEmployeeChangeRequests,
+  EmployeeDataChangeRequest,
+  EMPLOYEE_FIELD_LABELS
+} from '../../lib/employeeChangeRequestService';
 
 interface UserProfilePageProps {
   currentUser: any;
@@ -60,6 +68,22 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({ currentUser, o
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [isPreparingAvatar, setIsPreparingAvatar] = useState(false);
+  const [pendingRequest, setPendingRequest] = useState<EmployeeDataChangeRequest | null>(null);
+
+  const checkPendingChangeRequests = useCallback(async () => {
+    const targetId = profileData?.id || currentUser?.id;
+    if (!targetId) return;
+    try {
+      const list = await fetchEmployeeChangeRequests({ employeeId: targetId, status: 'Pending' });
+      setPendingRequest(list.length > 0 ? list[0] : null);
+    } catch (err) {
+      console.error('Failed to load pending change request for user:', err);
+    }
+  }, [profileData?.id, currentUser?.id]);
+
+  useEffect(() => {
+    checkPendingChangeRequests();
+  }, [checkPendingChangeRequests]);
 
   // Security Tab States
   const [newPassword, setNewPassword] = useState('');
@@ -265,6 +289,50 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({ currentUser, o
         updated_at: new Date().toISOString(),
       };
 
+      if (checkRequiresApproval(currentUser)) {
+        const originalData: Record<string, any> = {
+          nickname: profileData.nickname || null,
+          phone: profileData.phone || null,
+          address: profileData.address || null,
+          residential_address: profileData.residential_address || null,
+          birth_place: profileData.birth_place || null,
+          date_of_birth: profileData.date_of_birth || null,
+          gender: profileData.gender || null,
+          marital_status: profileData.marital_status || null,
+          religion: profileData.religion || null,
+          blood_type: profileData.blood_type || null,
+          bank_name: profileData.bank_name || null,
+          bank_account_name: profileData.bank_account_name || null,
+          bank_account_number: profileData.bank_account_number || null,
+        };
+
+        const { success, data: request, error: reqErr } = await createEmployeeChangeRequest({
+          employee: {
+            id: profileData.id || currentUser.id,
+            fullName: profileData.full_name || currentUser.fullName || 'User',
+            employeeCode: profileData.employee_code || currentUser.employeeCode,
+            department: profileData.department || currentUser.department,
+            company: profileData.company || currentUser.company,
+          },
+          requestedBy: currentUser,
+          source: 'self_service',
+          originalData,
+          proposedChanges: payload
+        });
+
+        if (!success || reqErr) {
+          toast.error(reqErr || 'Tidak ada perubahan data terdeteksi.', { id: toastId });
+          return;
+        }
+
+        await checkPendingChangeRequests();
+        toast.success('Permohonan perubahan data profil berhasil dikirim ke HR Manager untuk persetujuan!', {
+          id: toastId,
+          duration: 6000
+        });
+        return;
+      }
+
       // Resilient self-healing update
       const executeUpdate = async (dataPayload: any, retries = 5): Promise<void> => {
         const { error } = await supabase
@@ -285,6 +353,18 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({ currentUser, o
       };
 
       await executeUpdate(payload);
+
+      // Catat log aktivitas audit trail
+      trackActivity({
+        userId: currentUser?.id,
+        userName: currentUser?.fullName || 'User',
+        userRole: currentUser?.role || 'Admin',
+        userEmail: currentUser?.email || '',
+        action: 'Update Profil Mandiri Langsung',
+        module: 'Profil Karyawan',
+        details: `Memperbarui biodata profil mandiri secara langsung (Bypass Approval oleh ${currentUser?.role || 'Admin'})`
+      }).catch(console.error);
+
       await refreshProfile();
       toast.success('Data profil berhasil diperbarui!', { id: toastId });
     } catch (err: any) {
@@ -642,6 +722,24 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({ currentUser, o
             TAB 1: BIODATA & KONTAK
             ----------------------------------------------------------------------- */}
         <TabsContent value="personal" className="space-y-6 m-0">
+          {pendingRequest && (
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-xs flex items-start gap-3 text-amber-850 dark:text-amber-200">
+              <Clock className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <p className="font-semibold text-sm text-foreground">Pengajuan Perubahan Data Sedang Ditinjau HR Manager</p>
+                <p className="text-muted-foreground leading-relaxed">
+                  Anda telah mengajukan perubahan untuk field:{' '}
+                  <span className="font-semibold text-foreground">
+                    {pendingRequest.changedFields.map(f => EMPLOYEE_FIELD_LABELS[f] || f).join(', ')}
+                  </span>
+                  . Data Anda akan otomatis diperbarui setelah disetujui oleh HR Manager.
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  Waktu pengajuan: {new Date(pendingRequest.createdAt).toLocaleString('id-ID')}
+                </p>
+              </div>
+            </div>
+          )}
           <form onSubmit={handleSavePersonal}>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Left Column: Personal Data & Contact Form */}
@@ -991,8 +1089,14 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({ currentUser, o
                 disabled={isSaving}
                 className="text-xs font-semibold h-9 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5 shadow-sm px-5"
               >
-                {isSaving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
-                Simpan Perubahan
+                {isSaving ? (
+                  <Loader2 size={13} className="animate-spin" />
+                ) : checkRequiresApproval(currentUser) ? (
+                  <ShieldCheck size={13} />
+                ) : (
+                  <Check size={13} />
+                )}
+                {checkRequiresApproval(currentUser) ? 'Ajukan Perubahan ke HR Manager' : 'Simpan Perubahan'}
               </Button>
             </div>
           </form>
