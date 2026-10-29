@@ -227,8 +227,8 @@ test('emailed leave approvals link to the HR confirmation page, attendance stays
   await attendance.handle(request());
   const attendanceSend = attendance.calls.http.find(call => call.url.includes('/messages/send'));
   const attendanceMail = decodeMail(JSON.parse(attendanceSend.init.body).raw);
-  assert.equal(attendanceMail.html.includes('/email-approval'), false);
-  assert.match(attendanceMail.html, /approvals/);
+  assert.equal(attendanceMail.html.includes('/email-approval'), true);
+  assert.match(attendanceMail.html, /Setujui/);
 
   const final = fixture({
     options: { actionBaseUrl },

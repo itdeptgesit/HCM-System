@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, CheckCircle2, Loader2 } from '@/components/ui/icons';
 
 interface ApprovalRequest {
+  table?: string;
   requester_name: string;
   approver_name: string;
   leave_type: string;
@@ -122,6 +123,8 @@ export function EmailApprovalPage() {
     void decide(request.action);
   }, [request]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const isAttendance = request?.table === 'attendance_requests' || request?.leave_type === 'Presensi di Luar Radius';
+  const requestTitle = isAttendance ? 'Presensi di luar radius' : 'Cuti';
   const start = longDate(request?.start_date);
   const end = longDate(request?.end_date);
   const dates = start && end && start !== end ? `${start} – ${end}` : start;
@@ -130,9 +133,11 @@ export function EmailApprovalPage() {
   const details = request ? (
     <dl className="mt-5 text-left">
       <DetailRow label="Karyawan">{request.requester_name}</DetailRow>
-      <DetailRow label="Jenis cuti">{LEAVE_TYPES[request.leave_type] || request.leave_type || 'Cuti'}</DetailRow>
-      <DetailRow label="Tanggal">{dates || '-'}</DetailRow>
-      {days && <DetailRow label="Durasi">{days}</DetailRow>}
+      <DetailRow label={isAttendance ? 'Jenis pengajuan' : 'Jenis cuti'}>
+        {isAttendance ? 'Presensi di Luar Radius (Live Attendance)' : (LEAVE_TYPES[request.leave_type] || request.leave_type || 'Cuti')}
+      </DetailRow>
+      <DetailRow label={isAttendance ? 'Tanggal presensi' : 'Tanggal'}>{dates || '-'}</DetailRow>
+      {!isAttendance && days && <DetailRow label="Durasi">{days}</DetailRow>}
       {request.reason && <DetailRow label="Alasan">{request.reason}</DetailRow>}
       <DetailRow label="Tahap">Level {request.level}</DetailRow>
     </dl>
@@ -145,7 +150,7 @@ export function EmailApprovalPage() {
           <img src="/image/logo.png" alt="GESIT" className="h-14 w-auto" />
           <div>
             <p className="text-sm font-semibold tracking-wide text-[#12346a]">GESIT PEOPLE</p>
-            <p className="text-xs text-slate-500">Persetujuan pengajuan cuti</p>
+            <p className="text-xs text-slate-500">Persetujuan {isAttendance ? 'presensi di luar radius' : 'pengajuan cuti'}</p>
           </div>
         </div>
 
@@ -160,13 +165,13 @@ export function EmailApprovalPage() {
             <div className="text-center">
               <CheckCircle2 className="mx-auto mb-4 h-12 w-12 text-emerald-600" />
               <h1 className="text-xl font-bold text-slate-900">
-                Cuti {decision === 'approved' ? 'disetujui' : 'ditolak'}
+                {requestTitle} {decision === 'approved' ? 'disetujui' : 'ditolak'}
               </h1>
               <p className="mt-3 text-sm leading-6 text-slate-600">
                 Keputusan Anda sudah tercatat. Approver berikutnya dan karyawan akan menerima email sesuai alur persetujuan.
               </p>
               {details}
-              <a href="/requests" className="mt-6 inline-flex rounded-lg bg-[#12346a] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#0d2750]">
+              <a href={isAttendance ? "/attendance/requests" : "/requests"} className="mt-6 inline-flex rounded-lg bg-[#12346a] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#0d2750]">
                 Buka GESIT People
               </a>
             </div>
@@ -192,7 +197,7 @@ export function EmailApprovalPage() {
                   {submitting && <Loader2 className="h-4 w-4 animate-spin" />} Coba lagi
                 </button>
               )}
-              <a href="/requests" className="mt-5 ml-4 inline-flex text-sm font-semibold text-[#12346a] underline underline-offset-4">
+              <a href={isAttendance ? "/attendance/requests" : "/requests"} className="mt-5 ml-4 inline-flex text-sm font-semibold text-[#12346a] underline underline-offset-4">
                 Buka GESIT People
               </a>
             </div>

@@ -32,7 +32,7 @@ function fixture({ state = 'pending_level_2', error = null } = {}) {
             eq(column, value) {
               return {
                 async maybeSingle() {
-                  if (table === 'leave_requests') return { data: row, error: null };
+                  if (table === 'leave_requests' || table === 'attendance_requests') return { data: row, error: null };
                   return { data: { full_name: String(value) === String(row.user_id) ? 'Budi' : 'Sari' }, error: null };
                 },
               };
@@ -69,6 +69,7 @@ test('GET returns the request as JSON for the HR page and never decides anything
   assert.equal(response.headers.get('access-control-allow-origin'), appUrl);
   assert.deepEqual(await response.json(), {
     request: {
+      table: 'leave_requests',
       requester_name: 'Budi', approver_name: 'Sari', leave_type: 'annual',
       start_date: '2027-01-04', end_date: '2027-01-06', total_days: 3,
       reason: 'Keperluan keluarga', level: 2, action: 'approve', sender: 'hr-admin@gesit.co.id',
@@ -89,15 +90,32 @@ test('preflight and unsupported methods are handled with CORS headers', async ()
   assert.deepEqual(calls, []);
 });
 
-test('invalid, tampered, expired and non-leave links are refused as JSON', async () => {
+test('invalid, tampered, expired and unsupported links are refused as JSON', async () => {
   const { handle } = fixture();
   const valid = await token();
   for (const value of ['', 'not-a-token', valid.slice(0, -3), await token({ exp: 1 }), await token({ state: 'approved' }),
-    await token({ table: 'attendance_requests' }), await token({ action: 'maybe' }), await signActionToken({ event: eventId, table: 'leave_requests', request: requestId, state: 'pending_level_2', approver: '2', action: 'approve', exp: Math.floor(Date.now() / 1000) + 600 }, `${secret}-other`)]) {
+    await token({ table: 'unknown_requests' }), await token({ action: 'maybe' }), await signActionToken({ event: eventId, table: 'leave_requests', request: requestId, state: 'pending_level_2', approver: '2', action: 'approve', exp: Math.floor(Date.now() / 1000) + 600 }, `${secret}-other`)]) {
     const response = await handle(get(value));
     assert.equal(response.status, 400);
     assert.equal((await response.json()).error, 'INVALID_TOKEN');
   }
+});
+
+test('attendance requests support GET details and POST decide_attendance_via_email', async () => {
+  const { handle, calls } = fixture();
+  const attToken = await token({ table: 'attendance_requests', action: 'approve' });
+  const getRes = await handle(get(attToken));
+  assert.equal(getRes.status, 200);
+  const data = await getRes.json();
+  assert.equal(data.request.table, 'attendance_requests');
+  assert.equal(data.request.leave_type, 'Presensi di Luar Radius');
+
+  const postRes = await handle(post(attToken, 'approve'));
+  assert.equal(postRes.status, 200);
+  assert.deepEqual(await postRes.json(), { decision: 'approved' });
+  const rpcCall = calls.find(call => call.name === 'decide_attendance_via_email');
+  assert.ok(rpcCall);
+  assert.equal(rpcCall.args.p_decision, 'approved');
 });
 
 test('a link whose stage already moved on reports ALREADY_PROCESSED', async () => {

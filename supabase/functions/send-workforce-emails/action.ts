@@ -1,12 +1,14 @@
 import { HR_SENDER, verifyActionToken } from './email.ts';
 import type { EmailActionToken } from './email.ts';
 
-interface LeaveRow {
+interface RequestRow {
   id: string;
   user_id: string | number;
-  leave_type: string | null;
+  leave_type?: string | null;
+  type?: string | null;
   start_date: string | null;
   end_date: string | null;
+  request_date?: string | null;
   total_days: number | string | null;
   reason: string | null;
   status: string | null;
@@ -84,12 +86,16 @@ export function createEmailAction({ secret, appUrl, database }: ActionOptions) {
 
     const token = new URL(request.url).searchParams.get('t') || '';
     const payload: EmailActionToken | null = await verifyActionToken(token, secret).catch(() => null);
-    if (!payload || payload.table !== 'leave_requests') {
+    if (!payload || (payload.table !== 'leave_requests' && payload.table !== 'attendance_requests')) {
       return reply({ error: 'INVALID_TOKEN', message: 'Tautan ini tidak valid atau sudah kedaluwarsa.' }, 400);
     }
 
-    const { data: row } = await database.from('leave_requests')
-      .select<LeaveRow>('id,user_id,leave_type,start_date,end_date,total_days,reason,status,approval_status,current_approval_level')
+    const selectCols = payload.table === 'attendance_requests'
+      ? 'id,user_id,type,start_date,end_date,request_date,total_days,reason,status,approval_status,current_approval_level'
+      : 'id,user_id,leave_type,start_date,end_date,total_days,reason,status,approval_status,current_approval_level';
+
+    const { data: row } = await database.from(payload.table)
+      .select<RequestRow>(selectCols)
       .eq('id', payload.request).maybeSingle();
     if (!row) {
       return reply({ error: 'REQUEST_NOT_FOUND', message: 'Pengajuan sudah dihapus atau tidak tersedia.' }, 404);
@@ -111,14 +117,15 @@ export function createEmailAction({ secret, appUrl, database }: ActionOptions) {
         return reply({ error: 'INVALID_ACTION', message: 'Pilihan keputusan tidak cocok dengan tautan ini.' }, 400);
       }
       const decision = choice === 'approve' ? 'approved' : 'rejected';
-      const { error } = await database.rpc('decide_leave_via_email', {
+      const rpcName = payload.table === 'attendance_requests' ? 'decide_attendance_via_email' : 'decide_leave_via_email';
+      const { error } = await database.rpc(rpcName, {
         p_request_id: payload.request,
         p_approver_id: payload.approver,
         p_expected_state: payload.state,
         p_decision: decision,
       });
       if (error) {
-        console.error('decide_leave_via_email failed', { request: payload.request, code: error.code, message: error.message, details: (error as { details?: string }).details });
+        console.error(`${rpcName} failed`, { request: payload.request, code: error.code, message: error.message, details: (error as { details?: string }).details });
         return reply({ error: 'DECISION_FAILED', code: error.code || '', detail: (error.message || '').slice(0, 300), message: errorMessage(error.message || '') }, 409);
       }
       return reply({ decision });
@@ -133,12 +140,13 @@ export function createEmailAction({ secret, appUrl, database }: ActionOptions) {
 
     return reply({
       request: {
+        table: payload.table,
         requester_name: String(requester?.full_name || 'Karyawan'),
         approver_name: String(approver?.full_name || 'Approver'),
-        leave_type: String(row.leave_type || ''),
-        start_date: row.start_date,
-        end_date: row.end_date,
-        total_days: row.total_days,
+        leave_type: payload.table === 'attendance_requests' ? 'Presensi di Luar Radius' : String(row.leave_type || ''),
+        start_date: row.start_date || row.request_date || null,
+        end_date: row.end_date || row.request_date || null,
+        total_days: row.total_days || 1,
         reason: row.reason,
         level: Number(payload.state.slice(-1)),
         action: payload.action,

@@ -26,8 +26,7 @@ async function buildActionUrls(
   baseUrl: string | undefined,
   ttlSeconds: number,
 ): Promise<{ approve: string; reject: string } | undefined> {
-  // Attendance requests still require the application UI.
-  if (!baseUrl || envelope.request_table !== 'leave_requests') return undefined;
+  if (!baseUrl || (envelope.request_table !== 'leave_requests' && envelope.request_table !== 'attendance_requests')) return undefined;
   if (!envelope.recipient_id || !/^pending_level_[1-4]$/.test(envelope.state)) return undefined;
   const expires = Math.floor(Date.now() / 1000) + ttlSeconds;
   const link = async (action: 'approve' | 'reject') => {
