@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Users,
   ZoomIn,
@@ -13,6 +13,8 @@ import {
   X,
   Check,
 } from '@/components/ui/icons';
+import { UserAvatar } from '../UserAvatar';
+import { supabase } from '@/lib/supabaseClient';
 import {
   OrgNode,
   INITIAL_ORG_DATA,
@@ -25,6 +27,7 @@ export const OrganizationStructurePage: React.FC = () => {
   const [zoomLevel, setZoomLevel] = useState<number>(1);
   const [activeTab, setActiveTab] = useState<'canvas' | 'pdf'>('canvas');
   const [isEditMode, setIsEditMode] = useState<boolean>(false);
+  const [avatarMap, setAvatarMap] = useState<Map<string, string>>(new Map());
 
   // Edit Modal State
   const [editingNode, setEditingNode] = useState<{
@@ -37,6 +40,65 @@ export const OrganizationStructurePage: React.FC = () => {
     isNew?: boolean;
     section?: 'top' | 'left' | 'right';
   } | null>(null);
+
+  // Fetch all user accounts avatars from Supabase user_accounts
+  useEffect(() => {
+    let isMounted = true;
+    const fetchAvatars = async () => {
+      try {
+        const { data: users, error } = await supabase
+          .from('user_accounts')
+          .select('full_name, nickname, avatar_url');
+        if (error) {
+          console.warn('Failed to load user avatars for org chart:', error);
+          return;
+        }
+        if (users && isMounted) {
+          const map = new Map<string, string>();
+          users.forEach((u: any) => {
+            if (u.avatar_url) {
+              if (u.full_name) {
+                map.set(u.full_name.trim().toLowerCase(), u.avatar_url);
+              }
+              if (u.nickname) {
+                map.set(u.nickname.trim().toLowerCase(), u.avatar_url);
+              }
+            }
+          });
+          setAvatarMap(map);
+        }
+      } catch (err) {
+        console.warn('Error fetching avatars:', err);
+      }
+    };
+
+    fetchAvatars();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Helper to find avatar URL based on exact or partial name match
+  const findAvatarUrl = (name: string, directUrl?: string): string | undefined => {
+    if (directUrl) return directUrl;
+    if (!name || avatarMap.size === 0) return undefined;
+
+    const clean = name.trim().toLowerCase();
+    // 1. Direct full match
+    if (avatarMap.has(clean)) return avatarMap.get(clean);
+
+    // 2. Multi-person strings (e.g. "Suryadi & Susilo", "Retno W, Pratiwi") -> match first person
+    const firstPerson = clean.split(/&|,|\//)[0].trim();
+    if (avatarMap.has(firstPerson)) return avatarMap.get(firstPerson);
+
+    // 3. Substring matching
+    for (const [key, url] of avatarMap.entries()) {
+      if (clean.includes(key) || key.includes(clean)) {
+        return url;
+      }
+    }
+    return undefined;
+  };
 
   useEffect(() => {
     saveOrgData(data);
@@ -166,6 +228,8 @@ export const OrganizationStructurePage: React.FC = () => {
 
   // Staff card dengan gold left border identik bagan PDF
   const renderStaffCard = (node: OrgNode, section: 'left' | 'right') => {
+    const avatarUrl = findAvatarUrl(node.name, node.avatarUrl);
+
     return (
       <div key={node.id} className="relative group flex flex-col items-center">
         <div className="relative bg-white dark:bg-[#13161c] rounded-md shadow-sm border border-slate-200/90 dark:border-zinc-800 p-2 sm:p-2.5 min-w-[170px] max-w-[210px] w-full border-l-[3.5px] border-l-[#e5a823] transition-all hover:shadow-md">
@@ -215,7 +279,7 @@ export const OrganizationStructurePage: React.FC = () => {
             </div>
           )}
 
-          <div className="flex items-center justify-between gap-1.5">
+          <div className="flex items-center justify-between gap-2">
             <div className="min-w-0 flex-1">
               <h5 className="text-[10.5px] font-bold text-slate-900 dark:text-zinc-100 truncate leading-snug">
                 {node.name}
@@ -224,9 +288,14 @@ export const OrganizationStructurePage: React.FC = () => {
                 {node.title}
               </p>
             </div>
-            <div className="size-6 rounded-full bg-slate-100 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 shrink-0 flex items-center justify-center text-slate-400">
-              <Users className="size-3" />
-            </div>
+            {/* Real profile avatar or icon */}
+            <UserAvatar
+              name={node.name}
+              url={avatarUrl}
+              size="xs"
+              shape="circle"
+              className="size-6 text-[9px] border border-amber-500/40 shrink-0"
+            />
           </div>
         </div>
 
@@ -245,6 +314,9 @@ export const OrganizationStructurePage: React.FC = () => {
 
   // Division Header Bar (Navy blue background with gold accents)
   const renderDivisionBar = (div: OrgNode, section: 'left' | 'right') => {
+    const divAvatar = findAvatarUrl(div.name, div.avatarUrl);
+    const paAvatar = div.pa ? findAvatarUrl(div.pa.name, div.pa.avatarUrl) : undefined;
+
     return (
       <div key={div.id} className="w-full space-y-2.5">
         <div className="relative group rounded-xl bg-[#10223e] dark:bg-[#0c182c] text-white p-2.5 sm:p-3 shadow-md flex items-center justify-between border-l-4 border-l-[#e5a823] transition-all">
@@ -289,9 +361,14 @@ export const OrganizationStructurePage: React.FC = () => {
           )}
 
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="size-8 sm:size-9 rounded-full bg-[#1b355e] border-2 border-[#e5a823] flex items-center justify-center shrink-0 shadow-xs text-white font-bold text-xs">
-              {div.name.charAt(0)}
-            </div>
+            {/* Avatar Circle with Gold Border */}
+            <UserAvatar
+              name={div.name}
+              url={divAvatar}
+              size="sm"
+              shape="circle"
+              className="size-8 sm:size-9 border-2 border-[#e5a823] shrink-0 text-xs shadow-xs"
+            />
             <div className="min-w-0">
               <h4 className="text-xs font-bold text-white truncate">{div.name}</h4>
               <div className="h-[1px] w-full bg-[#e5a823]/60 my-0.5" />
@@ -300,9 +377,18 @@ export const OrganizationStructurePage: React.FC = () => {
           </div>
 
           {div.pa && (
-            <div className="text-right pl-2 border-l border-white/20 shrink-0">
-              <span className="text-[10px] font-bold text-white block truncate">{div.pa.name}</span>
-              <span className="text-[8.5px] text-[#f5b82e] italic">({div.pa.title})</span>
+            <div className="flex items-center gap-2 pl-2 border-l border-white/20 shrink-0">
+              <div className="text-right">
+                <span className="text-[10px] font-bold text-white block truncate">{div.pa.name}</span>
+                <span className="text-[8.5px] text-[#f5b82e] italic">({div.pa.title})</span>
+              </div>
+              <UserAvatar
+                name={div.pa.name}
+                url={paAvatar}
+                size="xs"
+                shape="circle"
+                className="size-6 text-[9px] border border-amber-400 shrink-0"
+              />
             </div>
           )}
         </div>
@@ -464,56 +550,83 @@ export const OrganizationStructurePage: React.FC = () => {
 
             {/* ================= TOP LEVEL C-SUITE TOWER ================= */}
             <div className="flex flex-col items-center w-full max-w-[850px]">
-              {data.topExecutives.map((exec, idx) => (
-                <React.Fragment key={exec.id}>
-                  <div className="relative flex items-center justify-center w-full">
-                    <div className="relative group rounded-xl bg-[#10223e] text-white px-7 py-3 text-center shadow-lg border border-slate-700 w-80">
-                      {isEditMode && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setEditingNode({
-                              id: exec.id,
-                              name: exec.name,
-                              title: exec.title,
-                              paName: exec.pa?.name,
-                              paTitle: exec.pa?.title,
-                              section: 'top',
-                            })
-                          }
-                          className="absolute -top-2 -right-2 size-5 rounded-full bg-blue-600 text-white flex items-center justify-center hover:bg-blue-700 shadow-xs z-10"
-                        >
-                          <Edit2 className="size-2.5" />
-                        </button>
-                      )}
-                      <h4 className="text-sm font-extrabold text-white">{exec.name}</h4>
-                      <p className="text-[11px] font-bold text-[#f5b82e] tracking-wider uppercase mt-0.5">
-                        {exec.title}
-                      </p>
-                    </div>
+              {data.topExecutives.map((exec, idx) => {
+                const execAvatar = findAvatarUrl(exec.name, exec.avatarUrl);
+                const paAvatar = exec.pa ? findAvatarUrl(exec.pa.name, exec.pa.avatarUrl) : undefined;
 
-                    {/* PA Line & Box to Right */}
-                    {exec.pa && (
-                      <div className="absolute left-[calc(50%+160px)] flex items-center">
-                        <div className="w-12 h-[1.5px] bg-slate-400 dark:bg-zinc-600" />
-                        <div className="relative group bg-white dark:bg-[#13161c] rounded-xl py-2 px-3.5 border-l-4 border-l-[#e5a823] border border-slate-200 dark:border-zinc-800 shadow-sm w-52 flex flex-col justify-center">
-                          <span className="text-[11px] font-bold text-slate-900 dark:text-zinc-100">
-                            {exec.pa.name}
-                          </span>
-                          <span className="text-[9.5px] font-semibold text-slate-500 italic">
-                            {exec.pa.title}
-                          </span>
+                return (
+                  <React.Fragment key={exec.id}>
+                    <div className="relative flex items-center justify-center w-full">
+                      <div className="relative group rounded-xl bg-[#10223e] text-white px-7 py-3 text-center shadow-lg border border-slate-700 w-80">
+                        {isEditMode && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setEditingNode({
+                                id: exec.id,
+                                name: exec.name,
+                                title: exec.title,
+                                paName: exec.pa?.name,
+                                paTitle: exec.pa?.title,
+                                section: 'top',
+                              })
+                            }
+                            className="absolute -top-2 -right-2 size-5 rounded-full bg-blue-600 text-white flex items-center justify-center hover:bg-blue-700 shadow-xs z-10"
+                          >
+                            <Edit2 className="size-2.5" />
+                          </button>
+                        )}
+                        <div className="flex items-center justify-center gap-2.5">
+                          {exec.type === 'executive' && exec.name !== 'Shareholders / Board of Commissioners' && (
+                            <UserAvatar
+                              name={exec.name}
+                              url={execAvatar}
+                              size="sm"
+                              shape="circle"
+                              className="size-8 border-2 border-[#e5a823] shrink-0"
+                            />
+                          )}
+                          <div>
+                            <h4 className="text-sm font-extrabold text-white">{exec.name}</h4>
+                            <p className="text-[11px] font-bold text-[#f5b82e] tracking-wider uppercase mt-0.5">
+                              {exec.title}
+                            </p>
+                          </div>
                         </div>
                       </div>
-                    )}
-                  </div>
 
-                  {/* Vertical Spine Link */}
-                  {idx < data.topExecutives.length - 1 && (
-                    <div className="w-[1.5px] h-6 bg-slate-400 dark:bg-zinc-600" />
-                  )}
-                </React.Fragment>
-              ))}
+                      {/* PA Line & Box to Right */}
+                      {exec.pa && (
+                        <div className="absolute left-[calc(50%+160px)] flex items-center">
+                          <div className="w-12 h-[1.5px] bg-slate-400 dark:bg-zinc-600" />
+                          <div className="relative group bg-white dark:bg-[#13161c] rounded-xl py-2 px-3.5 border-l-4 border-l-[#e5a823] border border-slate-200 dark:border-zinc-800 shadow-sm w-56 flex items-center justify-between gap-2">
+                            <div className="min-w-0">
+                              <span className="text-[11px] font-bold text-slate-900 dark:text-zinc-100 block truncate">
+                                {exec.pa.name}
+                              </span>
+                              <span className="text-[9.5px] font-semibold text-slate-500 italic block truncate">
+                                {exec.pa.title}
+                              </span>
+                            </div>
+                            <UserAvatar
+                              name={exec.pa.name}
+                              url={paAvatar}
+                              size="xs"
+                              shape="circle"
+                              className="size-6 text-[9px] border border-amber-400 shrink-0"
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Vertical Spine Link */}
+                    {idx < data.topExecutives.length - 1 && (
+                      <div className="w-[1.5px] h-6 bg-slate-400 dark:bg-zinc-600" />
+                    )}
+                  </React.Fragment>
+                );
+              })}
 
               {/* Central Spine Branching to 2 Main Columns */}
               <div className="w-[1.5px] h-8 bg-slate-400 dark:bg-zinc-600" />
