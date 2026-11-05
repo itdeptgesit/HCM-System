@@ -31,11 +31,14 @@ import {
   AlertCircle,
   ExternalLink,
   Copy,
+  Lock,
+  Info,
 } from 'lucide-react';
 import { toPng } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 import { supabase } from '../../lib/supabaseClient';
 import { uploadFileToGoogleDrive } from '../../lib/googleDriveUpload';
+import { syncEffectiveAppointments } from '../../lib/appointmentService';
 
 export interface EmployeeAppointmentData {
   id: string | number;
@@ -51,6 +54,7 @@ export interface EmployeeAppointmentData {
   contractStartDate?: string;
   contractEndDate?: string;
   contractType?: string;
+  employmentType?: string;
 }
 
 interface EmployeeAppointmentSKModalProps {
@@ -84,6 +88,16 @@ export const getCompanyAbbr = (companyName?: string): string => {
     return parts.map(p => p[0]).join('').slice(0, 4);
   }
   return parts[0]?.slice(0, 3) || 'GP';
+};
+
+// Get company logo based on company name
+export const getCompanyLogo = (companyName?: string): string => {
+  if (!companyName) return '/image/gesit_perkasa_logo.jpg';
+  const clean = companyName.toUpperCase();
+  if (clean.includes('FOUNDATION') || clean.includes('YAYASAN')) {
+    return '/image/gesit_foundation_logo.png';
+  }
+  return '/image/gesit_perkasa_logo.jpg';
 };
 
 // Format Indonesian Date (e.g. 26 Oktober 2026)
@@ -133,6 +147,7 @@ export const EmployeeAppointmentSKModal: React.FC<EmployeeAppointmentSKModalProp
   const [probationStart, setProbationStart] = useState('');
   const [probationEnd, setProbationEnd] = useState('');
   const [issueDate, setIssueDate] = useState('');
+  const [effectiveDate, setEffectiveDate] = useState('');
   const [issueCity, setIssueCity] = useState('Jakarta');
   
   // Signer details
@@ -193,7 +208,8 @@ export const EmployeeAppointmentSKModal: React.FC<EmployeeAppointmentSKModalProp
 
     setProbationStart(pStart || today.toISOString().split('T')[0]);
     setProbationEnd(pEnd || today.toISOString().split('T')[0]);
-    setIssueDate(pEnd || today.toISOString().split('T')[0]);
+    setIssueDate(today.toISOString().split('T')[0]);
+    setEffectiveDate(pEnd || today.toISOString().split('T')[0]);
 
     // Signer defaults
     setSignerName('Javier Wijaya');
@@ -295,32 +311,51 @@ export const EmployeeAppointmentSKModal: React.FC<EmployeeAppointmentSKModalProp
 
       setUploadProgressText('Menyimpan ke Database...');
 
-      // 2. Update user_accounts
-      const { error: updateError } = await supabase
-        .from('user_accounts')
-        .update({
-          contract_type: 'PKWTT',
-          employment_type: 'PKWTT',
-          pkwt_number: skNumber,
-          sk_file_url: uploadedFileUrl || undefined,
-          contract_start_date: probationEnd || issueDate,
-          contract_end_date: null, // PKWTT has no end date
-          status_effective_date: issueDate,
-        })
-        .eq('id', employee.id);
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const isEffectiveNow = !effectiveDate || effectiveDate <= todayStr;
 
-      if (updateError) throw updateError;
+      // 2. Update user_accounts (hanya jika effectiveDate <= hari ini, atau simpan referensi SK)
+      if (isEffectiveNow) {
+        const { error: updateError } = await supabase
+          .from('user_accounts')
+          .update({
+            contract_type: 'PKWTT',
+            employment_type: 'PKWTT',
+            pkwt_number: skNumber,
+            sk_file_url: uploadedFileUrl || undefined,
+            contract_start_date: effectiveDate || probationEnd || issueDate,
+            contract_end_date: null, // PKWTT has no end date
+            status_effective_date: effectiveDate || issueDate,
+          })
+          .eq('id', employee.id);
+
+        if (updateError) throw updateError;
+      } else {
+        // Tanggal efektif di masa depan: simpan tautan SK & nomor SK, jangan ubah contract_type & contract_end_date sekarang
+        const { error: updateError } = await supabase
+          .from('user_accounts')
+          .update({
+            pkwt_number: skNumber,
+            sk_file_url: uploadedFileUrl || undefined,
+            status_effective_date: effectiveDate,
+          })
+          .eq('id', employee.id);
+
+        if (updateError) throw updateError;
+      }
 
       // 3. Try inserting to employee_contract_history if table exists
       try {
         await supabase.from('employee_contract_history').insert({
           employee_id: employee.id,
-          contract_type: 'PKWTT',
+          contract_type: isEffectiveNow ? 'PKWTT' : (employee.contractType || 'Probation'),
           sk_number: skNumber,
           sk_file_url: uploadedFileUrl || null,
-          contract_start_date: probationEnd || issueDate,
-          contract_end_date: null,
-          notes: `Pengangkatan Karyawan Tetap setelah selesai masa percobaan (${formatIndoDate(probationStart)} s/d ${formatIndoDate(probationEnd)}). Penandatangan: ${signerName}.`,
+          contract_start_date: effectiveDate || probationEnd || issueDate,
+          contract_end_date: isEffectiveNow ? null : (employee.contractEndDate || probationEnd || null),
+          notes: isEffectiveNow
+            ? `Pengangkatan Karyawan Tetap efektif per ${formatIndoDate(effectiveDate)}. Penandatangan: ${signerName}.`
+            : `SK Pengangkatan Terbit per ${formatIndoDate(issueDate)}, status Karyawan Tetap dijadwalkan efektif per ${formatIndoDate(effectiveDate)}.`,
           created_by: currentUser?.fullName || currentUser?.name || 'HR Admin',
         });
       } catch {
@@ -338,7 +373,7 @@ export const EmployeeAppointmentSKModal: React.FC<EmployeeAppointmentSKModalProp
           salutation: salutation,
           probation_start_date: probationStart || null,
           probation_end_date: probationEnd || null,
-          effective_date: probationEnd || issueDate,
+          effective_date: effectiveDate || probationEnd || issueDate,
           issue_date: issueDate || null,
           issue_city: issueCity,
           signer_name: signerName,
@@ -356,12 +391,12 @@ export const EmployeeAppointmentSKModal: React.FC<EmployeeAppointmentSKModalProp
       if (onSaved) {
         onSaved({
           ...employee,
-          contractType: 'PKWTT',
-          employmentType: 'PKWTT',
+          contractType: isEffectiveNow ? 'PKWTT' : employee.contractType,
+          employmentType: isEffectiveNow ? 'PKWTT' : employee.employmentType,
           pkwtNumber: skNumber,
           skFileUrl: uploadedFileUrl,
-          contractStartDate: probationEnd || issueDate,
-          contractEndDate: null,
+          contractStartDate: isEffectiveNow ? (effectiveDate || probationEnd || issueDate) : employee.contractStartDate,
+          contractEndDate: isEffectiveNow ? null : employee.contractEndDate,
         });
       }
 
@@ -393,32 +428,33 @@ export const EmployeeAppointmentSKModal: React.FC<EmployeeAppointmentSKModalProp
         {/* Top Control Bar (Hidden when printing) */}
         <div className="sticky top-0 z-30 bg-white/95 dark:bg-[#121215]/95 backdrop-blur-md px-6 py-3 border-b border-slate-200 dark:border-zinc-800 flex items-center justify-between print:hidden">
           <div className="flex items-center gap-3">
-            <div className="size-9 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-[#12346a] dark:text-blue-400 flex items-center justify-center font-bold">
+            <div className="size-9 rounded-lg bg-slate-900 dark:bg-white text-white dark:text-slate-900 flex items-center justify-center font-bold shadow-xs">
               <FileCheck className="size-5" />
             </div>
             <div>
-              <DialogTitle className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <DialogTitle className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2">
                 <span>SK Pengangkatan Karyawan Tetap</span>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 font-bold border border-emerald-200 dark:border-emerald-800">
-                  Resmi & Otomatis
+                <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-md bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 border border-slate-200 dark:border-zinc-700">
+                  <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                  Terverifikasi Otomatis
                 </span>
               </DialogTitle>
               <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
-                Surat Keputusan pengangkatan dari Masa Percobaan (Probation) ke PKWTT
+                Penerbitan surat keputusan pengangkatan dari Masa Percobaan (Probation) ke PKWTT
               </DialogDescription>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            {/* View / Edit Mode Toggle */}
-            <div className="flex items-center bg-slate-100 dark:bg-zinc-800 p-0.5 rounded-lg border border-slate-200 dark:border-zinc-700 text-xs font-semibold mr-1">
+            {/* View / Edit Mode Segmented Control */}
+            <div className="flex items-center bg-slate-100 dark:bg-zinc-800/80 p-1 rounded-lg border border-slate-200 dark:border-zinc-700 text-xs font-medium mr-1">
               <button
                 type="button"
                 onClick={() => setActiveTab('preview')}
-                className={`px-3 py-1.5 rounded-md flex items-center gap-1.5 transition-all ${
+                className={`px-3 py-1.5 rounded-md flex items-center gap-1.5 transition-all text-xs font-medium ${
                   activeTab === 'preview'
                     ? 'bg-white dark:bg-zinc-900 text-slate-900 dark:text-white shadow-xs'
-                    : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                    : 'text-slate-600 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-white'
                 }`}
               >
                 <Eye className="size-3.5" />
@@ -427,10 +463,10 @@ export const EmployeeAppointmentSKModal: React.FC<EmployeeAppointmentSKModalProp
               <button
                 type="button"
                 onClick={() => setActiveTab('edit')}
-                className={`px-3 py-1.5 rounded-md flex items-center gap-1.5 transition-all ${
+                className={`px-3 py-1.5 rounded-md flex items-center gap-1.5 transition-all text-xs font-medium ${
                   activeTab === 'edit'
                     ? 'bg-white dark:bg-zinc-900 text-slate-900 dark:text-white shadow-xs'
-                    : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                    : 'text-slate-600 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-white'
                 }`}
               >
                 <Edit3 className="size-3.5" />
@@ -438,54 +474,50 @@ export const EmployeeAppointmentSKModal: React.FC<EmployeeAppointmentSKModalProp
               </button>
             </div>
 
-            {/* Download PDF Button */}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={isDownloading || isSaving}
-              onClick={handleDownloadPdf}
-              className="text-xs h-8.5 rounded-xl border-slate-300 dark:border-zinc-700 font-semibold"
-            >
-              {isDownloading ? (
-                <Loader2 className="size-3.5 mr-1.5 animate-spin text-slate-600 dark:text-zinc-300" />
-              ) : (
-                <Download className="size-3.5 mr-1.5 text-slate-600 dark:text-zinc-300" />
-              )}
-              {isDownloading ? 'Menyiapkan...' : 'Unduh PDF'}
-            </Button>
+            {/* Action Group: Download & Print */}
+            <div className="inline-flex items-center rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-xs">
+              <button
+                type="button"
+                disabled={isDownloading || isSaving}
+                onClick={handleDownloadPdf}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-800 rounded-l-lg transition-colors border-r border-slate-200 dark:border-zinc-700 disabled:opacity-50"
+              >
+                {isDownloading ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <Download className="size-3.5 text-slate-500" />
+                )}
+                <span>Unduh PDF</span>
+              </button>
+              <button
+                type="button"
+                onClick={handlePrint}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-800 rounded-r-lg transition-colors"
+              >
+                <Printer className="size-3.5 text-slate-500" />
+                <span>Cetak</span>
+              </button>
+            </div>
 
-            {/* Print Button */}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handlePrint}
-              className="text-xs h-8.5 rounded-xl border-slate-300 dark:border-zinc-700 font-semibold"
-            >
-              <Printer className="size-3.5 mr-1.5 text-slate-600 dark:text-zinc-300" />
-              Cetak
-            </Button>
-
-            {/* Save & Apply Button */}
+            {/* Save & Apply Primary CTA */}
             <Button
               type="button"
               size="sm"
               disabled={isSaving || isDownloading}
               onClick={handleApplyPermanent}
-              className="text-xs h-8.5 rounded-xl bg-[#12346a] hover:bg-[#1a448a] dark:bg-blue-600 dark:hover:bg-blue-700 text-white font-semibold shadow-xs"
+              className="text-xs h-8.5 rounded-lg bg-slate-900 hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 text-white font-medium shadow-xs px-3.5"
             >
               {isSaving ? (
                 <Loader2 className="size-3.5 mr-1.5 animate-spin" />
               ) : (
                 <CloudUpload className="size-3.5 mr-1.5" />
               )}
-              {isSaving ? (uploadProgressText || 'Menyimpan...') : 'Angkat Karyawan & Simpan ke GDrive'}
+              {isSaving ? (uploadProgressText || 'Menyimpan...') : 'Terbitkan & Terapkan SK'}
             </Button>
 
             <button
               onClick={() => onOpenChange(false)}
-              className="text-slate-400 hover:text-slate-600 dark:hover:text-white p-1 rounded-lg ml-1"
+              className="text-slate-400 hover:text-slate-700 dark:hover:text-white p-1 rounded-md ml-1"
             >
               <X className="size-5" />
             </button>
@@ -496,161 +528,320 @@ export const EmployeeAppointmentSKModal: React.FC<EmployeeAppointmentSKModalProp
         <div className="p-4 sm:p-6 lg:p-8">
           {activeTab === 'edit' ? (
             /* =========================================================================
-               EDIT FORM
+               EDIT FORM (Enterprise Clean Antislop Layout)
                ========================================================================= */
-            <div className="max-w-2xl mx-auto bg-white dark:bg-[#131316] rounded-2xl p-6 border border-slate-200 dark:border-zinc-800 shadow-xs space-y-5 print:hidden">
-              <div className="border-b border-slate-100 dark:border-zinc-800 pb-3">
-                <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                  Form Penyesuaian Data Surat Keputusan (SK)
-                </h3>
-                <p className="text-xs text-slate-500 dark:text-zinc-400">
-                  Ubah nomor surat, tanggal, atau penandatangan jika dibutuhkan sebelum dicetak
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold">Nomor Surat Keputusan</Label>
-                  <Input
-                    value={skNumber}
-                    onChange={e => setSkNumber(e.target.value)}
-                    placeholder="Contoh: 046/GP/HR/SK/X/2026"
-                    className="text-xs font-mono font-semibold"
-                  />
+            <div className="max-w-3xl mx-auto space-y-6 print:hidden">
+              {/* Card 1: Informasi Dokumen & Legalitas */}
+              <div className="bg-white dark:bg-[#131316] rounded-xl p-5 border border-slate-200 dark:border-zinc-800 shadow-xs space-y-4">
+                <div className="flex items-center gap-2 pb-3 border-b border-slate-100 dark:border-zinc-800 text-slate-900 dark:text-white">
+                  <FileText className="size-4 text-slate-500" />
+                  <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-zinc-300">
+                    Informasi Dokumen & Perusahaan
+                  </h4>
                 </div>
 
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold">Nama Perusahaan (Kop)</Label>
-                  <Input
-                    value={companyName}
-                    onChange={e => setCompanyName(e.target.value)}
-                    placeholder="PT. GESIT PERKASA"
-                    className="text-xs font-bold"
-                  />
-                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-slate-700 dark:text-zinc-300">
+                      Nomor Surat Keputusan
+                    </Label>
+                    <Input
+                      value={skNumber}
+                      onChange={e => setSkNumber(e.target.value)}
+                      placeholder="Contoh: 046/GP/HR/SK/X/2026"
+                      className="text-xs font-mono rounded-lg bg-white dark:bg-zinc-900 border-slate-300 dark:border-zinc-700 shadow-2xs"
+                    />
+                  </div>
 
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold">Nama Karyawan</Label>
-                  <Input
-                    value={employeeName}
-                    onChange={e => setEmployeeName(e.target.value)}
-                    className="text-xs"
-                  />
-                </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-slate-700 dark:text-zinc-300">
+                      Nama Perusahaan (Kop Dokumen)
+                    </Label>
+                    <Input
+                      value={companyName}
+                      onChange={e => setCompanyName(e.target.value)}
+                      placeholder="PT. GESIT PERKASA"
+                      className="text-xs rounded-lg bg-white dark:bg-zinc-900 border-slate-300 dark:border-zinc-700 shadow-2xs"
+                    />
+                  </div>
 
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold">NIK Karyawan</Label>
-                  <Input
-                    value={employeeNik}
-                    onChange={e => setEmployeeNik(e.target.value)}
-                    className="text-xs font-mono"
-                  />
-                </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-slate-700 dark:text-zinc-300">
+                      Kota Penerbitan
+                    </Label>
+                    <Input
+                      value={issueCity}
+                      onChange={e => setIssueCity(e.target.value)}
+                      className="text-xs rounded-lg bg-white dark:bg-zinc-900 border-slate-300 dark:border-zinc-700 shadow-2xs"
+                    />
+                  </div>
 
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold">Panggilan Pembuka</Label>
-                  <select
-                    value={salutation}
-                    onChange={e => setSalutation(e.target.value as any)}
-                    className="w-full text-xs rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-2 font-medium"
-                  >
-                    <option value="Saudari">Saudari (Wanita / Perempuan)</option>
-                    <option value="Saudara">Saudara (Pria / Laki-laki)</option>
-                  </select>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold">Kota Penerbitan</Label>
-                  <Input
-                    value={issueCity}
-                    onChange={e => setIssueCity(e.target.value)}
-                    className="text-xs"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold">Mulai Masa Percobaan</Label>
-                  <Input
-                    type="date"
-                    value={probationStart}
-                    onChange={e => setProbationStart(e.target.value)}
-                    className="text-xs"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold">Selesai Masa Percobaan</Label>
-                  <Input
-                    type="date"
-                    value={probationEnd}
-                    onChange={e => setProbationEnd(e.target.value)}
-                    className="text-xs"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold">Nama Penandatangan (Kanan)</Label>
-                  <Input
-                    value={signerName}
-                    onChange={e => setSignerName(e.target.value)}
-                    className="text-xs font-bold"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold">Jabatan Penandatangan</Label>
-                  <Input
-                    value={signerTitle}
-                    onChange={e => setSignerTitle(e.target.value)}
-                    className="text-xs"
-                  />
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-slate-700 dark:text-zinc-300">
+                      Panggilan Pembuka Karyawan
+                    </Label>
+                    <select
+                      value={salutation}
+                      onChange={e => setSalutation(e.target.value as any)}
+                      className="w-full text-xs rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-2 font-medium text-slate-800 dark:text-zinc-200 shadow-2xs focus:outline-none focus:ring-2 focus:ring-slate-900/10 dark:focus:ring-white/10"
+                    >
+                      <option value="Saudari">Saudari (Wanita / Perempuan)</option>
+                      <option value="Saudara">Saudara (Pria / Laki-laki)</option>
+                    </select>
+                  </div>
                 </div>
               </div>
 
-              <div className="space-y-3 pt-3 border-t border-slate-100 dark:border-zinc-800">
-                <h4 className="text-xs font-bold text-slate-800 dark:text-zinc-200">
-                  Ketentuan Hak Karyawan
-                </h4>
-
-                <div className="space-y-1">
-                  <Label className="text-[11px] font-medium text-slate-500">Medical</Label>
-                  <Input
-                    value={clauseMedical}
-                    onChange={e => setClauseMedical(e.target.value)}
-                    className="text-xs"
-                  />
+              {/* Card 2: Data Karyawan (Data Induk Terkunci / Read-Only) */}
+              <div className="bg-white dark:bg-[#131316] rounded-xl p-5 border border-slate-200 dark:border-zinc-800 shadow-xs space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-zinc-800">
+                  <div className="flex items-center gap-2 text-slate-900 dark:text-white">
+                    <User className="size-4 text-slate-500" />
+                    <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-zinc-300">
+                      Data Karyawan
+                    </h4>
+                  </div>
+                  <span className="inline-flex items-center gap-1 text-[11px] text-slate-400 dark:text-zinc-500">
+                    <Lock className="size-3" />
+                    Sinkron Profil Induk
+                  </span>
                 </div>
 
-                <div className="space-y-1">
-                  <Label className="text-[11px] font-medium text-slate-500">Asuransi Kesehatan dan Jiwa</Label>
-                  <Input
-                    value={clauseInsurance}
-                    onChange={e => setClauseInsurance(e.target.value)}
-                    className="text-xs"
-                  />
-                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-slate-700 dark:text-zinc-300 flex items-center justify-between">
+                      <span>Nama Lengkap Karyawan</span>
+                    </Label>
+                    <Input
+                      value={employeeName}
+                      onChange={e => setEmployeeName(e.target.value)}
+                      className="text-xs rounded-lg bg-slate-50/60 dark:bg-zinc-900/60 border-slate-200 dark:border-zinc-800 text-slate-800 dark:text-zinc-200 font-medium"
+                    />
+                  </div>
 
-                <div className="space-y-1">
-                  <Label className="text-[11px] font-medium text-slate-500">Hak Cuti Tahunan</Label>
-                  <Textarea
-                    rows={3}
-                    value={clauseLeave}
-                    onChange={e => setClauseLeave(e.target.value)}
-                    className="text-xs leading-relaxed"
-                  />
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-slate-700 dark:text-zinc-300">
+                      NIK Karyawan
+                    </Label>
+                    <Input
+                      value={employeeNik}
+                      onChange={e => setEmployeeNik(e.target.value)}
+                      className="text-xs font-mono rounded-lg bg-slate-50/60 dark:bg-zinc-900/60 border-slate-200 dark:border-zinc-800 text-slate-800 dark:text-zinc-200"
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div className="flex justify-end pt-2">
+              {/* Card 3: Tanggal Berlaku & Efektif SK */}
+              <div className="bg-white dark:bg-[#131316] rounded-xl p-5 border border-slate-200 dark:border-zinc-800 shadow-xs space-y-4">
+                <div className="flex items-center gap-2 pb-3 border-b border-slate-100 dark:border-zinc-800 text-slate-900 dark:text-white">
+                  <Calendar className="size-4 text-slate-500" />
+                  <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-zinc-300">
+                    Jadwal & Tanggal Efektif Pemberlakuan
+                  </h4>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-slate-700 dark:text-zinc-300">
+                      Tanggal Terbit SK (Surat Dikeluarkan)
+                    </Label>
+                    <Input
+                      type="date"
+                      value={issueDate}
+                      onChange={e => setIssueDate(e.target.value)}
+                      className="text-xs rounded-lg bg-white dark:bg-zinc-900 border-slate-300 dark:border-zinc-700 shadow-2xs font-medium"
+                    />
+                    <p className="text-[11px] text-slate-400">
+                      Tanggal administrasi surat resmi diterbitkan
+                    </p>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-slate-700 dark:text-zinc-300">
+                      Tanggal Efektif Pengangkatan (TMT Tetap)
+                    </Label>
+                    <Input
+                      type="date"
+                      value={effectiveDate}
+                      onChange={e => setEffectiveDate(e.target.value)}
+                      className="text-xs rounded-lg bg-white dark:bg-zinc-900 border-slate-300 dark:border-zinc-700 shadow-2xs font-semibold text-slate-900 dark:text-white"
+                    />
+                    <p className="text-[11px] text-slate-400">
+                      Tanggal mulai resmi berstatus PKWTT
+                    </p>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-slate-700 dark:text-zinc-300">
+                      Mulai Masa Percobaan
+                    </Label>
+                    <Input
+                      type="date"
+                      value={probationStart}
+                      onChange={e => setProbationStart(e.target.value)}
+                      className="text-xs rounded-lg bg-white dark:bg-zinc-900 border-slate-300 dark:border-zinc-700 shadow-2xs"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-slate-700 dark:text-zinc-300">
+                      Selesai Masa Percobaan
+                    </Label>
+                    <Input
+                      type="date"
+                      value={probationEnd}
+                      onChange={e => setProbationEnd(e.target.value)}
+                      className="text-xs rounded-lg bg-white dark:bg-zinc-900 border-slate-300 dark:border-zinc-700 shadow-2xs"
+                    />
+                  </div>
+                </div>
+
+                {/* Structured Callout Alert Banner */}
+                <div className={`p-3 rounded-lg border flex items-start gap-2.5 text-xs ${
+                  effectiveDate && effectiveDate > new Date().toISOString().slice(0, 10)
+                    ? 'bg-amber-50/80 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/40 text-amber-900 dark:text-amber-300'
+                    : 'bg-slate-50 dark:bg-zinc-900 border-slate-200 dark:border-zinc-800 text-slate-700 dark:text-zinc-300'
+                }`}>
+                  <Info className={`size-4 shrink-0 mt-0.5 ${
+                    effectiveDate && effectiveDate > new Date().toISOString().slice(0, 10)
+                      ? 'text-amber-600 dark:text-amber-400'
+                      : 'text-slate-500'
+                  }`} />
+                  <div>
+                    <span className="font-semibold block mb-0.5">
+                      {effectiveDate && effectiveDate > new Date().toISOString().slice(0, 10)
+                        ? 'Pengangkatan Terjadwal Otomatis (Masa Depan)'
+                        : 'Pengangkatan Langsung Efektif'}
+                    </span>
+                    <span className="text-[11px] leading-relaxed">
+                      {effectiveDate && effectiveDate > new Date().toISOString().slice(0, 10)
+                        ? `SK akan diterbitkan sekarang, namun status karyawan di sistem tetap masa probation aktif hingga TMT berlaku pada ${formatIndoDate(effectiveDate)}.`
+                        : 'Status karyawan di sistem akan langsung otomatis dialihkan ke Karyawan Tetap (PKWTT) per hari ini.'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 4: Penandatangan SK */}
+              <div className="bg-white dark:bg-[#131316] rounded-xl p-5 border border-slate-200 dark:border-zinc-800 shadow-xs space-y-4">
+                <div className="flex items-center gap-2 pb-3 border-b border-slate-100 dark:border-zinc-800 text-slate-900 dark:text-white">
+                  <Building className="size-4 text-slate-500" />
+                  <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-zinc-300">
+                    Otorisasi Penandatangan Manajemen
+                  </h4>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-slate-700 dark:text-zinc-300">
+                      Nama Penandatangan
+                    </Label>
+                    <Input
+                      value={signerName}
+                      onChange={e => setSignerName(e.target.value)}
+                      className="text-xs rounded-lg bg-white dark:bg-zinc-900 border-slate-300 dark:border-zinc-700 shadow-2xs font-medium"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-slate-700 dark:text-zinc-300">
+                      Jabatan Penandatangan
+                    </Label>
+                    <Input
+                      value={signerTitle}
+                      onChange={e => setSignerTitle(e.target.value)}
+                      className="text-xs rounded-lg bg-white dark:bg-zinc-900 border-slate-300 dark:border-zinc-700 shadow-2xs"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 5: Ketentuan Hak Karyawan */}
+              <div className="bg-white dark:bg-[#131316] rounded-xl p-5 border border-slate-200 dark:border-zinc-800 shadow-xs space-y-4">
+                <div className="flex items-center gap-2 pb-3 border-b border-slate-100 dark:border-zinc-800 text-slate-900 dark:text-white">
+                  <Sparkles className="size-4 text-slate-500" />
+                  <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-zinc-300">
+                    Ketentuan Hak Karyawan Tetap
+                  </h4>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-slate-700 dark:text-zinc-300">
+                      Klausul Tunjangan Medis (Medical)
+                    </Label>
+                    <Input
+                      value={clauseMedical}
+                      onChange={e => setClauseMedical(e.target.value)}
+                      className="text-xs rounded-lg bg-white dark:bg-zinc-900 border-slate-300 dark:border-zinc-700 shadow-2xs"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-slate-700 dark:text-zinc-300">
+                      Klausul Asuransi Kesehatan & Jiwa
+                    </Label>
+                    <Input
+                      value={clauseInsurance}
+                      onChange={e => setClauseInsurance(e.target.value)}
+                      className="text-xs rounded-lg bg-white dark:bg-zinc-900 border-slate-300 dark:border-zinc-700 shadow-2xs"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-slate-700 dark:text-zinc-300">
+                      Klausul Hak Cuti Tahunan
+                    </Label>
+                    <Textarea
+                      rows={3}
+                      value={clauseLeave}
+                      onChange={e => setClauseLeave(e.target.value)}
+                      className="text-xs rounded-lg bg-white dark:bg-zinc-900 border-slate-300 dark:border-zinc-700 shadow-2xs leading-relaxed"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Bottom Action Footer */}
+              <div className="flex items-center justify-between pt-2">
                 <Button
                   type="button"
+                  variant="outline"
                   size="sm"
-                  onClick={() => setActiveTab('preview')}
-                  className="text-xs bg-[#12346a] hover:bg-[#1a448a] text-white rounded-xl"
+                  onClick={() => onOpenChange(false)}
+                  className="text-xs rounded-lg border-slate-300 dark:border-zinc-700"
                 >
-                  <Eye className="size-3.5 mr-1.5" />
-                  Lihat Pratinjau Surat
+                  Batal
                 </Button>
+
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setActiveTab('preview')}
+                    className="text-xs rounded-lg border-slate-300 dark:border-zinc-700 font-medium"
+                  >
+                    <Eye className="size-3.5 mr-1.5" />
+                    Lihat Pratinjau Surat
+                  </Button>
+
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={isSaving || isDownloading}
+                    onClick={handleApplyPermanent}
+                    className="text-xs rounded-lg bg-slate-900 hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 text-white font-medium shadow-xs px-4"
+                  >
+                    {isSaving ? (
+                      <Loader2 className="size-3.5 mr-1.5 animate-spin" />
+                    ) : (
+                      <CloudUpload className="size-3.5 mr-1.5" />
+                    )}
+                    {isSaving ? (uploadProgressText || 'Menyimpan...') : 'Terbitkan & Terapkan SK'}
+                  </Button>
+                </div>
               </div>
             </div>
           ) : (
@@ -676,30 +867,35 @@ export const EmployeeAppointmentSKModal: React.FC<EmployeeAppointmentSKModalProp
                 {/* Main Letter Content (Strict 31.75mm / 1.25" Left and Right Margins) */}
                 <div style={{ paddingLeft: '31.75mm', paddingRight: '31.75mm' }}>
                   {/* Kop Surat / Header */}
-                  <div className="text-center mb-[24pt]">
-                    {/* Logo (Exact placement & dimensions: 55.2pt x 58.2pt) */}
+                  <div className="text-center mb-[20pt]">
+                    {/* Logo (Dynamic per company: Gesit Foundation vs Gesit Perkasa) */}
                     <div className="flex justify-center mb-1">
                       <img
-                        src="/image/gesit_perkasa_logo.jpg"
-                        alt="PT Gesit Perkasa Logo"
-                        className="w-[55.2pt] h-[58.2pt] object-contain"
+                        src={getCompanyLogo(companyName)}
+                        alt={`${companyName} Logo`}
+                        className={companyName.toUpperCase().includes('FOUNDATION')
+                          ? "h-[68pt] w-auto max-w-[280pt] object-contain"
+                          : "w-[55.2pt] h-[58.2pt] object-contain"
+                        }
                         crossOrigin="anonymous"
                       />
                     </div>
 
-                    {/* Company Name (Font: Arial Black, Size: 8.5pt, Color: #1b2366) */}
-                    <h2
-                      className="text-[8.5pt] font-black uppercase text-[#1b2366] leading-tight"
-                      style={{
-                        fontFamily: '"Arial Black", Arial, sans-serif',
-                        letterSpacing: '0.04em',
-                      }}
-                    >
-                      {companyName}
-                    </h2>
+                    {/* Company Name (Hidden if logo already contains full foundation name, or styled consistently) */}
+                    {!companyName.toUpperCase().includes('FOUNDATION') && (
+                      <h2
+                        className="text-[8.5pt] font-black uppercase text-[#1b2366] leading-tight"
+                        style={{
+                          fontFamily: '"Arial Black", Arial, sans-serif',
+                          letterSpacing: '0.04em',
+                        }}
+                      >
+                        {companyName}
+                      </h2>
+                    )}
 
                     {/* Document Title (Font: Cambria 12pt Bold Underline & 11pt Bold Number) */}
-                    <div className="mt-[20pt]">
+                    <div className="mt-[16pt]">
                       <h1 className="text-[12pt] font-bold underline tracking-wide uppercase leading-tight">
                         SURAT KEPUTUSAN
                       </h1>
@@ -709,17 +905,17 @@ export const EmployeeAppointmentSKModal: React.FC<EmployeeAppointmentSKModalProp
                     </div>
                   </div>
 
-                  {/* Recipient Information (Font: Cambria 12pt, colon aligned at 12.7mm / 36pt from left margin) */}
+                  {/* Recipient Information */}
                   <div className="space-y-[1pt] mb-[18pt] text-[12pt] leading-[18pt]">
                     <div>Kepada Yth.,</div>
-                    <div className="grid grid-cols-[36pt_12pt_1fr] items-center font-bold">
+                    <div className="grid grid-cols-[48pt_14pt_1fr] items-baseline font-bold">
                       <div>Nama</div>
-                      <div>:</div>
+                      <div className="text-center">:</div>
                       <div>{employeeName}</div>
                     </div>
-                    <div className="grid grid-cols-[36pt_12pt_1fr] items-center font-bold">
+                    <div className="grid grid-cols-[48pt_14pt_1fr] items-baseline font-bold">
                       <div>NIK</div>
-                      <div>:</div>
+                      <div className="text-center">:</div>
                       <div>{employeeNik}</div>
                     </div>
                     <div className="pt-[14pt]">Di tempat</div>
@@ -729,26 +925,26 @@ export const EmployeeAppointmentSKModal: React.FC<EmployeeAppointmentSKModalProp
                   <div className="text-justify text-[12pt] leading-[21pt]">
                     <div className="mb-[6pt]">Dengan hormat,</div>
                     <p className="indent-0">
-                      Sehubungan dengan masa kerja {salutation} {employeeName} telah melewati masa percobaan, yaitu Tanggal {formatIndoDate(probationStart)} sampai dengan {formatIndoDate(probationEnd)} , maka setelah mengadakan penilaian terhadap hasil kerja {salutation} {employeeName} selama masa percobaan, Management memutuskan untuk mengangkat {salutation} {employeeName} sebagai <strong className="font-bold">Karyawan Tetap</strong> dan berhak untuk:
+                      Sehubungan dengan telah berakhirnya masa percobaan {salutation} {employeeName}, yaitu tanggal {formatIndoDate(probationStart)} sampai dengan {formatIndoDate(probationEnd)}, maka setelah mengadakan penilaian terhadap hasil kerja {salutation} {employeeName} selama masa percobaan, Management memutuskan untuk mengangkat {salutation} {employeeName} sebagai <strong className="font-bold">Karyawan Tetap</strong>{effectiveDate && effectiveDate !== issueDate ? ` terhitung mulai tanggal (TMT) ${formatIndoDate(effectiveDate)}` : ''} dan berhak untuk:
                     </p>
 
-                    {/* Entitlements List (Exact colon alignment at x = 253.1pt / 57.5mm from left margin) */}
+                    {/* Entitlements List */}
                     <div className="my-[4pt] text-[12pt] leading-[21pt]">
-                      <div className="grid grid-cols-[57.5mm_14pt_1fr] items-start">
+                      <div className="grid grid-cols-[57.5mm_14pt_1fr] items-baseline">
                         <div>Medical</div>
-                        <div>:</div>
+                        <div className="text-center">:</div>
                         <div>{clauseMedical}</div>
                       </div>
 
-                      <div className="grid grid-cols-[57.5mm_14pt_1fr] items-start">
+                      <div className="grid grid-cols-[57.5mm_14pt_1fr] items-baseline">
                         <div>Asuransi Kesehatan dan Jiwa</div>
-                        <div>:</div>
+                        <div className="text-center">:</div>
                         <div>{clauseInsurance}</div>
                       </div>
 
-                      <div className="grid grid-cols-[57.5mm_14pt_1fr] items-start">
+                      <div className="grid grid-cols-[57.5mm_14pt_1fr] items-baseline">
                         <div>Cuti</div>
-                        <div>:</div>
+                        <div className="text-center">:</div>
                         <div className="leading-[21pt]">
                           {clauseLeave}
                         </div>
@@ -772,7 +968,7 @@ export const EmployeeAppointmentSKModal: React.FC<EmployeeAppointmentSKModalProp
 
                     {/* Right: Management */}
                     <div className="flex flex-col justify-between h-[96pt] pl-[20pt]">
-                      <div>{issueCity}, {formatIndoDate(issueDate || probationEnd)}</div>
+                      <div>{issueCity}, {formatIndoDate(issueDate || new Date().toISOString().slice(0, 10))}</div>
                       <div>
                         <div className="font-bold underline leading-normal">
                           {signerName}

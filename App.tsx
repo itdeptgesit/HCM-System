@@ -88,6 +88,7 @@ import { MasterDepartment } from './components/admin/MasterDepartment';
 import { PermissionMenu } from './components/admin/PermissionMenu';
 import { AccountManagement } from './components/admin/AccountManagement';
 import { ApprovalHierarchy } from './components/admin/ApprovalHierarchy';
+import { OrganizationStructurePage } from './components/admin/OrganizationStructurePage';
 import { ActivityLogsManager } from './components/admin/ActivityLogsManager';
 import { SystemSettings } from './components/admin/SystemSettings';
 import { LoginPage } from './components/auth/LoginPage';
@@ -252,6 +253,7 @@ export default function App() {
   const navAdmin = isHR ? [
     ...(canView('Master Company') ? [{ label: 'Master Company', path: '/admin/companies', icon: Building2 }] : []),
     ...(canView('Master Department') ? [{ label: 'Master Department', path: '/admin/departments', icon: FolderTree }] : []),
+    ...((canView('Master Department') || canView('Master Company') || isHR) ? [{ label: 'Struktur Organisasi', path: '/admin/organization-structure', icon: Users }] : []),
     ...(canView('Hierarchy Approval') ? [{ label: 'Hierarchy Approval', path: '/admin/approval-hierarchy', icon: GitMerge }] : []),
     ...(canView('Permission Menu') ? [{ label: 'Permission Menu', path: '/admin/permissions', icon: Lock }] : []),
     ...(canView('Account Management') ? [{ label: 'Account Management', path: '/admin/accounts', icon: UserCheck }] : []),
@@ -279,6 +281,7 @@ export default function App() {
     const adm = navAdmin.find((n) => n.path === location.pathname);
     if (adm) return adm.label;
     if (location.pathname === '/admin/activity-logs') return 'Log Aktivitas & Audit';
+    if (location.pathname === '/admin/organization-structure') return 'Struktur Organisasi';
     if (location.pathname === '/admin/settings') return 'Pengaturan';
     return 'Dashboard';
   };
@@ -523,6 +526,16 @@ export default function App() {
                     requiredAccess="Izin Lihat Master Department"
                     currentUser={currentUser}
                   />
+                )
+              }
+            />
+            <Route
+              path="/admin/organization-structure"
+              element={
+                !isHR ? (
+                  <Navigate to="/requests" replace />
+                ) : (
+                  <OrganizationStructurePage />
                 )
               }
             />

@@ -47,6 +47,7 @@ import { UserAvatar } from '../UserAvatar';
 import { dashboardAttendance } from '../../lib/dashboardAttendance';
 import { loadWorkCalendarDates } from '../../lib/holidayDates';
 import { dashboardWorkbook } from '../../lib/dashboardWorkbook';
+import { syncEffectiveAppointments } from '../../lib/appointmentService';
 
 interface LiveHRDashboardProps {
   currentUser?: any;
@@ -179,6 +180,13 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
       lookbackObj.setDate(lookbackObj.getDate() - 42);
       const lookbackDateStr = lookbackObj.toISOString().slice(0, 10);
       const attendanceQueryStart = lookbackDateStr < `${monthPrefix}-01` ? lookbackDateStr : `${monthPrefix}-01`;
+
+      // Jalankan auto-sync pengangkatan yang jatuh tempo hari ini
+      try {
+        await syncEffectiveAppointments(snapshotDate);
+      } catch (syncErr) {
+        console.warn('syncEffectiveAppointments info:', syncErr);
+      }
 
       const [users, companies, depts, attendance, leaves, overtime, reimb, corrections, outside, appointments, context] = await Promise.all([
         loadWorkforceAccounts({ includeSystemAccounts: true }),

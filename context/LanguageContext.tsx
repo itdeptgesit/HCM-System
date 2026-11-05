@@ -90,6 +90,7 @@ export interface Translations {
     administration: string;
     adminCompany: string;
     adminDepartment: string;
+    adminOrgChart: string;
     adminApprovalHierarchy: string;
     adminUserAccounts: string;
     adminPermissionMenu: string;
@@ -187,6 +188,7 @@ export const translations: Record<Language, Translations> = {
       administration: 'Administration',
       adminCompany: 'Companies',
       adminDepartment: 'Departments',
+      adminOrgChart: 'Org Structure',
       adminApprovalHierarchy: 'Hierarchy',
       adminUserAccounts: 'Accounts',
       adminPermissionMenu: 'Permissions',
@@ -282,6 +284,7 @@ export const translations: Record<Language, Translations> = {
       administration: 'Administrasi',
       adminCompany: 'Perusahaan',
       adminDepartment: 'Departemen',
+      adminOrgChart: 'Struktur Organisasi',
       adminApprovalHierarchy: 'Hierarki',
       adminUserAccounts: 'Akun Pengguna',
       adminPermissionMenu: 'Hak Akses',

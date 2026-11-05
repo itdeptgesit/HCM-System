@@ -46,6 +46,7 @@ import { RestrictedDocViewer } from './ui/RestrictedDocViewer';
 import { EmployeeImportModal } from './EmployeeImportModal';
 import { EmployeeExportModal } from './EmployeeExportModal';
 import { EmployeeAppointmentSKModal } from './hr/EmployeeAppointmentSKModal';
+import { syncEffectiveAppointments } from '../lib/appointmentService';
 import { EmployeeChangeRequestsManager } from './hr/EmployeeChangeRequestsManager';
 import {
   checkRequiresApproval,
@@ -180,6 +181,12 @@ export const EmployeeDataManager: React.FC<EmployeeDataManagerProps> = ({
   const fetchEmployees = async () => {
     setIsLoading(true);
     try {
+      // Sinkronkan pengangkatan yang jatuh tempo sebelum memuat data
+      try {
+        await syncEffectiveAppointments();
+      } catch (syncErr) {
+        console.warn('syncEffectiveAppointments info:', syncErr);
+      }
       const { data, error } = await supabase
         .from('user_accounts')
         .select('*')
