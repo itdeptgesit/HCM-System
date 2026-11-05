@@ -472,7 +472,7 @@ export const INITIAL_ORG_DATA: {
   ],
 };
 
-const STORAGE_KEY = 'gesit_corporate_organization_chart_v1';
+const STORAGE_KEY = 'gesit_corporate_organization_chart_v2';
 
 export function loadSavedOrgData() {
   try {

@@ -111,6 +111,7 @@ export const OrganizationStructurePage: React.FC = () => {
   const handleResetToDefault = () => {
     if (confirm('Kembalikan struktur organisasi ke data awal dokumen resmi?')) {
       localStorage.removeItem('gesit_corporate_organization_chart_v1');
+      localStorage.removeItem('gesit_corporate_organization_chart_v2');
       setData(INITIAL_ORG_DATA);
       saveOrgData(INITIAL_ORG_DATA);
     }
@@ -606,7 +607,7 @@ export const OrganizationStructurePage: React.FC = () => {
                   <React.Fragment key={exec.id}>
                     <div className="relative flex items-center justify-center w-full">
                       {/* Executive Card with exact PDF graphic if available */}
-                      <div className="relative group w-[340px] sm:w-[380px] rounded-xl overflow-hidden shadow-lg transition-transform hover:scale-[1.01]">
+                      <div className="relative group w-[320px] sm:w-[350px] transition-transform hover:scale-[1.01]">
                         {isEditMode && (
                           <button
                             type="button"
@@ -627,45 +628,23 @@ export const OrganizationStructurePage: React.FC = () => {
                           </button>
                         )}
 
-                        {exec.cardImage ? (
-                          <div className="w-full bg-white select-none pointer-events-none">
-                            <img
-                              src={exec.cardImage}
-                              alt={exec.name}
-                              className="w-full h-auto block object-contain"
-                            />
-                          </div>
-                        ) : (
-                          /* Fallback HTML rendering */
-                          <div className="bg-white border border-slate-200">
-                            <div className="bg-[#0A3468] text-white text-center py-2 px-3 text-xs font-bold tracking-wide">
-                              {exec.title}
-                            </div>
-                            <div className="p-3.5 flex items-center justify-between">
-                              <div>
-                                <h4 className="text-sm font-bold text-[#0B2545]">{exec.name}</h4>
-                                <div className="h-1 w-12 bg-[#E5B80B] mt-1" />
-                              </div>
-                              <UserAvatar
-                                name={exec.name}
-                                url={execAvatar}
-                                size="md"
-                                shape="circle"
-                                className="border border-slate-200"
-                              />
-                            </div>
-                          </div>
-                        )}
+                        <div className="w-full bg-transparent select-none pointer-events-none filter drop-shadow-md">
+                          <img
+                            src={exec.cardImage || `/image/org_people/${exec.id}.png`}
+                            alt={exec.name}
+                            className="w-full h-auto block object-contain"
+                          />
+                        </div>
                       </div>
 
                       {/* Horizontal connector to PA */}
                       {exec.pa && (
-                        <div className="absolute left-[calc(50%+170px)] sm:left-[calc(50%+190px)] flex items-center">
+                        <div className="absolute left-[calc(50%+160px)] sm:left-[calc(50%+175px)] flex items-center">
                           {/* Pure horizontal black line */}
                           <div className="w-10 sm:w-14 h-[2px] bg-black" />
 
                           {/* PA Card with exact PDF graphic */}
-                          <div className="relative group w-[220px] sm:w-[250px] rounded-xl overflow-hidden shadow-md transition-transform hover:scale-[1.01]">
+                          <div className="relative group w-[210px] sm:w-[230px] transition-transform hover:scale-[1.01]">
                             {isEditMode && (
                               <button
                                 type="button"
@@ -686,28 +665,13 @@ export const OrganizationStructurePage: React.FC = () => {
                               </button>
                             )}
 
-                            {exec.pa.cardImage ? (
-                              <div className="w-full bg-white select-none pointer-events-none">
-                                <img
-                                  src={exec.pa.cardImage}
-                                  alt={exec.pa.name}
-                                  className="w-full h-auto block object-contain"
-                                />
-                              </div>
-                            ) : (
-                              <div className="bg-white p-3 border border-slate-200 flex items-center justify-between">
-                                <div>
-                                  <h5 className="text-xs font-bold text-[#0B2545]">{exec.pa.name}</h5>
-                                  <p className="text-[10px] text-slate-500 italic">{exec.pa.title}</p>
-                                </div>
-                                <UserAvatar
-                                  name={exec.pa.name}
-                                  url={paAvatar}
-                                  size="sm"
-                                  shape="circle"
-                                />
-                              </div>
-                            )}
+                            <div className="w-full bg-transparent select-none pointer-events-none filter drop-shadow-md">
+                              <img
+                                src={exec.pa.cardImage || `/image/org_people/${exec.pa.id}.png`}
+                                alt={exec.pa.name}
+                                className="w-full h-auto block object-contain"
+                              />
+                            </div>
                           </div>
                         </div>
                       )}
