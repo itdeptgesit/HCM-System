@@ -5,12 +5,14 @@ export interface OrgNode {
   type: 'executive' | 'division-head' | 'staff' | 'secretary';
   color?: string; // e.g. '#10223E'
   avatarUrl?: string;
+  cardImage?: string; // High-resolution asset card image for perfect visual fidelity
   children?: OrgNode[];
   pa?: {
     id: string;
     name: string;
     title: string;
     avatarUrl?: string;
+    cardImage?: string;
   };
 }
 
@@ -27,10 +29,12 @@ export const INITIAL_ORG_DATA: {
       name: 'Shareholders / Board of Commissioners',
       title: 'Dewan Komisaris',
       type: 'executive',
+      cardImage: '/image/org_people/card_boc.png',
       pa: {
         id: 'pa-boc',
         name: 'Asmawati',
         title: 'PA & Secretary',
+        cardImage: '/image/org_people/card_asmawati.png',
       },
     },
     {
@@ -38,10 +42,12 @@ export const INITIAL_ORG_DATA: {
       name: 'Jacob Soetoyo',
       title: 'Chairman',
       type: 'executive',
+      cardImage: '/image/org_people/card_jacob.png',
       pa: {
         id: 'pa-chairman',
         name: 'Rizki Meisara Rosadi',
         title: 'PA & Secretary',
+        cardImage: '/image/org_people/card_rizki.png',
       },
     },
     {
@@ -49,10 +55,12 @@ export const INITIAL_ORG_DATA: {
       name: 'Jahja Soetoyo',
       title: 'President & CEO',
       type: 'executive',
+      cardImage: '/image/org_people/card_jahja.png',
       pa: {
         id: 'pa-ceo',
         name: 'Dinny Anggraini',
         title: 'PA & Secretary',
+        cardImage: '/image/org_people/card_dinny.png',
       },
     },
     {
@@ -60,10 +68,12 @@ export const INITIAL_ORG_DATA: {
       name: 'Jones Soetoyo',
       title: 'Deputy CEO',
       type: 'executive',
+      cardImage: '/image/org_people/card_jones.png',
       pa: {
         id: 'pa-deputy-ceo',
         name: 'Dwi Suryati',
         title: 'PA & Secretary',
+        cardImage: '/image/org_people/card_dwi.png',
       },
     },
   ],
@@ -73,6 +83,7 @@ export const INITIAL_ORG_DATA: {
       name: 'Peng Tjoan',
       title: 'VP Corporate Affair',
       type: 'division-head',
+      cardImage: '/image/org_people/card_peng_tjoan.png',
       children: [
         {
           id: 'ca-avp',
@@ -107,6 +118,7 @@ export const INITIAL_ORG_DATA: {
       name: 'Srijani Winata',
       title: 'VP Finance & Accounting',
       type: 'division-head',
+      cardImage: '/image/org_people/card_srijani.png',
       pa: {
         id: 'pa-fa',
         name: 'Nabillah Saroh Afifah',
@@ -194,6 +206,7 @@ export const INITIAL_ORG_DATA: {
       name: 'Jave Soetoyo',
       title: 'VP Property & Investment',
       type: 'division-head',
+      cardImage: '/image/org_people/card_jave.png',
       pa: {
         id: 'pa-prop',
         name: 'Artika Octavin Manafe',
@@ -279,6 +292,7 @@ export const INITIAL_ORG_DATA: {
       name: 'Jones Soetoyo',
       title: 'CEO - Natural Resources',
       type: 'division-head',
+      cardImage: '/image/org_people/card_natural_resources.png',
       children: [],
     },
   ],
@@ -288,6 +302,7 @@ export const INITIAL_ORG_DATA: {
       name: 'Natalia',
       title: 'VP Corporate Secretary & Legal',
       type: 'division-head',
+      cardImage: '/image/org_people/card_natalia.png',
       children: [
         {
           id: 'csl-deputy',
@@ -322,6 +337,7 @@ export const INITIAL_ORG_DATA: {
       name: 'Javier Wijaya',
       title: 'VP HR & Logistics',
       type: 'division-head',
+      cardImage: '/image/org_people/card_javier.png',
       children: [
         {
           id: 'hr-mgr',
@@ -402,6 +418,7 @@ export const INITIAL_ORG_DATA: {
       name: 'Javier Wijaya',
       title: 'Trading Head',
       type: 'division-head',
+      cardImage: '/image/org_people/card_trading.png',
       children: [
         {
           id: 'trad-a',
@@ -442,6 +459,7 @@ export const INITIAL_ORG_DATA: {
       name: 'Johanes Tanro',
       title: 'CEO - Manufacturing',
       type: 'division-head',
+      cardImage: '/image/org_people/card_manufacturing.png',
       children: [
         {
           id: 'mfg-dir',
@@ -459,7 +477,13 @@ const STORAGE_KEY = 'gesit_corporate_organization_chart_v1';
 export function loadSavedOrgData() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      // Migrate if old data lacks cardImage
+      if (parsed.topExecutives && parsed.topExecutives[1]?.cardImage) {
+        return parsed;
+      }
+    }
   } catch (e) {
     console.error('Failed to load saved org chart data:', e);
   }

@@ -110,6 +110,7 @@ export const OrganizationStructurePage: React.FC = () => {
 
   const handleResetToDefault = () => {
     if (confirm('Kembalikan struktur organisasi ke data awal dokumen resmi?')) {
+      localStorage.removeItem('gesit_corporate_organization_chart_v1');
       setData(INITIAL_ORG_DATA);
       saveOrgData(INITIAL_ORG_DATA);
     }
@@ -319,79 +320,126 @@ export const OrganizationStructurePage: React.FC = () => {
 
     return (
       <div key={div.id} className="w-full space-y-2.5">
-        <div className="relative group rounded-xl bg-[#10223e] dark:bg-[#0c182c] text-white p-2.5 sm:p-3 shadow-md flex items-center justify-between border-l-4 border-l-[#e5a823] transition-all">
-          {/* Edit overlay */}
-          {isEditMode && (
-            <div className="absolute -top-2 -right-2 flex items-center gap-1 z-20">
-              <button
-                type="button"
-                onClick={() =>
-                  setEditingNode({
-                    id: div.id,
-                    name: div.name,
-                    title: div.title,
-                    paName: div.pa?.name,
-                    paTitle: div.pa?.title,
-                    section,
-                  })
-                }
-                className="size-5 rounded-full bg-blue-600 text-white flex items-center justify-center hover:bg-blue-700 shadow-xs"
-                title="Edit Kepala Divisi"
-              >
-                <Edit2 className="size-2.5" />
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  setEditingNode({
-                    id: '',
-                    name: '',
-                    title: '',
-                    parentId: div.id,
-                    isNew: true,
-                    section,
-                  })
-                }
-                className="size-5 rounded-full bg-emerald-600 text-white flex items-center justify-center hover:bg-emerald-700 shadow-xs"
-                title="Tambah Bawahan Langsung"
-              >
-                <Plus className="size-2.5" />
-              </button>
-            </div>
-          )}
-
-          <div className="flex items-center gap-2.5 min-w-0">
-            {/* Avatar Circle with Gold Border */}
-            <UserAvatar
-              name={div.name}
-              url={divAvatar}
-              size="sm"
-              shape="circle"
-              className="size-8 sm:size-9 border-2 border-[#e5a823] shrink-0 text-xs shadow-xs"
-            />
-            <div className="min-w-0">
-              <h4 className="text-xs font-bold text-white truncate">{div.name}</h4>
-              <div className="h-[1px] w-full bg-[#e5a823]/60 my-0.5" />
-              <p className="text-[10px] font-semibold text-[#f5b82e] truncate">{div.title}</p>
-            </div>
-          </div>
-
-          {div.pa && (
-            <div className="flex items-center gap-2 pl-2 border-l border-white/20 shrink-0">
-              <div className="text-right">
-                <span className="text-[10px] font-bold text-white block truncate">{div.pa.name}</span>
-                <span className="text-[8.5px] text-[#f5b82e] italic">({div.pa.title})</span>
+        {div.cardImage ? (
+          <div className="relative group w-full rounded-xl overflow-hidden shadow-md transition-transform hover:scale-[1.01]">
+            {isEditMode && (
+              <div className="absolute top-2 right-2 flex items-center gap-1 z-20">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setEditingNode({
+                      id: div.id,
+                      name: div.name,
+                      title: div.title,
+                      paName: div.pa?.name,
+                      paTitle: div.pa?.title,
+                      section,
+                    })
+                  }
+                  className="size-6 rounded-full bg-blue-600 text-white flex items-center justify-center hover:bg-blue-700 shadow-xs"
+                  title="Edit Kepala Divisi"
+                >
+                  <Edit2 className="size-3" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setEditingNode({
+                      id: '',
+                      name: '',
+                      title: '',
+                      parentId: div.id,
+                      isNew: true,
+                      section,
+                    })
+                  }
+                  className="size-6 rounded-full bg-emerald-600 text-white flex items-center justify-center hover:bg-emerald-700 shadow-xs"
+                  title="Tambah Bawahan Langsung"
+                >
+                  <Plus className="size-3" />
+                </button>
               </div>
+            )}
+            <img
+              src={div.cardImage}
+              alt={div.name}
+              className="w-full h-auto block object-contain select-none pointer-events-none"
+            />
+          </div>
+        ) : (
+          <div className="relative group rounded-xl bg-[#10223e] dark:bg-[#0c182c] text-white p-2.5 sm:p-3 shadow-md flex items-center justify-between border-l-4 border-l-[#e5a823] transition-all">
+            {/* Edit overlay */}
+            {isEditMode && (
+              <div className="absolute -top-2 -right-2 flex items-center gap-1 z-20">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setEditingNode({
+                      id: div.id,
+                      name: div.name,
+                      title: div.title,
+                      paName: div.pa?.name,
+                      paTitle: div.pa?.title,
+                      section,
+                    })
+                  }
+                  className="size-5 rounded-full bg-blue-600 text-white flex items-center justify-center hover:bg-blue-700 shadow-xs"
+                  title="Edit Kepala Divisi"
+                >
+                  <Edit2 className="size-2.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setEditingNode({
+                      id: '',
+                      name: '',
+                      title: '',
+                      parentId: div.id,
+                      isNew: true,
+                      section,
+                    })
+                  }
+                  className="size-5 rounded-full bg-emerald-600 text-white flex items-center justify-center hover:bg-emerald-700 shadow-xs"
+                  title="Tambah Bawahan Langsung"
+                >
+                  <Plus className="size-2.5" />
+                </button>
+              </div>
+            )}
+
+            <div className="flex items-center gap-2.5 min-w-0">
               <UserAvatar
-                name={div.pa.name}
-                url={paAvatar}
-                size="xs"
+                name={div.name}
+                url={divAvatar}
+                size="sm"
                 shape="circle"
-                className="size-6 text-[9px] border border-amber-400 shrink-0"
+                className="size-8 sm:size-9 border-2 border-[#e5a823] shrink-0 text-xs shadow-xs"
               />
+              <div className="min-w-0">
+                <h4 className="text-xs font-bold text-white truncate">{div.name}</h4>
+                <div className="h-[1px] w-full bg-[#e5a823]/60 my-0.5" />
+                <p className="text-[10px] font-semibold text-[#f5b82e] truncate">{div.title}</p>
+              </div>
             </div>
-          )}
-        </div>
+
+            {div.pa && (
+              <div className="flex items-center gap-2 pl-2 border-l border-white/20 shrink-0">
+                <div className="text-right">
+                  <span className="text-[10px] font-bold text-white block truncate">{div.pa.name}</span>
+                  <span className="text-[8.5px] text-[#f5b82e] italic">({div.pa.title})</span>
+                </div>
+                <UserAvatar
+                  name={div.pa.name}
+                  url={paAvatar}
+                  size="xs"
+                  shape="circle"
+                  className="size-6 text-[9px] border border-amber-400 shrink-0"
+                />
+              </div>
+            )}
+          </div>
+        )}
 
         {div.children && div.children.length > 0 && (
           <div className="pl-4 border-l-2 border-slate-300 dark:border-zinc-700 ml-5 space-y-2.5 pt-1">
@@ -549,7 +597,7 @@ export const OrganizationStructurePage: React.FC = () => {
             </div>
 
             {/* ================= TOP LEVEL C-SUITE TOWER ================= */}
-            <div className="flex flex-col items-center w-full max-w-[850px]">
+            <div className="flex flex-col items-center w-full max-w-[950px]">
               {data.topExecutives.map((exec, idx) => {
                 const execAvatar = findAvatarUrl(exec.name, exec.avatarUrl);
                 const paAvatar = exec.pa ? findAvatarUrl(exec.pa.name, exec.pa.avatarUrl) : undefined;
@@ -557,7 +605,8 @@ export const OrganizationStructurePage: React.FC = () => {
                 return (
                   <React.Fragment key={exec.id}>
                     <div className="relative flex items-center justify-center w-full">
-                      <div className="relative group rounded-xl bg-[#10223e] text-white px-7 py-3 text-center shadow-lg border border-slate-700 w-80">
+                      {/* Executive Card with exact PDF graphic if available */}
+                      <div className="relative group w-[340px] sm:w-[380px] rounded-xl overflow-hidden shadow-lg transition-transform hover:scale-[1.01]">
                         {isEditMode && (
                           <button
                             type="button"
@@ -571,65 +620,109 @@ export const OrganizationStructurePage: React.FC = () => {
                                 section: 'top',
                               })
                             }
-                            className="absolute -top-2 -right-2 size-5 rounded-full bg-blue-600 text-white flex items-center justify-center hover:bg-blue-700 shadow-xs z-10"
+                            className="absolute top-2 right-2 size-6 rounded-full bg-blue-600 text-white flex items-center justify-center hover:bg-blue-700 shadow-md z-20"
+                            title="Edit Eksekutif"
                           >
-                            <Edit2 className="size-2.5" />
+                            <Edit2 className="size-3" />
                           </button>
                         )}
-                        <div className="flex items-center justify-center gap-2.5">
-                          {exec.type === 'executive' && exec.name !== 'Shareholders / Board of Commissioners' && (
-                            <UserAvatar
-                              name={exec.name}
-                              url={execAvatar}
-                              size="sm"
-                              shape="circle"
-                              className="size-8 border-2 border-[#e5a823] shrink-0"
+
+                        {exec.cardImage ? (
+                          <div className="w-full bg-white select-none pointer-events-none">
+                            <img
+                              src={exec.cardImage}
+                              alt={exec.name}
+                              className="w-full h-auto block object-contain"
                             />
-                          )}
-                          <div>
-                            <h4 className="text-sm font-extrabold text-white">{exec.name}</h4>
-                            <p className="text-[11px] font-bold text-[#f5b82e] tracking-wider uppercase mt-0.5">
-                              {exec.title}
-                            </p>
                           </div>
-                        </div>
+                        ) : (
+                          /* Fallback HTML rendering */
+                          <div className="bg-white border border-slate-200">
+                            <div className="bg-[#0A3468] text-white text-center py-2 px-3 text-xs font-bold tracking-wide">
+                              {exec.title}
+                            </div>
+                            <div className="p-3.5 flex items-center justify-between">
+                              <div>
+                                <h4 className="text-sm font-bold text-[#0B2545]">{exec.name}</h4>
+                                <div className="h-1 w-12 bg-[#E5B80B] mt-1" />
+                              </div>
+                              <UserAvatar
+                                name={exec.name}
+                                url={execAvatar}
+                                size="md"
+                                shape="circle"
+                                className="border border-slate-200"
+                              />
+                            </div>
+                          </div>
+                        )}
                       </div>
 
-                      {/* PA Line & Box to Right */}
+                      {/* Horizontal connector to PA */}
                       {exec.pa && (
-                        <div className="absolute left-[calc(50%+160px)] flex items-center">
-                          <div className="w-12 h-[1.5px] bg-slate-400 dark:bg-zinc-600" />
-                          <div className="relative group bg-white dark:bg-[#13161c] rounded-xl py-2 px-3.5 border-l-4 border-l-[#e5a823] border border-slate-200 dark:border-zinc-800 shadow-sm w-56 flex items-center justify-between gap-2">
-                            <div className="min-w-0">
-                              <span className="text-[11px] font-bold text-slate-900 dark:text-zinc-100 block truncate">
-                                {exec.pa.name}
-                              </span>
-                              <span className="text-[9.5px] font-semibold text-slate-500 italic block truncate">
-                                {exec.pa.title}
-                              </span>
-                            </div>
-                            <UserAvatar
-                              name={exec.pa.name}
-                              url={paAvatar}
-                              size="xs"
-                              shape="circle"
-                              className="size-6 text-[9px] border border-amber-400 shrink-0"
-                            />
+                        <div className="absolute left-[calc(50%+170px)] sm:left-[calc(50%+190px)] flex items-center">
+                          {/* Pure horizontal black line */}
+                          <div className="w-10 sm:w-14 h-[2px] bg-black" />
+
+                          {/* PA Card with exact PDF graphic */}
+                          <div className="relative group w-[220px] sm:w-[250px] rounded-xl overflow-hidden shadow-md transition-transform hover:scale-[1.01]">
+                            {isEditMode && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setEditingNode({
+                                    id: exec.id,
+                                    name: exec.name,
+                                    title: exec.title,
+                                    paName: exec.pa?.name,
+                                    paTitle: exec.pa?.title,
+                                    section: 'top',
+                                  })
+                                }
+                                className="absolute top-2 right-2 size-5 rounded-full bg-blue-600 text-white flex items-center justify-center hover:bg-blue-700 shadow-xs z-20"
+                                title="Edit PA"
+                              >
+                                <Edit2 className="size-2.5" />
+                              </button>
+                            )}
+
+                            {exec.pa.cardImage ? (
+                              <div className="w-full bg-white select-none pointer-events-none">
+                                <img
+                                  src={exec.pa.cardImage}
+                                  alt={exec.pa.name}
+                                  className="w-full h-auto block object-contain"
+                                />
+                              </div>
+                            ) : (
+                              <div className="bg-white p-3 border border-slate-200 flex items-center justify-between">
+                                <div>
+                                  <h5 className="text-xs font-bold text-[#0B2545]">{exec.pa.name}</h5>
+                                  <p className="text-[10px] text-slate-500 italic">{exec.pa.title}</p>
+                                </div>
+                                <UserAvatar
+                                  name={exec.pa.name}
+                                  url={paAvatar}
+                                  size="sm"
+                                  shape="circle"
+                                />
+                              </div>
+                            )}
                           </div>
                         </div>
                       )}
                     </div>
 
-                    {/* Vertical Spine Link */}
+                    {/* Central Vertical Connector Spine (Solid black line) */}
                     {idx < data.topExecutives.length - 1 && (
-                      <div className="w-[1.5px] h-6 bg-slate-400 dark:bg-zinc-600" />
+                      <div className="w-[2px] h-7 bg-black" />
                     )}
                   </React.Fragment>
                 );
               })}
 
               {/* Central Spine Branching to 2 Main Columns */}
-              <div className="w-[1.5px] h-8 bg-slate-400 dark:bg-zinc-600" />
+              <div className="w-[2px] h-10 bg-black" />
             </div>
 
             {/* ================= TWO COLUMNS (LEFT & RIGHT WINGS) ================= */}
