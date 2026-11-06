@@ -26,8 +26,14 @@ import {
   Layers,
   FileText,
   CloudSun,
+  Sun,
+  Cloud,
+  CloudRain,
+  CloudLightning,
+  CloudFog,
   Filter
 } from '@/components/ui/icons';
+import { getRealtimeWeather, getCachedWeather, type WeatherInfo } from '../../lib/weatherService';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import * as XLSX from 'xlsx';
@@ -1619,42 +1625,38 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
     }
   }, []);
 
-  const [weather, setWeather] = useState<{
-    temp: number;
-    condition: string;
-    city: string;
-  }>({
-    temp: 31,
-    condition: 'Cerah Berawan',
-    city: 'Jakarta'
+  const [weather, setWeather] = useState<WeatherInfo>(() => {
+    return (
+      getCachedWeather() || {
+        temp: 31,
+        condition: 'Cerah Berawan',
+        city: 'Jakarta',
+        source: 'Cache',
+        iconType: 'cloud-sun',
+        updatedAt: Date.now()
+      }
+    );
   });
 
   useEffect(() => {
+    let isMounted = true;
     const fetchWeather = async () => {
       try {
-        const res = await fetch(
-          'https://api.open-meteo.com/v1/forecast?latitude=-6.2088&longitude=106.8456&current=temperature_2m,weather_code'
-        );
-        if (!res.ok) return;
-        const data = await res.json();
-        const temp = Math.round(data?.current?.temperature_2m ?? 31);
-        const code = Number(data?.current?.weather_code ?? 1);
-        let condition = 'Cerah';
-        if (code === 0) condition = 'Cerah';
-        else if (code >= 1 && code <= 3) condition = 'Cerah Berawan';
-        else if (code >= 45 && code <= 48) condition = 'Berkabut';
-        else if (code >= 51 && code <= 67) condition = 'Hujan Ringan';
-        else if (code >= 80 && code <= 82) condition = 'Hujan';
-        else if (code >= 95) condition = 'Hujan Petir';
-
-        setWeather({ temp, condition, city: 'Jakarta' });
-      } catch {
-        // Fallback gracefully
+        const data = await getRealtimeWeather();
+        if (isMounted && data) {
+          setWeather(data);
+        }
+      } catch (err) {
+        console.warn('Weather fetch warning:', err);
       }
     };
+
     fetchWeather();
     const weatherTimer = setInterval(fetchWeather, 300_000);
-    return () => clearInterval(weatherTimer);
+    return () => {
+      isMounted = false;
+      clearInterval(weatherTimer);
+    };
   }, []);
 
   if (loadError) return (
@@ -1684,10 +1686,30 @@ export default function LiveHRDashboard({ currentUser, onMetricsUpdate }: LiveHR
               <span>{formattedTodayDate}</span>
             </span>
             <span className="text-slate-300 dark:text-zinc-700 font-light">•</span>
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20 font-semibold text-[11.5px] shadow-2xs">
-              <CloudSun className="size-3.5 text-amber-500" />
+            <div
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-semibold text-[11.5px] shadow-2xs transition-colors ${
+                weather.iconType === 'rain'
+                  ? 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/20'
+                  : weather.iconType === 'thunder'
+                  ? 'bg-purple-500/10 text-purple-700 dark:text-purple-400 border border-purple-500/20'
+                  : weather.iconType === 'fog' || weather.iconType === 'cloud'
+                  ? 'bg-slate-500/10 text-slate-700 dark:text-slate-300 border border-slate-500/20'
+                  : 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20'
+              }`}
+              title={
+                weather.source === 'BMKG'
+                  ? 'Prakiraan Cuaca Resmi BMKG (Badan Meteorologi, Klimatologi, dan Geofisika)'
+                  : 'Prakiraan Cuaca Terkini'
+              }
+            >
+              {weather.iconType === 'sun' && <Sun className="size-3.5 text-amber-500 shrink-0" />}
+              {weather.iconType === 'cloud-sun' && <CloudSun className="size-3.5 text-amber-500 shrink-0" />}
+              {weather.iconType === 'cloud' && <Cloud className="size-3.5 text-slate-500 dark:text-zinc-400 shrink-0" />}
+              {weather.iconType === 'rain' && <CloudRain className="size-3.5 text-blue-500 shrink-0" />}
+              {weather.iconType === 'thunder' && <CloudLightning className="size-3.5 text-purple-600 dark:text-purple-400 shrink-0" />}
+              {weather.iconType === 'fog' && <CloudFog className="size-3.5 text-slate-400 shrink-0" />}
               <span>{weather.temp}°C {weather.condition}</span>
-              <span className="text-[10.5px] text-amber-600/75 dark:text-amber-300/75 font-normal">({weather.city})</span>
+              <span className="text-[10.5px] opacity-75 font-normal">({weather.city})</span>
             </div>
           </div>
 

@@ -112,6 +112,9 @@ export const OrganizationStructurePage: React.FC = () => {
     if (confirm('Kembalikan struktur organisasi ke data awal dokumen resmi?')) {
       localStorage.removeItem('gesit_corporate_organization_chart_v1');
       localStorage.removeItem('gesit_corporate_organization_chart_v2');
+      localStorage.removeItem('gesit_corporate_organization_chart_v3');
+      localStorage.removeItem('gesit_corporate_organization_chart_v4');
+      localStorage.removeItem('gesit_corporate_organization_chart_v5');
       setData(INITIAL_ORG_DATA);
       saveOrgData(INITIAL_ORG_DATA);
     }
@@ -234,7 +237,7 @@ export const OrganizationStructurePage: React.FC = () => {
 
     return (
       <div key={node.id} className="relative group flex flex-col items-center">
-        <div className="relative bg-white dark:bg-[#13161c] rounded-md shadow-sm border border-slate-200/90 dark:border-zinc-800 p-2 sm:p-2.5 min-w-[170px] max-w-[210px] w-full border-l-[3.5px] border-l-[#e5a823] transition-all hover:shadow-md">
+        <div className="relative bg-white dark:bg-[#13161c] rounded-lg shadow-2xs border border-slate-200/90 dark:border-zinc-800 p-2 sm:p-2.5 min-w-[170px] max-w-[210px] w-full border-l-[3.5px] border-l-[#e5a823] transition-all hover:shadow-md">
           {/* Edit overlay */}
           {isEditMode && (
             <div className="absolute -top-2.5 -right-2.5 flex items-center gap-1 z-20">
@@ -283,21 +286,31 @@ export const OrganizationStructurePage: React.FC = () => {
 
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0 flex-1">
-              <h5 className="text-[10.5px] font-bold text-slate-900 dark:text-zinc-100 truncate leading-snug">
+              <h5 className="text-[11px] font-bold text-slate-900 dark:text-zinc-100 truncate leading-snug">
                 {node.name}
               </h5>
-              <p className="text-[9px] text-slate-500 dark:text-zinc-400 italic truncate leading-normal">
+              <p className="text-[9.5px] text-slate-500 dark:text-zinc-400 italic truncate leading-normal">
                 {node.title}
               </p>
             </div>
-            {/* Real profile avatar or icon */}
-            <UserAvatar
-              name={node.name}
-              url={avatarUrl}
-              size="xs"
-              shape="circle"
-              className="size-6 text-[9px] border border-amber-500/40 shrink-0"
-            />
+            {/* Real profile avatar or photo cutout */}
+            {node.personPhoto ? (
+              <div className="w-6 h-7 shrink-0 rounded overflow-hidden flex items-end justify-center bg-slate-100 border border-amber-500/30">
+                <img
+                  src={node.personPhoto}
+                  alt={node.name}
+                  className="w-full h-full object-cover object-top"
+                />
+              </div>
+            ) : (
+              <UserAvatar
+                name={node.name}
+                url={avatarUrl}
+                size="xs"
+                shape="circle"
+                className="size-6 text-[9px] border border-amber-500/40 shrink-0"
+              />
+            )}
           </div>
         </div>
 
@@ -321,95 +334,57 @@ export const OrganizationStructurePage: React.FC = () => {
 
     return (
       <div key={div.id} className="w-full space-y-2.5">
-        {div.cardImage ? (
-          <div className="relative group w-full rounded-xl overflow-hidden shadow-md transition-transform hover:scale-[1.01]">
-            {isEditMode && (
-              <div className="absolute top-2 right-2 flex items-center gap-1 z-20">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setEditingNode({
-                      id: div.id,
-                      name: div.name,
-                      title: div.title,
-                      paName: div.pa?.name,
-                      paTitle: div.pa?.title,
-                      section,
-                    })
-                  }
-                  className="size-6 rounded-full bg-blue-600 text-white flex items-center justify-center hover:bg-blue-700 shadow-xs"
-                  title="Edit Kepala Divisi"
-                >
-                  <Edit2 className="size-3" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setEditingNode({
-                      id: '',
-                      name: '',
-                      title: '',
-                      parentId: div.id,
-                      isNew: true,
-                      section,
-                    })
-                  }
-                  className="size-6 rounded-full bg-emerald-600 text-white flex items-center justify-center hover:bg-emerald-700 shadow-xs"
-                  title="Tambah Bawahan Langsung"
-                >
-                  <Plus className="size-3" />
-                </button>
-              </div>
-            )}
-            <img
-              src={div.cardImage}
-              alt={div.name}
-              className="w-full h-auto block object-contain select-none pointer-events-none"
-            />
-          </div>
-        ) : (
-          <div className="relative group rounded-xl bg-[#10223e] dark:bg-[#0c182c] text-white p-2.5 sm:p-3 shadow-md flex items-center justify-between border-l-4 border-l-[#e5a823] transition-all">
-            {/* Edit overlay */}
-            {isEditMode && (
-              <div className="absolute -top-2 -right-2 flex items-center gap-1 z-20">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setEditingNode({
-                      id: div.id,
-                      name: div.name,
-                      title: div.title,
-                      paName: div.pa?.name,
-                      paTitle: div.pa?.title,
-                      section,
-                    })
-                  }
-                  className="size-5 rounded-full bg-blue-600 text-white flex items-center justify-center hover:bg-blue-700 shadow-xs"
-                  title="Edit Kepala Divisi"
-                >
-                  <Edit2 className="size-2.5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setEditingNode({
-                      id: '',
-                      name: '',
-                      title: '',
-                      parentId: div.id,
-                      isNew: true,
-                      section,
-                    })
-                  }
-                  className="size-5 rounded-full bg-emerald-600 text-white flex items-center justify-center hover:bg-emerald-700 shadow-xs"
-                  title="Tambah Bawahan Langsung"
-                >
-                  <Plus className="size-2.5" />
-                </button>
-              </div>
-            )}
+        <div className="relative group rounded-xl bg-[#0A3468] dark:bg-[#0c182c] text-white p-2.5 sm:p-3 shadow-md flex items-center justify-between border-l-4 border-l-[#E5B80B] transition-all">
+          {/* Edit overlay */}
+          {isEditMode && (
+            <div className="absolute -top-2 -right-2 flex items-center gap-1 z-20">
+              <button
+                type="button"
+                onClick={() =>
+                  setEditingNode({
+                    id: div.id,
+                    name: div.name,
+                    title: div.title,
+                    paName: div.pa?.name,
+                    paTitle: div.pa?.title,
+                    section,
+                  })
+                }
+                className="size-5 rounded-full bg-blue-600 text-white flex items-center justify-center hover:bg-blue-700 shadow-xs"
+                title="Edit Kepala Divisi"
+              >
+                <Edit2 className="size-2.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setEditingNode({
+                    id: '',
+                    name: '',
+                    title: '',
+                    parentId: div.id,
+                    isNew: true,
+                    section,
+                  })
+                }
+                className="size-5 rounded-full bg-emerald-600 text-white flex items-center justify-center hover:bg-emerald-700 shadow-xs"
+                title="Tambah Bawahan Langsung"
+              >
+                <Plus className="size-2.5" />
+              </button>
+            </div>
+          )}
 
-            <div className="flex items-center gap-2.5 min-w-0">
+          <div className="flex items-center gap-2.5 min-w-0">
+            {div.personPhoto ? (
+              <div className="w-9 h-11 shrink-0 rounded overflow-hidden flex items-end justify-center bg-slate-800/50 border border-[#E5B80B]/50 shadow-xs">
+                <img
+                  src={div.personPhoto}
+                  alt={div.name}
+                  className="w-full h-full object-cover object-top"
+                />
+              </div>
+            ) : (
               <UserAvatar
                 name={div.name}
                 url={divAvatar}
@@ -417,19 +392,32 @@ export const OrganizationStructurePage: React.FC = () => {
                 shape="circle"
                 className="size-8 sm:size-9 border-2 border-[#e5a823] shrink-0 text-xs shadow-xs"
               />
-              <div className="min-w-0">
-                <h4 className="text-xs font-bold text-white truncate">{div.name}</h4>
-                <div className="h-[1px] w-full bg-[#e5a823]/60 my-0.5" />
-                <p className="text-[10px] font-semibold text-[#f5b82e] truncate">{div.title}</p>
-              </div>
+            )}
+            <div className="min-w-0">
+              <span className="text-[10px] sm:text-[10.5px] font-extrabold text-[#E5B80B] tracking-wider block uppercase truncate">
+                {div.title}
+              </span>
+              <h4 className="text-xs sm:text-sm font-extrabold text-white truncate leading-tight">
+                {div.name}
+              </h4>
             </div>
+          </div>
 
-            {div.pa && (
-              <div className="flex items-center gap-2 pl-2 border-l border-white/20 shrink-0">
-                <div className="text-right">
-                  <span className="text-[10px] font-bold text-white block truncate">{div.pa.name}</span>
-                  <span className="text-[8.5px] text-[#f5b82e] italic">({div.pa.title})</span>
+          {div.pa && (
+            <div className="flex items-center gap-2 pl-2 border-l border-white/20 shrink-0">
+              <div className="text-right">
+                <span className="text-[10px] font-bold text-white block truncate">{div.pa.name}</span>
+                <span className="text-[8.5px] text-[#E5B80B] italic">({div.pa.title})</span>
+              </div>
+              {div.pa.personPhoto ? (
+                <div className="w-6 h-7 shrink-0 rounded-full overflow-hidden flex items-end justify-center bg-slate-800/40 border border-[#E5B80B]">
+                  <img
+                    src={div.pa.personPhoto}
+                    alt={div.pa.name}
+                    className="w-full h-full object-cover object-top"
+                  />
                 </div>
+              ) : (
                 <UserAvatar
                   name={div.pa.name}
                   url={paAvatar}
@@ -437,14 +425,17 @@ export const OrganizationStructurePage: React.FC = () => {
                   shape="circle"
                   className="size-6 text-[9px] border border-amber-400 shrink-0"
                 />
-              </div>
-            )}
-          </div>
-        )}
+              )}
+            </div>
+          )}
+        </div>
 
         {div.children && div.children.length > 0 && (
-          <div className="pl-4 border-l-2 border-slate-300 dark:border-zinc-700 ml-5 space-y-2.5 pt-1">
-            {div.children.map(child => renderStaffCard(child, section))}
+          <div className="w-full flex flex-col items-center pt-1.5">
+            <div className="w-[1.5px] h-3 bg-slate-400 dark:bg-zinc-600" />
+            <div className="flex flex-wrap items-start justify-center gap-3 w-full">
+              {div.children.map(child => renderStaffCard(child, section))}
+            </div>
           </div>
         )}
       </div>
@@ -605,46 +596,20 @@ export const OrganizationStructurePage: React.FC = () => {
 
                 return (
                   <React.Fragment key={exec.id}>
-                    <div className="relative flex items-center justify-center w-full">
-                      {/* Executive Card with exact PDF graphic if available */}
-                      <div className="relative group w-[320px] sm:w-[350px] transition-transform hover:scale-[1.01]">
-                        {isEditMode && (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setEditingNode({
-                                id: exec.id,
-                                name: exec.name,
-                                title: exec.title,
-                                paName: exec.pa?.name,
-                                paTitle: exec.pa?.title,
-                                section: 'top',
-                              })
-                            }
-                            className="absolute top-2 right-2 size-6 rounded-full bg-blue-600 text-white flex items-center justify-center hover:bg-blue-700 shadow-md z-20"
-                            title="Edit Eksekutif"
+                    <div className="relative flex items-center justify-center w-full min-h-[72px]">
+                      {/* Executive Card Native HTML matching FigCraft */}
+                      {(() => {
+                        const isCeo = exec.id === 'exec-ceo';
+                        const isBoc = exec.id === 'exec-boc';
+
+                        return (
+                          <div
+                            className={`relative group w-[320px] sm:w-[335px] rounded-lg shadow-sm border transition-transform hover:scale-[1.01] ${
+                              isCeo
+                                ? 'bg-[#0A3468] border-[#E5B80B] text-white shadow-md'
+                                : 'bg-white border-[#0C2340] text-[#0B2545]'
+                            }`}
                           >
-                            <Edit2 className="size-3" />
-                          </button>
-                        )}
-
-                        <div className="w-full bg-transparent select-none pointer-events-none filter drop-shadow-md">
-                          <img
-                            src={exec.cardImage || `/image/org_people/${exec.id}.png`}
-                            alt={exec.name}
-                            className="w-full h-auto block object-contain"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Horizontal connector to PA */}
-                      {exec.pa && (
-                        <div className="absolute left-[calc(50%+160px)] sm:left-[calc(50%+175px)] flex items-center">
-                          {/* Pure horizontal black line */}
-                          <div className="w-10 sm:w-14 h-[2px] bg-black" />
-
-                          {/* PA Card with exact PDF graphic */}
-                          <div className="relative group w-[210px] sm:w-[230px] transition-transform hover:scale-[1.01]">
                             {isEditMode && (
                               <button
                                 type="button"
@@ -658,19 +623,123 @@ export const OrganizationStructurePage: React.FC = () => {
                                     section: 'top',
                                   })
                                 }
-                                className="absolute top-2 right-2 size-5 rounded-full bg-blue-600 text-white flex items-center justify-center hover:bg-blue-700 shadow-xs z-20"
+                                className="absolute -top-2 -right-2 size-6 rounded-full bg-blue-600 text-white flex items-center justify-center hover:bg-blue-700 shadow-md z-30"
+                                title="Edit Eksekutif"
+                              >
+                                <Edit2 className="size-3" />
+                              </button>
+                            )}
+
+                            <div className="p-2.5 sm:p-3 flex items-center gap-3">
+                              {/* Left side: Person Portrait / Avatar */}
+                              {exec.personPhoto ? (
+                                <div className="w-10 h-14 shrink-0 rounded overflow-hidden flex items-end justify-center bg-slate-100">
+                                  <img
+                                    src={exec.personPhoto}
+                                    alt={exec.name}
+                                    className="w-full h-full object-cover object-top"
+                                  />
+                                </div>
+                              ) : isBoc ? (
+                                <div className="w-10 h-10 shrink-0 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500">
+                                  <Users className="size-5" />
+                                </div>
+                              ) : (
+                                <div className="shrink-0">
+                                  <UserAvatar
+                                    name={exec.name}
+                                    url={execAvatar}
+                                    size="md"
+                                    shape="circle"
+                                  />
+                                </div>
+                              )}
+
+                              {/* Right side: Title (Gold), Name, Accent line */}
+                              <div className="flex-1 min-w-0">
+                                <span
+                                  className={`text-[10px] sm:text-[11px] font-extrabold tracking-wider block uppercase ${
+                                    isCeo ? 'text-[#E5B80B]' : 'text-[#C5A059]'
+                                  }`}
+                                >
+                                  {exec.title}
+                                </span>
+                                <h4
+                                  className={`text-sm sm:text-base font-extrabold tracking-tight truncate leading-snug ${
+                                    isCeo ? 'text-white' : 'text-[#0B2545]'
+                                  }`}
+                                >
+                                  {exec.name}
+                                </h4>
+                                {!isBoc && (
+                                  <div
+                                    className={`h-[2px] w-12 mt-1 rounded-full ${
+                                      isCeo ? 'bg-[#E5B80B]' : 'bg-[#C5A059]'
+                                    }`}
+                                  />
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                      {/* Horizontal connector line to PA */}
+                      {exec.pa && (
+                        <div className="absolute left-[calc(50%+160px)] sm:left-[calc(50%+167px)] flex items-center">
+                          {/* Horizontal line with gold/slate stroke matching FigCraft */}
+                          <div className="w-10 sm:w-14 h-[1.5px] bg-[#C5A059]" />
+
+                          {/* PA Card matching FigCraft */}
+                          <div className="relative group w-[195px] sm:w-[210px] bg-white rounded-lg shadow-sm border border-slate-200 p-2 flex items-center gap-2.5 transition-transform hover:scale-[1.01]">
+                            {isEditMode && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setEditingNode({
+                                    id: exec.id,
+                                    name: exec.name,
+                                    title: exec.title,
+                                    paName: exec.pa?.name,
+                                    paTitle: exec.pa?.title,
+                                    section: 'top',
+                                  })
+                                }
+                                className="absolute -top-2 -right-2 size-5 rounded-full bg-blue-600 text-white flex items-center justify-center hover:bg-blue-700 shadow-xs z-30"
                                 title="Edit PA"
                               >
                                 <Edit2 className="size-2.5" />
                               </button>
                             )}
 
-                            <div className="w-full bg-transparent select-none pointer-events-none filter drop-shadow-md">
-                              <img
-                                src={exec.pa.cardImage || `/image/org_people/${exec.pa.id}.png`}
-                                alt={exec.pa.name}
-                                className="w-full h-auto block object-contain"
-                              />
+                            {/* PA Photo on Left */}
+                            {exec.pa.personPhoto ? (
+                              <div className="w-8 h-9 shrink-0 rounded-full overflow-hidden flex items-end justify-center bg-slate-100 border border-slate-200">
+                                <img
+                                  src={exec.pa.personPhoto}
+                                  alt={exec.pa.name}
+                                  className="w-full h-full object-cover object-top"
+                                />
+                              </div>
+                            ) : (
+                              <div className="shrink-0">
+                                <UserAvatar
+                                  name={exec.pa.name}
+                                  url={paAvatar}
+                                  size="sm"
+                                  shape="circle"
+                                />
+                              </div>
+                            )}
+
+                            {/* PA Text on Right */}
+                            <div className="min-w-0 flex-1">
+                              <h5 className="text-[11px] sm:text-xs font-bold text-[#0B2545] truncate">
+                                {exec.pa.name}
+                              </h5>
+                              <p className="text-[9.5px] sm:text-[10px] text-slate-500 italic truncate">
+                                {exec.pa.title}
+                              </p>
                             </div>
                           </div>
                         </div>

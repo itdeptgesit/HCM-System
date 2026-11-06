@@ -35,6 +35,7 @@ import {
   Info,
 } from 'lucide-react';
 import { toPng } from 'html-to-image';
+import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { supabase } from '../../lib/supabaseClient';
 import { uploadFileToGoogleDrive } from '../../lib/googleDriveUpload';
@@ -221,17 +222,33 @@ export const EmployeeAppointmentSKModal: React.FC<EmployeeAppointmentSKModalProp
     // Switch to preview if currently on edit tab to ensure element is in DOM
     if (activeTab !== 'preview') {
       setActiveTab('preview');
-      await new Promise(r => setTimeout(r, 150));
+      await new Promise(r => setTimeout(r, 200));
     }
 
     const element = document.getElementById('printable-sk-sheet');
     if (!element) throw new Error('Elemen pratinjau SK tidak ditemukan di layar.');
 
-    const imgData = await toPng(element, {
-      quality: 0.95,
-      pixelRatio: 2,
-      backgroundColor: '#ffffff',
-    });
+    // Use html2canvas for pixel-perfect PDF rendering without SVG foreignObject CSS bugs
+    let imgData: string;
+    try {
+      const canvas = await html2canvas(element, {
+        scale: 2, // 2x high resolution (300 DPI equivalent)
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+        scrollX: 0,
+        scrollY: 0,
+      });
+      imgData = canvas.toDataURL('image/jpeg', 0.98);
+    } catch (canvasErr) {
+      console.warn('html2canvas fallback to toPng:', canvasErr);
+      imgData = await toPng(element, {
+        quality: 0.98,
+        pixelRatio: 2,
+        backgroundColor: '#ffffff',
+      });
+    }
 
     const pdf = new jsPDF({
       orientation: 'portrait',
@@ -242,7 +259,7 @@ export const EmployeeAppointmentSKModal: React.FC<EmployeeAppointmentSKModalProp
     const pdfWidth = pdf.internal.pageSize.getWidth();
     const pdfHeight = pdf.internal.pageSize.getHeight();
 
-    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
+    pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
     const pdfBlob = pdf.output('blob');
 
     const cleanName = (employeeName || 'Karyawan').replace(/[^a-zA-Z0-9_-]/g, '_');
@@ -906,18 +923,22 @@ export const EmployeeAppointmentSKModal: React.FC<EmployeeAppointmentSKModalProp
                   </div>
 
                   {/* Recipient Information */}
-                  <div className="space-y-[1pt] mb-[18pt] text-[12pt] leading-[18pt]">
+                  <div className="mb-[18pt] text-[12pt] leading-[18pt]">
                     <div>Kepada Yth.,</div>
-                    <div className="grid grid-cols-[48pt_14pt_1fr] items-baseline font-bold">
-                      <div>Nama</div>
-                      <div className="text-center">:</div>
-                      <div>{employeeName}</div>
-                    </div>
-                    <div className="grid grid-cols-[48pt_14pt_1fr] items-baseline font-bold">
-                      <div>NIK</div>
-                      <div className="text-center">:</div>
-                      <div>{employeeNik}</div>
-                    </div>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '2pt' }}>
+                      <tbody>
+                        <tr style={{ fontWeight: 'bold' }}>
+                          <td style={{ width: '48pt', verticalAlign: 'top', padding: 0 }}>Nama</td>
+                          <td style={{ width: '14pt', textAlign: 'center', verticalAlign: 'top', padding: 0 }}>:</td>
+                          <td style={{ verticalAlign: 'top', padding: 0 }}>{employeeName}</td>
+                        </tr>
+                        <tr style={{ fontWeight: 'bold' }}>
+                          <td style={{ width: '48pt', verticalAlign: 'top', padding: 0 }}>NIK</td>
+                          <td style={{ width: '14pt', textAlign: 'center', verticalAlign: 'top', padding: 0 }}>:</td>
+                          <td style={{ verticalAlign: 'top', padding: 0 }}>{employeeNik}</td>
+                        </tr>
+                      </tbody>
+                    </table>
                     <div className="pt-[14pt]">Di tempat</div>
                   </div>
 
@@ -929,27 +950,27 @@ export const EmployeeAppointmentSKModal: React.FC<EmployeeAppointmentSKModalProp
                     </p>
 
                     {/* Entitlements List */}
-                    <div className="my-[4pt] text-[12pt] leading-[21pt]">
-                      <div className="grid grid-cols-[57.5mm_14pt_1fr] items-baseline">
-                        <div>Medical</div>
-                        <div className="text-center">:</div>
-                        <div>{clauseMedical}</div>
-                      </div>
-
-                      <div className="grid grid-cols-[57.5mm_14pt_1fr] items-baseline">
-                        <div>Asuransi Kesehatan dan Jiwa</div>
-                        <div className="text-center">:</div>
-                        <div>{clauseInsurance}</div>
-                      </div>
-
-                      <div className="grid grid-cols-[57.5mm_14pt_1fr] items-baseline">
-                        <div>Cuti</div>
-                        <div className="text-center">:</div>
-                        <div className="leading-[21pt]">
-                          {clauseLeave}
-                        </div>
-                      </div>
-                    </div>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '4pt', marginBottom: '4pt', fontSize: '12pt', lineHeight: '21pt' }}>
+                      <tbody>
+                        <tr>
+                          <td style={{ width: '57.5mm', verticalAlign: 'top', padding: '1pt 0' }}>Medical</td>
+                          <td style={{ width: '14pt', textAlign: 'center', verticalAlign: 'top', padding: '1pt 0' }}>:</td>
+                          <td style={{ verticalAlign: 'top', padding: '1pt 0' }}>{clauseMedical}</td>
+                        </tr>
+                        <tr>
+                          <td style={{ width: '57.5mm', verticalAlign: 'top', padding: '1pt 0' }}>Asuransi Kesehatan dan Jiwa</td>
+                          <td style={{ width: '14pt', textAlign: 'center', verticalAlign: 'top', padding: '1pt 0' }}>:</td>
+                          <td style={{ verticalAlign: 'top', padding: '1pt 0' }}>{clauseInsurance}</td>
+                        </tr>
+                        <tr>
+                          <td style={{ width: '57.5mm', verticalAlign: 'top', padding: '1pt 0' }}>Cuti</td>
+                          <td style={{ width: '14pt', textAlign: 'center', verticalAlign: 'top', padding: '1pt 0' }}>:</td>
+                          <td style={{ verticalAlign: 'top', padding: '1pt 0', lineHeight: '21pt' }}>
+                            {clauseLeave}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
 
                     <p className="pt-[6pt]">
                       Demikian informasi ini kami sampaikan, atas perhatiannya kami ucapkan terima kasih.
@@ -957,28 +978,36 @@ export const EmployeeAppointmentSKModal: React.FC<EmployeeAppointmentSKModalProp
                   </div>
 
                   {/* Signatures Section */}
-                  <div className="mt-[20pt] grid grid-cols-2 text-[12pt] leading-[18pt]">
-                    {/* Left: Employee */}
-                    <div className="flex flex-col justify-between h-[96pt] pl-[14pt]">
-                      <div>Diketahui Oleh,</div>
-                      <div className="font-bold">
-                        ({employeeName})
-                      </div>
-                    </div>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '20pt', fontSize: '12pt', lineHeight: '18pt' }}>
+                    <tbody>
+                      <tr>
+                        {/* Left: Employee */}
+                        <td style={{ width: '50%', verticalAlign: 'top', paddingLeft: '14pt' }}>
+                          <div className="flex flex-col justify-between h-[96pt]">
+                            <div>Diketahui Oleh,</div>
+                            <div className="font-bold">
+                              ({employeeName})
+                            </div>
+                          </div>
+                        </td>
 
-                    {/* Right: Management */}
-                    <div className="flex flex-col justify-between h-[96pt] pl-[20pt]">
-                      <div>{issueCity}, {formatIndoDate(issueDate || new Date().toISOString().slice(0, 10))}</div>
-                      <div>
-                        <div className="font-bold underline leading-normal">
-                          {signerName}
-                        </div>
-                        <div className="font-bold leading-normal">
-                          {signerTitle}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                        {/* Right: Management */}
+                        <td style={{ width: '50%', verticalAlign: 'top', paddingLeft: '20pt' }}>
+                          <div className="flex flex-col justify-between h-[96pt]">
+                            <div>{issueCity}, {formatIndoDate(issueDate || new Date().toISOString().slice(0, 10))}</div>
+                            <div>
+                              <div className="font-bold underline leading-normal">
+                                {signerName}
+                              </div>
+                              <div className="font-bold leading-normal">
+                                {signerTitle}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
 
                 {/* Footer Address (Margin beda sendiri, 1 baris penuh / single line, Font: Times New Roman, Size: 9pt) */}
@@ -1052,32 +1081,32 @@ export const EmployeeAppointmentSKModal: React.FC<EmployeeAppointmentSKModalProp
     >
       <DialogContent
         showCloseButton={false}
-        className="sm:max-w-md w-full p-6 bg-white dark:bg-[#121215] border border-slate-200 dark:border-zinc-800 rounded-3xl shadow-2xl z-[100]"
+        className="w-[92vw] max-w-[460px] p-6 bg-white dark:bg-[#121215] border border-slate-200 dark:border-zinc-800 rounded-3xl shadow-2xl z-[100] overflow-hidden"
       >
-        <div className="flex flex-col items-center text-center">
+        <div className="w-full max-w-full min-w-0 flex flex-col items-center text-center">
           {/* Animated Glowing Icon Badge */}
-          <div className="size-16 rounded-2xl bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800/80 flex items-center justify-center text-emerald-600 dark:text-emerald-400 mb-4 shadow-lg shadow-emerald-500/10">
+          <div className="size-16 rounded-2xl bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800/80 flex items-center justify-center text-emerald-600 dark:text-emerald-400 mb-4 shadow-lg shadow-emerald-500/10 shrink-0">
             <CheckCircle2 className="size-9 animate-in zoom-in-75 duration-300" />
           </div>
 
-          <DialogTitle className="text-lg font-bold text-slate-900 dark:text-white">
+          <DialogTitle className="text-lg font-bold text-slate-900 dark:text-white text-center w-full break-words">
             Pengangkatan Karyawan Berhasil!
           </DialogTitle>
-          <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400 mt-1 max-w-xs leading-relaxed">
+          <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400 mt-1.5 w-full max-w-sm leading-relaxed text-center">
             <strong className="text-slate-800 dark:text-zinc-200">{successResult?.employeeName}</strong> telah resmi diangkat menjadi <strong>Karyawan Tetap (PKWTT)</strong>.
           </DialogDescription>
 
           {/* Metadata Card */}
-          <div className="mt-4 w-full bg-slate-50 dark:bg-zinc-900/70 border border-slate-200 dark:border-zinc-800 rounded-2xl p-3.5 text-left space-y-2 text-xs">
-            <div className="flex justify-between items-center">
-              <span className="text-slate-500 dark:text-zinc-400">Nomor SK Resmi:</span>
-              <span className="font-mono font-bold text-slate-900 dark:text-white bg-slate-100 dark:bg-zinc-800 px-2 py-0.5 rounded-md text-[11px]">
-                {successResult?.skNumber}
+          <div className="mt-4 w-full bg-slate-50 dark:bg-zinc-900/70 border border-slate-200 dark:border-zinc-800 rounded-2xl p-3.5 text-left space-y-2.5 text-xs">
+            <div className="flex items-center justify-between gap-2 min-w-0">
+              <span className="text-slate-500 dark:text-zinc-400 shrink-0">Nomor SK Resmi:</span>
+              <span className="font-mono font-bold text-slate-900 dark:text-white bg-slate-100 dark:bg-zinc-800 px-2 py-0.5 rounded-md text-[11px] truncate text-right">
+                {successResult?.skNumber || skNumber}
               </span>
             </div>
-            <div className="flex justify-between items-center">
-              <span className="text-slate-500 dark:text-zinc-400">Status Baru:</span>
-              <span className="font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+            <div className="flex items-center justify-between gap-2 min-w-0">
+              <span className="text-slate-500 dark:text-zinc-400 shrink-0">Status Baru:</span>
+              <span className="font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 shrink-0">
                 <span className="size-2 rounded-full bg-emerald-500 inline-block animate-pulse" />
                 PKWTT (Tetap)
               </span>
@@ -1086,33 +1115,33 @@ export const EmployeeAppointmentSKModal: React.FC<EmployeeAppointmentSKModalProp
 
           {/* Google Drive Integration Card */}
           {successResult?.uploadedUrl && (
-            <div className="mt-3.5 w-full bg-gradient-to-br from-blue-50/70 via-indigo-50/40 to-slate-50 dark:from-blue-950/40 dark:via-indigo-950/20 dark:to-zinc-900 border border-blue-200/80 dark:border-blue-800/60 rounded-2xl p-4 text-left">
-              <div className="flex items-start gap-3">
-                <div className="size-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-sm">
-                  <CloudUpload className="size-5" />
+            <div className="mt-3.5 w-full bg-gradient-to-br from-blue-50/70 via-indigo-50/40 to-slate-50 dark:from-blue-950/40 dark:via-indigo-950/20 dark:to-zinc-900 border border-blue-200/80 dark:border-blue-800/60 rounded-2xl p-3.5 text-left min-w-0">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="size-8 rounded-lg bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                  <CloudUpload className="size-4" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                  <div className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5 flex-wrap">
                     <span>Tersimpan di Google Drive</span>
                     <span className="text-[10px] px-1.5 py-0.2 rounded bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 font-mono font-semibold">
                       Auto-Upload
                     </span>
                   </div>
-                  <p className="text-[11px] text-slate-500 dark:text-zinc-400 truncate mt-0.5 font-mono">
+                  <p className="text-[11px] text-slate-500 dark:text-zinc-400 truncate mt-0.5 font-mono" title={successResult.uploadedUrl}>
                     {successResult.uploadedUrl}
                   </p>
                 </div>
               </div>
 
-              <div className="mt-3.5 flex items-center gap-2">
+              <div className="mt-3 flex items-center gap-2 w-full">
                 <a
                   href={successResult.uploadedUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-xs transition-all hover:scale-[1.01]"
+                  className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-xs transition-all min-w-0 truncate"
                 >
-                  <ExternalLink className="size-3.5" />
-                  <span>Buka di Google Drive</span>
+                  <ExternalLink className="size-3.5 shrink-0" />
+                  <span className="truncate">Buka di Drive</span>
                 </a>
                 <Button
                   type="button"
@@ -1125,12 +1154,12 @@ export const EmployeeAppointmentSKModal: React.FC<EmployeeAppointmentSKModalProp
                       setTimeout(() => setCopiedLink(false), 2000);
                     }
                   }}
-                  className="px-3.5 py-2 text-xs font-semibold border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-slate-700 dark:text-zinc-200 rounded-xl"
+                  className="px-3 py-2 text-xs font-semibold border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-slate-700 dark:text-zinc-200 rounded-xl shrink-0"
                 >
                   {copiedLink ? (
                     <>
                       <Check className="size-3.5 mr-1 text-emerald-600" />
-                      <span className="text-emerald-600 font-bold">Tersalin!</span>
+                      <span className="text-emerald-600 font-bold">Tersalin</span>
                     </>
                   ) : (
                     <>

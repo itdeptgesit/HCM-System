@@ -3,15 +3,17 @@ export interface OrgNode {
   name: string;
   title: string;
   type: 'executive' | 'division-head' | 'staff' | 'secretary';
-  color?: string; // e.g. '#10223E'
+  color?: string;
   avatarUrl?: string;
-  cardImage?: string; // High-resolution asset card image for perfect visual fidelity
+  personPhoto?: string;
+  cardImage?: string;
   children?: OrgNode[];
   pa?: {
     id: string;
     name: string;
     title: string;
     avatarUrl?: string;
+    personPhoto?: string;
     cardImage?: string;
   };
 }
@@ -26,64 +28,66 @@ export const INITIAL_ORG_DATA: {
   topExecutives: [
     {
       id: 'exec-boc',
-      name: 'Shareholders / Board of Commissioners',
-      title: 'Dewan Komisaris',
+      name: 'Board of Commissioners',
+      title: 'SHAREHOLDERS',
       type: 'executive',
-      cardImage: '/image/org_people/card_boc.png',
       pa: {
         id: 'pa-boc',
         name: 'Asmawati',
         title: 'PA & Secretary',
-        cardImage: '/image/org_people/card_asmawati.png',
+        personPhoto: '/image/org_people/fig_asmawati.png',
       },
     },
     {
       id: 'exec-chairman',
       name: 'Jacob Soetoyo',
-      title: 'Chairman',
+      title: 'CHAIRMAN',
       type: 'executive',
-      cardImage: '/image/org_people/card_jacob.png',
+      personPhoto: '/image/org_people/fig_jacob.png',
       pa: {
         id: 'pa-chairman',
         name: 'Rizki Meisara Rosadi',
         title: 'PA & Secretary',
-        cardImage: '/image/org_people/card_rizki.png',
+        personPhoto: '/image/org_people/fig_rizki.png',
       },
     },
     {
       id: 'exec-ceo',
       name: 'Jahja Soetoyo',
-      title: 'President & CEO',
+      title: 'PRESIDENT & CEO',
       type: 'executive',
-      cardImage: '/image/org_people/card_jahja.png',
+      color: '#0A3468',
+      personPhoto: '/image/org_people/fig_jahja.png',
       pa: {
         id: 'pa-ceo',
         name: 'Dinny Anggraini',
         title: 'PA & Secretary',
-        cardImage: '/image/org_people/card_dinny.png',
+        personPhoto: '/image/org_people/fig_dinny.png',
       },
     },
     {
       id: 'exec-deputy-ceo',
       name: 'Jones Soetoyo',
-      title: 'Deputy CEO',
+      title: 'DEPUTY CEO',
       type: 'executive',
-      cardImage: '/image/org_people/card_jones.png',
+      personPhoto: '/image/org_people/fig_jones.png',
       pa: {
         id: 'pa-deputy-ceo',
         name: 'Dwi Suryati',
         title: 'PA & Secretary',
-        cardImage: '/image/org_people/card_dwi.png',
+        personPhoto: '/image/org_people/fig_dwi.png',
       },
     },
   ],
   leftDivisions: [
+    // 1. Corporate Affairs (Peng Tjoan)
     {
       id: 'div-ca',
       name: 'Peng Tjoan',
       title: 'VP Corporate Affair',
       type: 'division-head',
-      cardImage: '/image/org_people/card_peng_tjoan.png',
+      avatarUrl: '/image/org_people/fig_peng_tjoan.png',
+      personPhoto: '/image/org_people/fig_peng_tjoan.png',
       children: [
         {
           id: 'ca-avp',
@@ -113,17 +117,14 @@ export const INITIAL_ORG_DATA: {
         },
       ],
     },
+    // 2. Finance & Accounting (Srijani Winata)
     {
       id: 'div-fa',
       name: 'Srijani Winata',
       title: 'VP Finance & Accounting',
       type: 'division-head',
-      cardImage: '/image/org_people/card_srijani.png',
-      pa: {
-        id: 'pa-fa',
-        name: 'Nabillah Saroh Afifah',
-        title: 'PA & Secretary',
-      },
+      avatarUrl: '/image/org_people/fig_srijani.png',
+      personPhoto: '/image/org_people/fig_srijani.png',
       children: [
         {
           id: 'fa-deputy',
@@ -138,12 +139,6 @@ export const INITIAL_ORG_DATA: {
               type: 'staff',
               children: [
                 {
-                  id: 'fa-acc-spv',
-                  name: 'Merly Miselly',
-                  title: 'Finance & Accounting Supervisor',
-                  type: 'staff',
-                },
-                {
                   id: 'fa-acc-sr',
                   name: 'Priscilia Angsari',
                   title: 'Accounting Senior Staff',
@@ -153,20 +148,6 @@ export const INITIAL_ORG_DATA: {
                   id: 'fa-acc-st',
                   name: 'Vanesha Valentina',
                   title: 'Accounting Staff',
-                  type: 'staff',
-                },
-              ],
-            },
-            {
-              id: 'fa-tax-mgr',
-              name: 'Parawinata Naidi',
-              title: 'Tax Manager',
-              type: 'staff',
-              children: [
-                {
-                  id: 'fa-tax-spv',
-                  name: 'Novitasari Siregar',
-                  title: 'Tax Supervisor',
                   type: 'staff',
                 },
               ],
@@ -192,21 +173,45 @@ export const INITIAL_ORG_DATA: {
               ],
             },
             {
+              id: 'fa-tax-mgr',
+              name: 'Parawinata Naidi Gaing',
+              title: 'Tax Manager',
+              type: 'staff',
+              children: [
+                {
+                  id: 'fa-tax-spv',
+                  name: 'Novitasari Siregar',
+                  title: 'Tax Supervisor',
+                  type: 'staff',
+                },
+              ],
+            },
+            {
               id: 'fa-boc-mgr',
               name: 'Winarti',
               title: 'Finance Deputy Manager for BOC',
               type: 'staff',
+              children: [
+                {
+                  id: 'fa-acc-spv',
+                  name: 'Merly Miselly',
+                  title: 'Finance & Accounting Supervisor',
+                  type: 'staff',
+                },
+              ],
             },
           ],
         },
       ],
     },
+    // 3. Property & Investment (Jave Soetoyo)
     {
       id: 'div-prop',
       name: 'Jave Soetoyo',
       title: 'VP Property & Investment',
       type: 'division-head',
-      cardImage: '/image/org_people/card_jave.png',
+      avatarUrl: '/image/org_people/fig_jave.png',
+      personPhoto: '/image/org_people/fig_jave.png',
       pa: {
         id: 'pa-prop',
         name: 'Artika Octavin Manafe',
@@ -214,20 +219,8 @@ export const INITIAL_ORG_DATA: {
       },
       children: [
         {
-          id: 'prop-corinna',
-          name: 'Corinna Soetoyo',
-          title: 'Property',
-          type: 'staff',
-        },
-        {
-          id: 'prop-stefanini',
-          name: 'Stefanini Adriana',
-          title: 'Property',
-          type: 'staff',
-        },
-        {
           id: 'prop-sm-mgr',
-          name: 'Neysa Yulita S.',
+          name: 'Corinna Soetoyo',
           title: 'Sales & Marketing Manager',
           type: 'staff',
           children: [
@@ -236,21 +229,19 @@ export const INITIAL_ORG_DATA: {
               name: 'Devi Ariyani',
               title: 'Marketing Manager',
               type: 'staff',
-              children: [
-                {
-                  id: 'prop-mkt-st',
-                  name: 'Cyntia Dwi Ningrum',
-                  title: 'Marketing Staff',
-                  type: 'staff',
-                },
-              ],
             },
           ],
         },
         {
+          id: 'prop-stefanini',
+          name: 'Stefanini Adriana',
+          title: 'Property',
+          type: 'staff',
+        },
+        {
           id: 'prop-pm',
-          name: 'Fendra Hartanto',
-          title: 'Project Manager',
+          name: 'Neysa Yulita S.',
+          title: 'Property Project Manager',
           type: 'staff',
           children: [
             {
@@ -258,17 +249,25 @@ export const INITIAL_ORG_DATA: {
               name: 'Petrus Voki Cahyadi',
               title: 'FA & Operation Manager',
               type: 'staff',
-            },
-            {
-              id: 'prop-pdm',
-              name: 'Yohanes Donny Triatmoko',
-              title: 'Project Deputy Manager',
-              type: 'staff',
+              children: [
+                {
+                  id: 'prop-tek-romli',
+                  name: 'Romli',
+                  title: 'Teknisi',
+                  type: 'staff',
+                },
+              ],
             },
             {
               id: 'prop-permit',
-              name: 'Eliaanti Christine',
+              name: 'Yohanes Donny Triatmoko',
               title: 'Relations & Permits Dep. Manager',
+              type: 'staff',
+            },
+            {
+              id: 'prop-pdm',
+              name: 'Eliaanti Christine',
+              title: 'Project Deputy Manager',
               type: 'staff',
             },
             {
@@ -287,27 +286,60 @@ export const INITIAL_ORG_DATA: {
         },
       ],
     },
+    // 4. Natural Resources (Jones Soetoyo)
     {
       id: 'div-nr',
       name: 'Jones Soetoyo',
       title: 'CEO - Natural Resources',
       type: 'division-head',
-      cardImage: '/image/org_people/card_natural_resources.png',
+      avatarUrl: '/image/org_people/fig_jones.png',
+      personPhoto: '/image/org_people/fig_jones.png',
       children: [],
+    },
+    // 5. Gesit Foundation (Pengurus)
+    {
+      id: 'div-gf',
+      name: 'Pengurus',
+      title: 'Gesit Foundation',
+      type: 'division-head',
+      children: [
+        {
+          id: 'gf-eo',
+          name: 'Angelica Thania Ivone',
+          title: 'Executive Officer',
+          type: 'staff',
+          children: [
+            {
+              id: 'gf-ps',
+              name: 'Christin Rajagukguk',
+              title: 'Program Specialist',
+              type: 'staff',
+            },
+            {
+              id: 'gf-as',
+              name: 'Edel Trudis Uto',
+              title: 'Admin Staff',
+              type: 'staff',
+            },
+          ],
+        },
+      ],
     },
   ],
   rightDivisions: [
+    // 1. Corporate Secretary & Legal (Natalia)
     {
       id: 'div-csl',
       name: 'Natalia',
       title: 'VP Corporate Secretary & Legal',
       type: 'division-head',
-      cardImage: '/image/org_people/card_natalia.png',
+      avatarUrl: '/image/org_people/fig_natalia.png',
+      personPhoto: '/image/org_people/fig_natalia.png',
       children: [
         {
           id: 'csl-deputy',
           name: 'Yohan Alamsyah',
-          title: 'Deputy VP Corporate Secretary & Legal',
+          title: 'Deputy VP CSL',
           type: 'staff',
           children: [
             {
@@ -332,12 +364,19 @@ export const INITIAL_ORG_DATA: {
         },
       ],
     },
+    // 2. HR & Logistics (Javier Wijaya)
     {
       id: 'div-hr',
       name: 'Javier Wijaya',
       title: 'VP HR & Logistics',
       type: 'division-head',
-      cardImage: '/image/org_people/card_javier.png',
+      avatarUrl: '/image/org_people/fig_javier.png',
+      personPhoto: '/image/org_people/fig_javier.png',
+      pa: {
+        id: 'pa-hr',
+        name: 'Nabillah Saroh Afifah',
+        title: 'PA & Secretary',
+      },
       children: [
         {
           id: 'hr-mgr',
@@ -347,7 +386,7 @@ export const INITIAL_ORG_DATA: {
           children: [
             {
               id: 'hr-it-spv',
-              name: 'Gaing',
+              name: 'Bendry',
               title: 'IT Supervisor',
               type: 'staff',
               children: [
@@ -361,7 +400,7 @@ export const INITIAL_ORG_DATA: {
             },
             {
               id: 'hr-ga-spv',
-              name: 'Noni Bendry',
+              name: 'Noni',
               title: 'GA Supervisor',
               type: 'staff',
               children: [
@@ -378,7 +417,13 @@ export const INITIAL_ORG_DATA: {
                   type: 'staff',
                 },
                 {
-                  id: 'hr-receptionist',
+                  id: 'hr-receptionist-retno',
+                  name: 'Retno Widiyati',
+                  title: 'Receptionist',
+                  type: 'staff',
+                },
+                {
+                  id: 'hr-receptionist-susilo',
                   name: 'Suryadi & Susilo',
                   title: 'Receptionist',
                   type: 'staff',
@@ -391,7 +436,7 @@ export const INITIAL_ORG_DATA: {
                 },
                 {
                   id: 'hr-support',
-                  name: 'Retno W., Pratiwi, Sariana & Doni',
+                  name: 'Pratiwi, Sariana & Doni',
                   title: 'OB / OG',
                   type: 'staff',
                 },
@@ -413,53 +458,65 @@ export const INITIAL_ORG_DATA: {
         },
       ],
     },
+    // 3. Trading (Javier Wijaya)
     {
       id: 'div-trading',
       name: 'Javier Wijaya',
       title: 'Trading Head',
       type: 'division-head',
-      cardImage: '/image/org_people/card_trading.png',
+      avatarUrl: '/image/org_people/fig_javier_trading.png',
+      personPhoto: '/image/org_people/fig_javier_trading.png',
       children: [
-        {
-          id: 'trad-a',
-          name: 'Tay Chong Seng',
-          title: 'Trading A - Head of Finance & Accounting',
-          type: 'staff',
-        },
         {
           id: 'trad-b',
           name: 'Suryadi Hartanto',
-          title: 'Trading B - Head of Trading',
+          title: 'Trading B',
           type: 'staff',
           children: [
             {
               id: 'trad-tek1',
-              name: 'Hilaluddin & Harvey Kurniawan',
-              title: 'Teknisi Trading',
+              name: 'Hilaluddin',
+              title: 'Trading Supervisor',
               type: 'staff',
             },
             {
               id: 'trad-adm',
-              name: 'Stefani',
+              name: 'Stefani Cyntia Dwi Ningrum',
               title: 'Trading Admin Staff',
-              type: 'staff',
-            },
-            {
-              id: 'trad-tek2',
-              name: 'Romli',
-              title: 'Teknisi',
               type: 'staff',
             },
           ],
         },
+        {
+          id: 'trad-a',
+          name: 'Tay Chong Seng',
+          title: 'Trading A',
+          type: 'staff',
+          children: [
+            {
+              id: 'trad-tek-harvey',
+              name: 'Harvey Kurniawan',
+              title: 'Teknisi Trading',
+              type: 'staff',
+            },
+          ],
+        },
+        {
+          id: 'trad-fa',
+          name: 'Fendra Hartanto',
+          title: 'Head of Finance & Accounting',
+          type: 'staff',
+        },
       ],
     },
+    // 4. Manufacturing (Johanes Tanro)
     {
       id: 'div-mfg',
       name: 'Johanes Tanro',
       title: 'CEO - Manufacturing',
       type: 'division-head',
-      cardImage: '/image/org_people/card_manufacturing.png',
+      avatarUrl: '/image/org_people/johanes_tanro.png',
+      personPhoto: '/image/org_people/johanes_tanro.png',
       children: [
         {
           id: 'mfg-dir',
@@ -472,20 +529,19 @@ export const INITIAL_ORG_DATA: {
   ],
 };
 
-const STORAGE_KEY = 'gesit_corporate_organization_chart_v2';
+const STORAGE_KEY = 'gesit_corporate_organization_chart_v5';
 
 export function loadSavedOrgData() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      // Migrate if old data lacks cardImage
-      if (parsed.topExecutives && parsed.topExecutives[1]?.cardImage) {
+      if (parsed && parsed.topExecutives && parsed.leftDivisions && parsed.rightDivisions) {
         return parsed;
       }
     }
-  } catch (e) {
-    console.error('Failed to load saved org chart data:', e);
+  } catch (err) {
+    console.warn('Failed to load saved org chart data:', err);
   }
   return INITIAL_ORG_DATA;
 }
@@ -493,7 +549,7 @@ export function loadSavedOrgData() {
 export function saveOrgData(data: typeof INITIAL_ORG_DATA) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  } catch (e) {
-    console.error('Failed to save org chart data:', e);
+  } catch (err) {
+    console.warn('Failed to save org chart data:', err);
   }
 }
